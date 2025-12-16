@@ -30,6 +30,10 @@ public class OtpRequest {
 	@Setter
 	private String defaultLengthPattern;
 
+	@Setter
+	@Getter
+	private String mdmsValidationErrorMessage;
+
     public void validate() {
         if(isTenantIdAbsent()
 				|| isMobileNumberAbsent()
@@ -69,23 +73,31 @@ public class OtpRequest {
 
 		// Validate length
 		if(rules.getMinLength() != null && mobileNumber.length() < rules.getMinLength()) {
+			setMdmsValidationErrorMessage(rules.getErrorMessage());
 			return false;
 		}
 		if(rules.getMaxLength() != null && mobileNumber.length() > rules.getMaxLength()) {
+			setMdmsValidationErrorMessage(rules.getErrorMessage());
 			return false;
 		}
 
 		// Validate pattern
 		if(rules.getPattern() != null && !rules.getPattern().isEmpty()) {
 			if(!mobileNumber.matches(rules.getPattern())) {
+				setMdmsValidationErrorMessage(rules.getErrorMessage());
 				return false;
 			}
 		}
 
 		// Validate allowed starting digits
 		if(rules.getAllowedStartingDigits() != null && !rules.getAllowedStartingDigits().isEmpty()) {
+			if(mobileNumber.isEmpty()) {
+				setMdmsValidationErrorMessage(rules.getErrorMessage());
+				return false;
+			}
 			String firstDigit = mobileNumber.substring(0, 1);
 			if(!rules.getAllowedStartingDigits().contains(firstDigit)) {
+				setMdmsValidationErrorMessage(rules.getErrorMessage());
 				return false;
 			}
 		}
@@ -138,5 +150,9 @@ public class OtpRequest {
 
 	public void setUserName(String userName) {
 		this.userName = userName;
+	}
+
+	public boolean hasMdmsValidationError() {
+		return mdmsValidationErrorMessage != null && !mdmsValidationErrorMessage.isEmpty();
 	}
 }
