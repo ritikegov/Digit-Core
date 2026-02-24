@@ -1,8 +1,7 @@
 package org.egov.user.security;
 
-import java.util.ArrayList;
-import java.util.List;
 import org.egov.user.security.oauth2.custom.CustomTokenEnhancer;
+import org.egov.user.security.oauth2.custom.CustomWebResponseExceptionTranslator;
 import org.egov.user.security.oauth2.custom.jwt.JwtExchangeTokenGranter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,6 +19,9 @@ import org.springframework.security.oauth2.provider.TokenGranter;
 import org.springframework.security.oauth2.provider.token.DefaultTokenServices;
 import org.springframework.security.oauth2.provider.token.TokenStore;
 import redis.clients.jedis.JedisShardInfo;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.egov.user.config.UserServiceConstants.USER_CLIENT_ID;
 
@@ -47,6 +49,9 @@ public class AuthorizationServerConfiguration extends AuthorizationServerConfigu
 
     @Autowired
     private TokenStore tokenStore;
+
+    @Autowired
+    private CustomWebResponseExceptionTranslator customWebResponseExceptionTranslator;
 
     /**
      * Configures OAuth2 client details for the authorization server.
@@ -88,7 +93,8 @@ public class AuthorizationServerConfiguration extends AuthorizationServerConfigu
 
         endpoints.tokenGranter(new CompositeTokenGranter(granters));
         endpoints.tokenServices(customTokenServices())
-                .authenticationManager(customAuthenticationManager);
+                .authenticationManager(customAuthenticationManager)
+                .exceptionTranslator(customWebResponseExceptionTranslator);
     }
 
     /**

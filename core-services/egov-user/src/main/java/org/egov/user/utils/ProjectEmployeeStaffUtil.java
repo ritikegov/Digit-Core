@@ -1,31 +1,22 @@
 package org.egov.user.utils;
 
-import java.util.Collections;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.tracer.model.CustomException;
-import org.egov.user.domain.model.hrms.Assignment;
-import org.egov.user.domain.model.hrms.AuditDetails;
-import org.egov.user.domain.model.hrms.Employee;
-import org.egov.user.domain.model.hrms.EmployeeRequest;
-import org.egov.user.domain.model.hrms.EmployeeResponse;
-import org.egov.user.domain.model.hrms.Jurisdiction;
-import org.egov.user.domain.model.hrms.User;
-import org.egov.user.domain.model.project.Address;
-import org.egov.user.domain.model.project.Project;
-import org.egov.user.domain.model.project.ProjectRequest;
-import org.egov.user.domain.model.project.ProjectResponse;
-import org.egov.user.domain.model.project.ProjectStaff;
-import org.egov.user.domain.model.project.ProjectStaffRequest;
-import org.egov.user.domain.model.project.ProjectStaffResponse;
+import org.egov.user.domain.model.boundary.*;
+import org.egov.user.domain.model.hrms.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
+
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Utility class for creating employees in HRMS and project staff mappings.
@@ -38,23 +29,37 @@ import org.springframework.web.client.RestTemplate;
 @Slf4j
 public class ProjectEmployeeStaffUtil {
 
+        /** Exception codes (used in CustomException). */
+        private static final String CUSTOM_EXCEPTION_BOUNDARY_HIERARCHY = "BOUNDARY_HIERARCHY_SEARCH_FAILED";
+        private static final String CUSTOM_EXCEPTION_BOUNDARY_RELATIONSHIPS = "BOUNDARY_RELATIONSHIPS_SEARCH_FAILED";
+        private static final String CUSTOM_EXCEPTION_BOUNDARY_HIERARCHY_EMPTY = "BOUNDARY_HIERARCHY_EMPTY";
+        private static final String CUSTOM_EXCEPTION_BOUNDARY_TENANT_EMPTY = "BOUNDARY_TENANT_EMPTY";
+        private static final String CUSTOM_EXCEPTION_BOUNDARY_LIST_EMPTY = "BOUNDARY_LIST_EMPTY";
+        private static final String CUSTOM_EXCEPTION_EMPLOYEE_CREATION_FAILED = "EMPLOYEE_CREATION_FAILED";
+        private static final String CUSTOM_EXCEPTION_USER_SERVICE_UUID_MISSING = "USER_SERVICE_UUID_MISSING";
+        private static final String CUSTOM_EXCEPTION_HTTP_CLIENT_ERROR = "HTTP_CLIENT_ERROR";
+        private static final String CUSTOM_EXCEPTION_SERVICE_REQUEST_CLIENT_ERROR = "SERVICE_REQUEST_CLIENT_ERROR";
+        /** Query/param keys used in code. */
+        private static final String PARAM_TENANT_ID = "tenantId";
+        private static final String PARAM_HIERARCHY_TYPE = "hierarchyType";
+
         private final RestTemplate restTemplate;
         private final ObjectMapper objectMapper;
-
-        @Value("${egov.project.host}")
-        private String projectServiceHost;
-
-        @Value("${egov.project.search.url}")
-        private String projectSearchUrl;
-
-        @Value("${egov.project.staff.create.url}")
-        private String projectStaffCreateUrl;
 
         @Value("${egov.hrms.host}")
         private String hrmsServiceHost;
 
         @Value("${egov.hrms.employee.create.url}")
         private String hrmsEmployeeCreateUrl;
+
+        @Value("${egov.boundary.host}")
+        private String boundaryServiceHost;
+
+        @Value("${egov.boundary.hierarchy.search.url}")
+        private String boundaryHierarchySearchUrl;
+
+        @Value("${egov.boundary.relationships.search.url}")
+        private String boundaryRelationshipsSearchUrl;
 
         @Autowired
         public ProjectEmployeeStaffUtil(RestTemplate restTemplate,
@@ -64,64 +69,125 @@ public class ProjectEmployeeStaffUtil {
         }
 
         /**
-         * Searches for a project by project name and boundary code.
+         * Searches boundary hierarchy definitions for the given tenant.
+         * Calls boundary-service hierarchy definition search API.
          *
-         * @param projectName  The name of the project to search for
-         * @param boundaryCode The boundary code to filter the project
-         * @param tenantId     The tenant ID
-         * @param requestInfo  The request info for authentication and tracking
-         * @return The found Project object
-         * @throws CustomException if project is not found or multiple projects are
-         *                         found
+         * @param tenantId    The tenant ID
+         * @param requestInfo Request info for the API call
+         * @return BoundaryTypeHierarchyResponse containing list of hierarchy definitions (may be empty)
          */
-        public Project searchProjectByNameAndBoundary(String projectName, String boundaryCode,
-                        String tenantId, RequestInfo requestInfo) {
-                log.info("Searching for project with name: {} and boundaryCode: {}", projectName, boundaryCode);
+        public BoundaryTypeHierarchyResponse searchBoundaryHierarchyByTenantId(String tenantId, RequestInfo requestInfo) {
+                log.info("Searching for boundary hierarchy by tenantId: {}", tenantId);
+                BoundaryTypeHierarchySearchCriteria criteria = BoundaryTypeHierarchySearchCriteria.builder()
+                        .tenantId(tenantId)
+                        .limit(1)
+                        .offset(0)
+                        .build();
+                BoundaryTypeHierarchySearchRequest request = BoundaryTypeHierarchySearchRequest.builder()
+                        .requestInfo(requestInfo)
+                        .boundaryTypeHierarchySearchCriteria(criteria)
+                        .build();
+                StringBuilder uri = new StringBuilder()
+                        .append(boundaryServiceHost)
+                        .append(boundaryHierarchySearchUrl);
+                BoundaryTypeHierarchyResponse response = fetchResult(uri, request, BoundaryTypeHierarchyResponse.class);
+                if (response == null) {
+                        throw new CustomException(CUSTOM_EXCEPTION_BOUNDARY_HIERARCHY, "Boundary hierarchy search returned null");
+                }
+                return response;
+        }
 
-                Project project = Project.builder()
-                                .name(projectName)
-                                .tenantId(tenantId)
-                                .address(Address.builder().boundary(boundaryCode).build())
-                                .build();
+        /**
+         * Searches boundary relationships by hierarchy type and tenant.
+         * Calls boundary-service relationship search API (criteria as query params, RequestInfo in body).
+         *
+         * @param hierarchyType The hierarchy type (e.g. "REVENUE", "ADMIN")
+         * @param tenantId      The tenant ID
+         * @param requestInfo   Request info for the API call
+         * @return BoundarySearchResponse containing TenantBoundary list (may be empty)
+         */
+        public BoundarySearchResponse searchBoundaryByHierarchyTypeAndTenantId(String hierarchyType, String tenantId,
+                        RequestInfo requestInfo) {
+                log.info("Searching for boundaries by hierarchyType: {} and tenantId: {}", hierarchyType, tenantId);
+                String url = UriComponentsBuilder.fromHttpUrl(boundaryServiceHost + boundaryRelationshipsSearchUrl)
+                        .queryParam(PARAM_TENANT_ID, tenantId)
+                        .queryParam(PARAM_HIERARCHY_TYPE, hierarchyType)
+                        .build()
+                        .toUriString();
+                BoundarySearchResponse response = fetchResult(new StringBuilder(url), requestInfo,
+                        BoundarySearchResponse.class);
+                if (response == null) {
+                        throw new CustomException(CUSTOM_EXCEPTION_BOUNDARY_RELATIONSHIPS, "Boundary relationships search returned null");
+                }
+                return response;
+        }
 
-                ProjectRequest projectRequest = ProjectRequest.builder().requestInfo(requestInfo)
-                                .projects(Collections.singletonList(project)).build();
+        private String getHierarchyTypeOrThrow(BoundaryTypeHierarchyResponse response, String tenantId) {
+                List<org.egov.user.domain.model.boundary.BoundaryTypeHierarchyDefinition> hierarchy = response == null
+                        ? null
+                        : response.getBoundaryHierarchy();
+                if (CollectionUtils.isEmpty(hierarchy)) {
+                        log.warn("Boundary hierarchy empty for tenantId: {}", tenantId);
+                        throw new CustomException(CUSTOM_EXCEPTION_BOUNDARY_HIERARCHY_EMPTY,
+                                "No boundary hierarchy found for tenant " + PARAM_TENANT_ID + "=" + tenantId);
+                }
+                String type = hierarchy.get(0).getHierarchyType();
+                if (type == null || type.trim().isEmpty()) {
+                        log.warn("Hierarchy type null or empty for tenantId: {}", tenantId);
+                        throw new CustomException(CUSTOM_EXCEPTION_BOUNDARY_HIERARCHY_EMPTY,
+                                "No boundary hierarchy found for tenant " + PARAM_TENANT_ID + "=" + tenantId);
+                }
+                return type.trim();
+        }
 
-                // Build the URI
-                StringBuilder uri = new StringBuilder();
-                uri.append(projectServiceHost)
-                                .append(projectSearchUrl)
-                                .append("?limit=10")
-                                .append("&offset=0")
-                                .append("&tenantId=").append(tenantId);
+        private BoundaryCodeAndType getBoundaryCodeAndTypeOrThrow(BoundarySearchResponse response,
+                        String hierarchyType, String tenantId) {
+                List<HierarchyRelation> tenantBoundary = response == null ? null : response.getTenantBoundary();
+                if (CollectionUtils.isEmpty(tenantBoundary)) {
+                        log.warn("Tenant boundary empty for hierarchyType: {}, tenantId: {}", hierarchyType, tenantId);
+                        throw new CustomException(CUSTOM_EXCEPTION_BOUNDARY_TENANT_EMPTY,
+                                "No tenant boundary found for hierarchy type and tenant " + PARAM_HIERARCHY_TYPE + "=" + hierarchyType
+                                        + ", " + PARAM_TENANT_ID + "=" + tenantId);
+                }
+                List<org.egov.user.domain.model.boundary.EnrichedBoundary> boundary = tenantBoundary.get(0).getBoundary();
+                if (CollectionUtils.isEmpty(boundary)) {
+                        log.warn("Boundary list empty for hierarchyType: {}, tenantId: {}", hierarchyType, tenantId);
+                        throw new CustomException(CUSTOM_EXCEPTION_BOUNDARY_LIST_EMPTY,
+                                "No boundary found in tenant boundary " + PARAM_HIERARCHY_TYPE + "=" + hierarchyType
+                                        + ", " + PARAM_TENANT_ID + "=" + tenantId);
+                }
+                org.egov.user.domain.model.boundary.EnrichedBoundary first = boundary.get(0);
+                String code = first.getCode();
+                String boundaryType = first.getBoundaryType();
+                if (code == null || code.trim().isEmpty()) {
+                        throw new CustomException(CUSTOM_EXCEPTION_BOUNDARY_LIST_EMPTY,
+                                "Boundary code missing for " + PARAM_TENANT_ID + "=" + tenantId);
+                }
+                return new BoundaryCodeAndType(code.trim(), boundaryType != null ? boundaryType.trim() : null);
+        }
 
-                // Make the API call
-                ProjectResponse response = fetchResult(uri, projectRequest, ProjectResponse.class);
+        private static final class BoundaryCodeAndType {
+                private final String code;
+                private final String boundaryType;
 
-                // Validate response
-                if (response == null || CollectionUtils.isEmpty(response.getProject())) {
-                        log.error("No project found with name: {} and boundaryCode: {}", projectName, boundaryCode);
-                        throw new CustomException("PROJECT_NOT_FOUND",
-                                        String.format("No project found with name: %s and boundaryCode: %s",
-                                                        projectName, boundaryCode));
+                BoundaryCodeAndType(String code, String boundaryType) {
+                        this.code = code;
+                        this.boundaryType = boundaryType;
                 }
 
-                if (response.getProject().size() > 1) {
-                        log.warn("Multiple projects found with name: {} and boundaryCode: {}, returning the first one",
-                                        projectName, boundaryCode);
+                String getCode() {
+                        return code;
                 }
 
-                Project result = response.getProject().get(0);
-                log.info("Found project with id: {}", result.getId());
-                return result;
+                String getBoundaryType() {
+                        return boundaryType;
+                }
         }
 
         /**
          * Creates an employee in egov-hrms with boundary details from the project.
          *
          * @param user              The user object containing user details
-         * @param project           The project from which to extract boundary details
-         * @param hierarchyType     The hierarchy type for the jurisdiction
          * @param employeeType      The type of employee (PERMANENT, TEMPORARY, etc.)
          * @param designation       The designation for the employee assignment
          * @param department        The department for the employee assignment
@@ -132,23 +198,23 @@ public class ProjectEmployeeStaffUtil {
          * @return The created Employee object with userServiceUuid
          * @throws CustomException if employee creation fails
          */
-        public Employee createEmployeeInHrms(User user, Project project, String hierarchyType,
+        public Employee createEmployeeInHrms(User user,
                         String employeeType, String designation, String department,
                         String employeeStatus, Long dateOfAppointment,
                         String tenantId, String createdBy, RequestInfo requestInfo) {
-                log.info("Creating employee in HRMS for user: {} with project: {}", user.getName(), project.getName());
-
-                // Validate project address and boundary
-                if (project.getAddress() == null || project.getAddress().getBoundary() == null) {
-                        throw new CustomException("PROJECT_BOUNDARY_MISSING",
-                                        "Project does not have valid boundary information");
-                }
+                log.info("Creating employee in HRMS for user: {}", user.getName());
+                BoundaryTypeHierarchyResponse boundaryTypeHierarchyResponse = searchBoundaryHierarchyByTenantId(tenantId, requestInfo);
+                String hierarchyType = getHierarchyTypeOrThrow(boundaryTypeHierarchyResponse, tenantId);
+                BoundarySearchResponse boundarySearchResponse = searchBoundaryByHierarchyTypeAndTenantId(hierarchyType, tenantId, requestInfo);
+                BoundaryCodeAndType boundaryCodeAndType = getBoundaryCodeAndTypeOrThrow(boundarySearchResponse, hierarchyType, tenantId);
+                String boundaryCode = boundaryCodeAndType.getCode();
+                String boundaryType = boundaryCodeAndType.getBoundaryType();
 
                 // Create jurisdiction from project boundary
                 Jurisdiction jurisdiction = Jurisdiction.builder()
                                 .hierarchy(hierarchyType)
-                                .boundary(project.getAddress().getBoundary())
-                                .boundaryType(project.getAddress().getBoundaryType())
+                                .boundary(boundaryCode)
+                                .boundaryType(boundaryType)
                                 .tenantId(tenantId)
                                 .isActive(true)
                                 .build();
@@ -205,7 +271,7 @@ public class ProjectEmployeeStaffUtil {
                 // Validate response
                 if (response == null || CollectionUtils.isEmpty(response.getEmployees())) {
                         log.error("Failed to create employee in HRMS for user: {}", user.getName());
-                        throw new CustomException("EMPLOYEE_CREATION_FAILED",
+                        throw new CustomException(CUSTOM_EXCEPTION_EMPLOYEE_CREATION_FAILED,
                                         "Failed to create employee in HRMS service");
                 }
 
@@ -215,65 +281,11 @@ public class ProjectEmployeeStaffUtil {
         }
 
         /**
-         * Creates a project staff mapping for the given user and project.
-         *
-         * @param userServiceUuid The UUID of the user from HRMS/user service
-         * @param projectId       The ID of the project
-         * @param tenantId        The tenant ID
-         * @param requestInfo     The request info for authentication and tracking
-         * @return The created ProjectStaff object
-         * @throws CustomException if project staff creation fails
-         */
-        public ProjectStaff createProjectStaff(String userServiceUuid, String projectId,
-                        String tenantId, RequestInfo requestInfo) {
-                log.info("Creating project staff mapping for userServiceUuid: {} and projectId: {}",
-                                userServiceUuid, projectId);
-
-                // Create project staff
-                ProjectStaff projectStaff = ProjectStaff.builder()
-                                .userId(userServiceUuid)
-                                .projectId(projectId)
-                                .tenantId(tenantId)
-                                .startDate(System.currentTimeMillis())
-                                .isDeleted(false)
-                                .build();
-
-                // Create project staff request
-                ProjectStaffRequest staffRequest = ProjectStaffRequest.builder()
-                                .requestInfo(requestInfo)
-                                .projectStaff(projectStaff)
-                                .build();
-
-                // Build the URI
-                StringBuilder uri = new StringBuilder();
-                uri.append(projectServiceHost)
-                                .append(projectStaffCreateUrl);
-
-                // Make the API call
-                ProjectStaffResponse response = fetchResult(uri, staffRequest, ProjectStaffResponse.class);
-
-                // Validate response
-                if (response == null || response.getProjectStaff() == null) {
-                        log.error("Failed to create project staff for userServiceUuid: {} and projectId: {}",
-                                        userServiceUuid, projectId);
-                        throw new CustomException("PROJECT_STAFF_CREATION_FAILED",
-                                        "Failed to create project staff mapping");
-                }
-
-                ProjectStaff createdStaff = response.getProjectStaff();
-                log.info("Successfully created project staff with id: {}", createdStaff.getId());
-                return createdStaff;
-        }
-
-        /**
          * Complete workflow: Search project, create employee in HRMS, and create
          * project staff.
          * This is a convenience method that orchestrates the entire flow.
          *
-         * @param projectName    The name of the project to search for
-         * @param boundaryCode   The boundary code to filter the project
          * @param user           The user object containing user details
-         * @param hierarchyType  The hierarchy type for the jurisdiction
          * @param employeeType   The type of employee (PERMANENT, TEMPORARY, etc.)
          * @param designation    The designation for the employee assignment
          * @param department     The department for the employee assignment
@@ -283,31 +295,24 @@ public class ProjectEmployeeStaffUtil {
          * @return The created ProjectStaff object
          * @throws CustomException if any step in the workflow fails
          */
-        public User createEmployeeAndProjectStaff(String projectName, String boundaryCode,
-                        User user, String hierarchyType,
+        public User createEmployeeAndProjectStaff(
+                        User user,
                         String employeeType, String designation,
                         String department, String employeeStatus,
                         String tenantId, String createdBy,
                         RequestInfo requestInfo) {
-                log.info("Starting complete workflow: project search -> HRMS employee creation -> project staff creation");
 
-                // Step 1: Search for project
-                Project project = searchProjectByNameAndBoundary(projectName, boundaryCode, tenantId, requestInfo);
 
-                // Step 2: Create employee in HRMS
-                Employee employee = createEmployeeInHrms(user, project, hierarchyType, employeeType,
+                // Create employee in HRMS
+                Employee employee = createEmployeeInHrms(user, employeeType,
                                 designation, department, employeeStatus, System.currentTimeMillis(),
                                 tenantId, createdBy, requestInfo);
 
-                // Step 3: Create project staff
                 String userServiceUuid = employee.getUser().getUserServiceUuid();
                 if (userServiceUuid == null || userServiceUuid.isEmpty()) {
-                        throw new CustomException("USER_SERVICE_UUID_MISSING",
+                        throw new CustomException(CUSTOM_EXCEPTION_USER_SERVICE_UUID_MISSING,
                                         "User service UUID is missing from HRMS employee response");
                 }
-
-                // ProjectStaff projectStaff = createProjectStaff(userServiceUuid,
-                // project.getId(), tenantId, requestInfo);
 
                 log.info("Successfully completed workflow for user: {}", user.getName());
                 return employee.getUser();
@@ -322,11 +327,10 @@ public class ProjectEmployeeStaffUtil {
                         response = restTemplate.postForObject(uri.toString(), request, clazz);
                 } catch (HttpClientErrorException e) {
                         // Handle HTTP client errors
-                        throw new CustomException("HTTP_CLIENT_ERROR",
+                        throw new CustomException(CUSTOM_EXCEPTION_HTTP_CLIENT_ERROR,
                                         String.format("%s - %s", e.getMessage(), e.getResponseBodyAsString()));
                 } catch (Exception exception) {
-                        // Handle other exceptions
-                        throw new CustomException("SERVICE_REQUEST_CLIENT_ERROR",
+                        throw new CustomException(CUSTOM_EXCEPTION_SERVICE_REQUEST_CLIENT_ERROR,
                                         exception.getMessage());
                 }
                 return response;

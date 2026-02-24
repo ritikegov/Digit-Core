@@ -1,16 +1,17 @@
 package org.egov.user.config;
 
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 /**
  * Supplies OIDC providers from static config (auth.providers in application.properties / env).
  */
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = "auth.oidc.providers-source", havingValue = "static", matchIfMissing = true)
+@ConditionalOnProperty(name = "auth.oidc.providers-source", havingValue = OidcConfigConstants.PROVIDERS_SOURCE_STATIC, matchIfMissing = true)
 public class StaticOidcProviderSupplier implements OidcProviderSupplier {
 
     private final AuthProperties authProperties;

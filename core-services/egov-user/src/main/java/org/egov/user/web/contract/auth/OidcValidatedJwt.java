@@ -11,21 +11,15 @@ public class OidcValidatedJwt {
     private final Map<String, Object> claims;
     private final Date expirationTime;
     private final Date issuanceTime;
-    private final String projectName;
-    private final String hierarchy;
-    private final String boundary;
     private final String rawToken;
     private final String providerId;
 
     public OidcValidatedJwt(Set<String> roles, Map<String, Object> claims, Date expirationTime, Date issuanceTime,
-            String projectName, String hierarchy, String boundary, String rawToken, String providerId) {
+            String rawToken, String providerId) {
         this.claims = claims;
         this.roles = roles;
         this.expirationTime = expirationTime;
         this.issuanceTime = issuanceTime;
-        this.projectName = projectName;
-        this.hierarchy = hierarchy;
-        this.boundary = boundary;
         this.rawToken = rawToken;
         this.providerId = providerId;
     }

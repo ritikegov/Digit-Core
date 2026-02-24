@@ -1,9 +1,7 @@
-package org.egov.user.domain.model.project;
+package org.egov.user.domain.model.boundary;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import javax.validation.Valid;
-import javax.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -11,27 +9,23 @@ import lombok.NoArgsConstructor;
 import org.egov.common.contract.response.ResponseInfo;
 import org.springframework.validation.annotation.Validated;
 
+import java.util.List;
+
 /**
-* ProjectStaffResponse
-*/
+ * Response from boundary relationship search API.
+ */
 @Validated
-
-
 @Data
-@NoArgsConstructor
 @AllArgsConstructor
+@NoArgsConstructor
 @Builder
-@JsonIgnoreProperties(ignoreUnknown = true)
-public class ProjectStaffResponse   {
+public class BoundarySearchResponse {
 
     @JsonProperty("ResponseInfo")
-    @NotNull
     @Valid
     private ResponseInfo responseInfo = null;
 
-    @JsonProperty("ProjectStaff")
-    @NotNull
+    @JsonProperty("TenantBoundary")
     @Valid
-    private ProjectStaff projectStaff = null;
+    private List<HierarchyRelation> tenantBoundary = null;
 }
-

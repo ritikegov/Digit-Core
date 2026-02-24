@@ -10,6 +10,7 @@ public class JwtExchangeAuthenticationToken extends AbstractAuthenticationToken 
 
     private final String jwt;
     private final String authToken;
+    private final String tenantId;
 
     /**
      * Creates a JWT exchange authentication token with only the JWT token.
@@ -20,6 +21,7 @@ public class JwtExchangeAuthenticationToken extends AbstractAuthenticationToken 
         super(null);
         this.jwt = jwt;
         this.authToken = null;
+        this.tenantId = null;
         setAuthenticated(false);
     }
 
@@ -29,10 +31,11 @@ public class JwtExchangeAuthenticationToken extends AbstractAuthenticationToken 
      * @param jwt the JWT token from the identity provider
      * @param authToken the MFA or access token (optional, can be null)
      */
-    public JwtExchangeAuthenticationToken(String jwt, String authToken) {
+    public JwtExchangeAuthenticationToken(String jwt, String authToken, String tenantId) {
         super(null);
         this.jwt = jwt;
         this.authToken = authToken;
+        this.tenantId = tenantId;
         setAuthenticated(false);
     }
 
@@ -63,6 +66,10 @@ public class JwtExchangeAuthenticationToken extends AbstractAuthenticationToken 
      */
     public String getAuthToken() {
         return authToken;
+    }
+
+    public String getTenantId() {
+        return tenantId;
     }
 }
 

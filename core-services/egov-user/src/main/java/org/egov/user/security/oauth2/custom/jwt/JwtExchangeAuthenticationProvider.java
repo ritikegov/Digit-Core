@@ -1,28 +1,24 @@
 package org.egov.user.security.oauth2.custom.jwt;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Random;
-import java.util.Set;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.log4j.MDC;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.utils.MultiStateInstanceUtil;
-import org.egov.user.config.AuthProperties;
-import org.egov.user.config.OidcProviderSupplier;
-import org.egov.user.config.UserServiceConstants;
+import org.egov.user.config.*;
 import org.egov.user.domain.exception.DuplicateUserNameException;
 import org.egov.user.domain.exception.UserNotFoundException;
+import org.egov.user.domain.exception.sso.OidcProviderConfigException;
+import org.egov.user.domain.exception.sso.SsoMissingParamException;
+import org.egov.user.domain.exception.sso.SsoUserMappingException;
 import org.egov.user.domain.model.Role;
 import org.egov.user.domain.model.SecureUser;
 import org.egov.user.domain.model.User;
 import org.egov.user.domain.model.enums.UserType;
 import org.egov.user.domain.service.UserService;
-import org.egov.user.domain.service.utils.EncryptionDecryptionUtil;
+import org.egov.user.security.oauth2.custom.service.EmployeeCreationProfile;
+import org.egov.user.security.oauth2.custom.service.IdpGraphService;
+import org.egov.user.security.oauth2.custom.service.impl.NoOpGraphService;
 import org.egov.user.utils.ProjectEmployeeStaffUtil;
-import org.egov.user.security.oauth2.custom.MsGraphService;
 import org.egov.user.web.contract.auth.OidcValidatedJwt;
 import org.springframework.beans.BeanUtils;
 import org.springframework.security.authentication.AuthenticationProvider;
@@ -30,14 +26,17 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.oauth2.common.exceptions.OAuth2Exception;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
+import java.util.*;
+import java.util.stream.Collectors;
 
 import static java.util.Objects.isNull;
+import static java.util.Objects.requireNonNull;
 import static org.springframework.util.StringUtils.isEmpty;
 
 @Slf4j
@@ -47,83 +46,87 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
     private final JwtValidationService jwtValidationService;
     private final UserService userService;
     private final MultiStateInstanceUtil centraInstanceUtil;
-    private final EncryptionDecryptionUtil encryptionDecryptionUtil;
     private final ProjectEmployeeStaffUtil projectEmployeeStaffUtil;
-    private final AuthProperties authProperties;
     private final OidcProviderSupplier oidcProviderSupplier;
-    private final MsGraphService msGraphService;
+    private final List<IdpGraphService> graphServices;
     private final AccessTokenMfaExtractor accessTokenMfaExtractor;
+    private final SsoDefaultPasswordResolver ssoDefaultPasswordResolver;
+    private final NoOpGraphService noOpGraphService;
 
     public JwtExchangeAuthenticationProvider(
             JwtValidationService jwtValidationService,
             UserService userService, MultiStateInstanceUtil centraInstanceUtil,
-            EncryptionDecryptionUtil encryptionDecryptionUtil, ProjectEmployeeStaffUtil projectEmployeeStaffUtil,
-            AuthProperties authProperties, OidcProviderSupplier oidcProviderSupplier,
-            MsGraphService msGraphService,
-            AccessTokenMfaExtractor accessTokenMfaExtractor) {
+            ProjectEmployeeStaffUtil projectEmployeeStaffUtil,
+            OidcProviderSupplier oidcProviderSupplier,
+            List<IdpGraphService> graphServices,
+            AccessTokenMfaExtractor accessTokenMfaExtractor,
+            SsoDefaultPasswordResolver ssoDefaultPasswordResolver,
+            NoOpGraphService noOpGraphService) {
         this.jwtValidationService = jwtValidationService;
         this.userService = userService;
         this.centraInstanceUtil = centraInstanceUtil;
-        this.encryptionDecryptionUtil = encryptionDecryptionUtil;
         this.projectEmployeeStaffUtil = projectEmployeeStaffUtil;
-        this.authProperties = authProperties;
         this.oidcProviderSupplier = oidcProviderSupplier;
-        this.msGraphService = msGraphService;
-        this.accessTokenMfaExtractor = accessTokenMfaExtractor;
+        this.graphServices = graphServices != null ? graphServices : new ArrayList<>();
+        this.accessTokenMfaExtractor = requireNonNull(accessTokenMfaExtractor,
+                JwtConstants.MFA_EXTRACTOR_REQUIRED_MESSAGE);
+        this.ssoDefaultPasswordResolver = ssoDefaultPasswordResolver;
+        this.noOpGraphService = noOpGraphService;
     }
 
     /**
-     * Authenticates a user using JWT exchange flow.
-     * 
-     * <p>This method performs the following operations:
+     * Authenticates a user using JWT exchange flow with SSO integration.
+     *
+     * <p>This method handles the complete authentication lifecycle for SSO users:
      * <ol>
-     *   <li>Validates the JWT token from the identity provider</li>
-     *   <li>Extracts tenant ID, user type, and user information from JWT</li>
-     *   <li>Looks up existing user or creates new user if not found</li>
-     *   <li>Updates user information from JWT claims (roles, email, name, etc.)</li>
-     *   <li>Enriches user with MFA details from access token and Microsoft Graph</li>
-     *   <li>Validates account status (active, locked)</li>
-     *   <li>Unlocks account if eligible</li>
-     *   <li>Returns authenticated user with authorities</li>
+     *   <li>Validates JWT token and extracts tenant ID, user type, and provider information</li>
+     *   <li>Validates required parameters (tenant ID, user type)</li>
+     *   <li>Looks up existing user by issuer, external user ID, and tenant</li>
+     *   <li>If user exists: updates user information with latest JWT claims and MFA details</li>
+     *   <li>If user not found: creates new HRMS user with employee/project staff mapping</li>
+     *   <li>Applies MFA details from access token and provider-specific graph service</li>
+     *   <li>Sets creator ID from OID digits if available</li>
+     *   <li>Validates account status (active, not locked)</li>
+     *   <li>Unlocks account if eligible based on failed login attempts</li>
+     *   <li>Resets failed login attempts and returns authenticated user</li>
      * </ol>
      *
-     * @param authentication the JwtExchangeAuthenticationToken containing JWT and optional auth token
-     * @return UsernamePasswordAuthenticationToken with authenticated user and authorities
-     * @throws OAuth2Exception if authentication fails (invalid token, user not found, account locked, etc.)
+     * <p>Handles both existing user updates and new user creation scenarios with proper
+     * exception handling for missing users, duplicate users, inactive accounts, and locked accounts.
+     *
+     * @param authentication the JwtExchangeAuthenticationToken containing JWT token, optional auth token, and tenant ID
+     * @return UsernamePasswordAuthenticationToken with authenticated SecureUser and role-based authorities
+     * @throws SsoMissingParamException if tenant ID or user type is missing/invalid
+     * @throws SsoUserMappingException if user is inactive, account is permanently locked, or duplicate user conflict
+     * @throws OidcProviderConfigException if provider configuration is not found
+     * @throws UserNotFoundException if user lookup fails (handled internally for new user creation)
+     * @throws DuplicateUserNameException if user creation results in duplicate username (fatal error)
      */
     @Override
     public Authentication authenticate(Authentication authentication) {
-        try {
-            String token = (String) authentication.getCredentials();
-            String authToken = null;
+        String token = (String) authentication.getCredentials();
+        String authToken = null;
+        String tenantId = null;
+        if (authentication instanceof JwtExchangeAuthenticationToken) {
+            authToken = ((JwtExchangeAuthenticationToken) authentication).getAuthToken();
+            tenantId = ((JwtExchangeAuthenticationToken) authentication).getTenantId();
+        }
 
-            // Extract auth token from JwtExchangeAuthenticationToken if available
-            if (authentication instanceof JwtExchangeAuthenticationToken) {
-                authToken = ((JwtExchangeAuthenticationToken) authentication).getAuthToken();
-            }
+        OidcValidatedJwt jwt = jwtValidationService.validate(token, tenantId);
 
-            OidcValidatedJwt jwt;
-            try {
-                jwt = jwtValidationService.validate(token);
-            } catch (IllegalArgumentException e) {
-                log.error("JWT validation failed: {}", e.getMessage());
-                throw new OAuth2Exception("Invalid JWT token: " + e.getMessage());
-            }
-
-        String tenantId = jwt.getTenantId();
         String userType = jwt.getUserType();
         if (centraInstanceUtil.getIsEnvironmentCentralInstance()) {
             MDC.put(UserServiceConstants.TENANTID_MDC_STRING, tenantId);
         }
 
         if (isEmpty(tenantId)) {
-            throw new OAuth2Exception("TenantId is mandatory");
+            throw SsoMissingParamException.tenantIdMissing();
         }
         if (isEmpty(userType) || isNull(UserType.fromValue(userType))) {
-            throw new OAuth2Exception("User Type is mandatory and has to be a valid type");
+            throw SsoMissingParamException.userTypeMissing();
         }
 
-        AuthProperties.Provider provider = getProviderById(jwt.getProviderId());
+        AuthProperties.Provider provider = getProviderById(jwt.getProviderId(),tenantId);
         AccessTokenMfaDetails mfaDetails = accessTokenMfaExtractor.extract(authToken);
 
         User user;
@@ -134,7 +137,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
             requestInfo = getRequestInfo(user);
             User userForUpdate = createUserForSsoUpdate(user, jwt);
             applyMfaDetailsToUser(userForUpdate, mfaDetails);
-            msGraphService.enrichUserWithMfaDetails(userForUpdate, provider, jwt.getOid());
+            resolveGraphService(provider).enrichUserWithMfaDetails(userForUpdate, provider, jwt.getOid());
             if (jwt.getOid() != null) {
                 String oidDigits = jwt.getOid().replaceAll("\\D", "");
                 if (!oidDigits.isEmpty()) {
@@ -147,20 +150,25 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
             requestInfo.getUserInfo().setId(userForUpdate.getId());
             user = userService.updateWithoutOtpValidation(userForUpdate, requestInfo);
         } catch (UserNotFoundException e) {
-            log.info("User not found for user id: {}, creating new user", jwt.getOid(), e);
+            log.info("User not found for oid: {}, creating new user", jwt.getOid(), e);
             requestInfo = getRequestInfo(jwt.getRoles(), jwt.getUserType(), jwt.getOid());
 
-            String mobileNumber = generateMobileNumber(provider);
-            org.egov.user.domain.model.hrms.User userToCreate = convertJwtToUser(jwt, mobileNumber, provider);
-            userToCreate.setPassword(provider.getDefaultPassword());
+            String password = ssoDefaultPasswordResolver.resolveDefaultPassword(tenantId, provider.getId());
+            org.egov.user.domain.model.hrms.User userToCreate = convertJwtToUser(jwt, provider);
+            userToCreate.setPassword(password);
+            Optional<EmployeeCreationProfile> profileOpt = resolveGraphService(provider)
+                    .getEmployeeCreationProfile(provider, jwt.getOid());
+            String employeeType = profileOpt.map(EmployeeCreationProfile::getEmployeeType).filter(StringUtils::hasText)
+                    .orElse(OidcConfigConstants.DEFAULT_EMPLOYEE_TYPE);
+            String designation = profileOpt.map(EmployeeCreationProfile::getDesignation).filter(StringUtils::hasText)
+                    .orElse(OidcConfigConstants.DEFAULT_DESIGNATION_ID);
+            String department = profileOpt.map(EmployeeCreationProfile::getDepartment).filter(StringUtils::hasText)
+                    .orElse(OidcConfigConstants.DEFAULT_DEPARTMENT_CODE);
             org.egov.user.domain.model.hrms.User hrmsUser = projectEmployeeStaffUtil.createEmployeeAndProjectStaff(
-                    jwt.getProjectName(),
-                    jwt.getBoundary(),
                     userToCreate,
-                    jwt.getHierarchy(),
-                    provider.getEmployeeType(),
-                    provider.getDefaultDesignation(),
-                    provider.getDefaultDepartment(),
+                    employeeType,
+                    designation,
+                    department,
                     provider.getDefaultEmployeeStatus(),
                     tenantId,
                     jwt.getOid(),
@@ -168,7 +176,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
             String userUuid = hrmsUser.getUserServiceUuid();
             log.info("Created HRMS user and staff mapping for user service uuid: {}", userUuid);
             User createdUser = convertHrmsUserToUser(hrmsUser);
-            createdUser.setPassword(provider.getDefaultPassword());
+            createdUser.setPassword(password);
             createdUser.setTenantId(tenantId);
             createdUser.setIdpIssuer(jwt.getIssuer());
             createdUser.setIdpSubject(jwt.getSubject());
@@ -176,7 +184,6 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
             createdUser.setJwtToken(jwt.getRawToken());
             createdUser.setIdpTokenExp(jwt.getExpirationTime());
             createdUser.setLastSsoLoginAt(jwt.getIssuanceTime());
-            createdUser.setActive(Boolean.TRUE);
             createdUser.setActive(Boolean.TRUE);
             createdUser.setEmailId(jwt.getPreferredUsername());
             if (jwt.getOid() != null) {
@@ -188,52 +195,69 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
                 }
             }
             applyMfaDetailsToUser(createdUser, mfaDetails);
-            msGraphService.enrichUserWithMfaDetails(createdUser, provider, jwt.getOid());
+            resolveGraphService(provider).enrichUserWithMfaDetails(createdUser, provider, jwt.getOid());
 
             requestInfo.getUserInfo().setId(createdUser.getId());
             requestInfo.getUserInfo().setUuid(createdUser.getUuid());
             user = userService.updateWithoutOtpValidation(createdUser, requestInfo);
         } catch (DuplicateUserNameException e) {
-            log.error("Fatal error, user conflict, more than one user found", e);
-            throw new OAuth2Exception("Invalid login credentials: duplicate users found");
-
+            log.error("Fatal: duplicate user conflict for oid: {}", jwt.getOid(), e);
+            throw SsoUserMappingException.duplicateUser(e);
         }
 
         if (user.getActive() == null || !user.getActive()) {
-            throw new OAuth2Exception("Please activate your account");
+            throw SsoUserMappingException.userInactive();
         }
 
-        // If account is locked, perform lazy unlock if eligible
         if (user.getAccountLocked() != null && user.getAccountLocked()) {
             if (userService.isAccountUnlockAble(user)) {
                 user = unlockAccount(user, requestInfo);
-            } else
-                throw new OAuth2Exception("Account locked");
+            } else {
+                throw SsoUserMappingException.accountLocked();
+            }
         }
 
-            List<GrantedAuthority> grantedAuths = new ArrayList<>();
-            grantedAuths.add(new SimpleGrantedAuthority(provider.getRolePrefix() + user.getType()));
-            final SecureUser secureUser = new SecureUser(getUser(user));
-            userService.resetFailedLoginAttempts(user);
-            return new UsernamePasswordAuthenticationToken(secureUser, user.getPassword(), grantedAuths);
-        } catch (Exception e) {
-            log.error("Unexpected error during JWT exchange authentication", e);
-            throw new OAuth2Exception("Authentication failed: " + e.getMessage(), e);
-        }
+        List<GrantedAuthority> grantedAuths = new ArrayList<>();
+        grantedAuths.add(new SimpleGrantedAuthority(provider.getRolePrefix() + user.getType()));
+        final SecureUser secureUser = new SecureUser(getUser(user));
+        userService.resetFailedLoginAttempts(user);
+        return new UsernamePasswordAuthenticationToken(secureUser, user.getPassword(), grantedAuths);
     }
 
     /**
-     * Gets the provider configuration by provider ID.
-     *
-     * @param providerId the provider ID to look up
-     * @return the matching provider configuration
-     * @throws OAuth2Exception if no provider is found with the given ID
+     * Resolves the graph/MFA enrichment service for the given provider.
+     * Returns the first implementation that supports the provider, or a no-op if none match.
      */
-    private AuthProperties.Provider getProviderById(String providerId) {
-        return oidcProviderSupplier.getProviders().stream()
-                .filter(p -> p.getId() != null && p.getId().trim().equals(providerId))
+    private IdpGraphService resolveGraphService(AuthProperties.Provider provider) {
+        return graphServices.stream()
+                .filter(s -> s.supports(provider))
                 .findFirst()
-                .orElseThrow(() -> new OAuth2Exception("No OIDC provider configured for providerId=" + providerId));
+                .orElse(noOpGraphService);
+    }
+
+    /**
+     * Gets the provider configuration by provider ID and tenant ID.
+     *
+     * <p>This method searches through all available OIDC providers to find a matching
+     * configuration based on both provider ID and tenant ID. The match requires exact
+     * equality for both fields with proper null checks and string trimming.
+     *
+     * <p>The search is performed as a stream operation that filters providers by:
+     * <ul>
+     *   <li>Non-null provider ID that matches the given providerId (trimmed)</li>
+     *   <li>Non-null tenant ID that exactly matches the given tenantId</li>
+     * </ul>
+     *
+     * @param providerId the provider ID to look up (must not be null)
+     * @param tenantId the tenant ID to look up (must not be null)
+     * @return the matching provider configuration
+     * @throws OidcProviderConfigException if no provider is found with the given provider ID and tenant ID combination
+     */
+    private AuthProperties.Provider getProviderById(String providerId, String tenantId) {
+        return oidcProviderSupplier.getProviders().stream()
+                .filter(p -> p.getId() != null && p.getId().trim().equals(providerId) && p.getTenantId() !=null && p.getTenantId().equals(tenantId))
+                .findFirst()
+                .orElseThrow(() -> OidcProviderConfigException.providerNotFound(providerId));
     }
 
     /**
@@ -323,12 +347,10 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
      * Extracts user information from JWT claims and generates username if configured.
      *
      * @param jwt the validated JWT containing user claims
-     * @param mobileNumber the generated mobile number for the user
      * @param provider the OIDC provider configuration
      * @return HRMS User object ready for creation
      */
-    private org.egov.user.domain.model.hrms.User convertJwtToUser(OidcValidatedJwt jwt, String mobileNumber,
-            AuthProperties.Provider provider) {
+    private org.egov.user.domain.model.hrms.User convertJwtToUser(OidcValidatedJwt jwt, AuthProperties.Provider provider) {
         List<org.egov.user.domain.model.hrms.Role> roles = new ArrayList<>();
         if (!CollectionUtils.isEmpty(jwt.getRoles())) {
             for (String role : jwt.getRoles()) {
@@ -339,11 +361,9 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
                 roles.add(domainRole);
             }
         }
-        String idpRole = getFirstIdpRole(jwt, provider);
-        String userName = generateEmployeeUsername(jwt.getTenantId(), jwt.getRoles(), idpRole, provider);
-        if (userName == null) {
-            userName = jwt.getPreferredUsername();
-        }
+
+        String username = jwt.getPreferredUsername();
+
         return org.egov.user.domain.model.hrms.User.builder()
                 .uuid(jwt.getExternalUserId())
                 .emailId(jwt.getEmail())
@@ -352,9 +372,8 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
                 .tenantId(jwt.getTenantId())
                 .type(jwt.getUserType())
                 .roles(roles)
-                .userName(userName)
+                .userName(username)
                 .name(jwt.getName())
-                .mobileNumber(mobileNumber)
                 .dob(provider.getDefaultDob())
                 .createdBy(jwt.getOid())
                 .build();
@@ -377,79 +396,6 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
             return list.isEmpty() ? null : (list.get(0) != null ? list.get(0).toString() : null);
         }
         return val != null ? val.toString() : null;
-    }
-
-    /**
-     * Generates employee username from pattern when auth.providers[i].employee-username-format is set.
-     * Placeholders: {provider} (e.g. ms, google), {tenantId}, {role} (Digit-mapped), {idpRole} (raw IdP role), {number}.
-     */
-    private String generateEmployeeUsername(String tenantId, Set<String> roles, String idpRole,
-            AuthProperties.Provider provider) {
-        String format = provider.getEmployeeUsernameFormat();
-        if (format == null || format.trim().isEmpty()) {
-            return null;
-        }
-        String role = null;
-        if (!CollectionUtils.isEmpty(roles)) {
-            role = roles.iterator().next();
-        }
-        if (role == null && provider.getDefaultRoleCodes() != null) {
-            String[] parts = provider.getDefaultRoleCodes().split(",");
-            if (parts.length > 0) {
-                role = parts[0].trim();
-            }
-        }
-        if (role == null) {
-            role = "EMP";
-        }
-        if (idpRole == null) {
-            idpRole = "";
-        }
-        String providerKey = provider.getEmployeeUsernameProviderKey();
-        if (providerKey == null) {
-            providerKey = provider.getId() != null ? provider.getId() : "";
-        }
-        int numLen = provider.getEmployeeUsernameNumberLength() != null && provider.getEmployeeUsernameNumberLength() > 0
-                ? provider.getEmployeeUsernameNumberLength() : 6;
-        long seq;
-        try {
-            seq = userService.getNextEmployeeUsernameNumber(tenantId != null ? tenantId : "", numLen);
-        } catch (Exception e) {
-            log.warn("Failed to get next employee username sequence for tenant {}, using random: {}", tenantId, e.getMessage());
-            int max = (int) Math.pow(10, numLen);
-            seq = new Random().nextInt(max);
-        }
-        String number = String.format("%0" + numLen + "d", seq);
-        return format
-                .replace("{provider}", providerKey)
-                .replace("{tenantId}", tenantId != null ? tenantId : "")
-                .replace("{role}", role)
-                .replace("{idpRole}", idpRole)
-                .replace("{number}", number);
-    }
-
-    /**
-     * Generates a random mobile number for new users.
-     * Uses the provider's configured prefix and length.
-     *
-     * @param provider the OIDC provider configuration
-     * @return generated mobile number string
-     */
-    private String generateMobileNumber(AuthProperties.Provider provider) {
-        Random random = new Random();
-        String prefix = provider.getMobileNumberPrefix();
-        int length = provider.getMobileNumberLength();
-        int remainingLength = length - prefix.length();
-
-        if (remainingLength <= 0) {
-            return prefix;
-        }
-
-        StringBuilder mobileNumber = new StringBuilder(prefix);
-        for (int i = 0; i < remainingLength; i++) {
-            mobileNumber.append(random.nextInt(10));
-        }
-        return mobileNumber.toString();
     }
 
     /**

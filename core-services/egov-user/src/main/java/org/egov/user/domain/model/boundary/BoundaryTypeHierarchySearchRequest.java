@@ -1,9 +1,7 @@
-package org.egov.user.domain.model.project;
+package org.egov.user.domain.model.boundary;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import javax.validation.Valid;
-import javax.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -12,25 +10,20 @@ import org.egov.common.contract.request.RequestInfo;
 import org.springframework.validation.annotation.Validated;
 
 /**
-* ProjectStaffRequest
-*/
+ * Request body for boundary hierarchy definition search.
+ */
 @Validated
-
-
 @Data
-@NoArgsConstructor
 @AllArgsConstructor
+@NoArgsConstructor
 @Builder
-@JsonIgnoreProperties(ignoreUnknown = true)
-public class ProjectStaffRequest {
+public class BoundaryTypeHierarchySearchRequest {
+
     @JsonProperty("RequestInfo")
-    @NotNull
     @Valid
     private RequestInfo requestInfo = null;
 
-    @JsonProperty("ProjectStaff")
-    @NotNull
+    @JsonProperty("BoundaryTypeHierarchySearchCriteria")
     @Valid
-    private ProjectStaff projectStaff;
+    private BoundaryTypeHierarchySearchCriteria boundaryTypeHierarchySearchCriteria = null;
 }
-

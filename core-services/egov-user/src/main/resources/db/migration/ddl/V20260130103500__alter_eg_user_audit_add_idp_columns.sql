@@ -10,7 +10,7 @@ ALTER TABLE eg_user_audit_table
     ADD COLUMN mfa_device_name varchar(256),
     ADD COLUMN mfa_phone_last4 varchar(4),
     ADD COLUMN mfa_registered_on timestamp,
-    ADD COLUMN mfa_details varchar(1000);
+    ADD COLUMN mfa_details varchar(256);
 
 -- Update existing records to avoid NULL
 UPDATE eg_user_audit_table

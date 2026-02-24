@@ -31,6 +31,8 @@ public class AccessTokenMfaExtractor {
     private static final String CLAIM_MFA_DEVICE = "mfa_device_name";
     private static final String CLAIM_MFA_DETAILS = "mfa_details";
     private static final String CLAIM_MFA_REGISTERED_ON = "mfa_registered_on";
+    /** JSON key for MFA enabled flag (e.g. in non-JWT token payload). */
+    private static final String KEY_MFA_ENABLE = "mfaenable";
 
     private final ObjectMapper objectMapper;
 
@@ -79,12 +81,8 @@ public class AccessTokenMfaExtractor {
     }
 
     /**
-     * Determine MFA from "amr" claim. Microsoft sends amr as array; Nimbus may
-     * return List or other collection. Also handle single string.
-     */
-    /**
      * Determines if MFA was used based on the "amr" (Authentication Methods Reference) claim.
-     * Handles various formats: collections, iterables, and single strings.
+     * Microsoft sends amr as array; Nimbus may return List or other collection. Also handles single string.
      *
      * @param amrClaim the amr claim value from the JWT
      * @return true if MFA is indicated in the amr claim, false otherwise
@@ -167,8 +165,8 @@ public class AccessTokenMfaExtractor {
     private AccessTokenMfaDetails extractFromJson(String accessToken) throws Exception {
         JsonNode root = objectMapper.readTree(accessToken);
         boolean mfaEnabled = false;
-        if (root.has("mfaenable")) {
-            mfaEnabled = root.get("mfaenable").asBoolean();
+        if (root.has(KEY_MFA_ENABLE)) {
+            mfaEnabled = root.get(KEY_MFA_ENABLE).asBoolean();
         } else if (root.has(CLAIM_AMR)) {
             JsonNode amr = root.get(CLAIM_AMR);
             if (amr.isArray()) {

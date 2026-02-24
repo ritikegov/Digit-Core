@@ -1,5 +1,7 @@
 package org.egov.user.security.oauth2.custom.jwt;
 
+import org.egov.user.domain.exception.sso.IdpJwtValidationException;
+import org.egov.user.domain.exception.sso.OidcProviderConfigException;
 import org.egov.user.web.contract.auth.OidcValidatedJwt;
 
 /**
@@ -15,10 +17,10 @@ public interface JwtValidator {
      * @return true if this validator can handle tokens from this issuer, false otherwise
      */
     boolean supports(String issuer);
-    
+
     /**
      * Validates a JWT token and extracts claims into a standardized format.
-     * 
+     *
      * <p>This method should:
      * <ul>
      *   <li>Verify the token signature using the issuer's JWKS</li>
@@ -28,10 +30,11 @@ public interface JwtValidator {
      * </ul>
      *
      * @param token the raw JWT token string to validate
+     * @param tenantId tenant ID for provider resolution and for setting on validated claims
      * @return OidcValidatedJwt containing validated claims and extracted information
-     * @throws OAuth2Exception if token validation fails (invalid signature, expired, etc.)
-     * @throws IllegalArgumentException if the token format is invalid
+     * @throws IdpJwtValidationException if token validation fails (invalid signature, expired, etc.)
+     * @throws OidcProviderConfigException if provider configuration is missing or invalid
      */
-    OidcValidatedJwt validate(String token);
+    OidcValidatedJwt validate(String token, String tenantId);
 }
 

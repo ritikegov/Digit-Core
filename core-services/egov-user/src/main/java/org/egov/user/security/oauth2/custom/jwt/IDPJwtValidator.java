@@ -1,44 +1,31 @@
 package org.egov.user.security.oauth2.custom.jwt;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
-import javax.annotation.PostConstruct;
-
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nimbusds.jwt.JWTParser;
+import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.mdms.model.MasterDetail;
 import org.egov.mdms.model.MdmsCriteria;
 import org.egov.mdms.model.MdmsCriteriaReq;
 import org.egov.mdms.model.ModuleDetail;
-import org.egov.tracer.model.CustomException;
 import org.egov.user.config.AuthProperties;
 import org.egov.user.config.OidcProviderSupplier;
+import org.egov.user.domain.exception.sso.IdpJwtValidationException;
+import org.egov.user.domain.exception.sso.OidcProviderConfigException;
 import org.egov.user.web.contract.auth.OidcValidatedJwt;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
-import org.springframework.security.oauth2.common.exceptions.OAuth2Exception;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtValidators;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.jwt.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.nimbusds.jwt.JWTParser;
-
-import lombok.extern.slf4j.Slf4j;
+import javax.annotation.PostConstruct;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -109,64 +96,67 @@ public class IDPJwtValidator implements JwtValidator {
 
     /**
      * Validates a JWT token from an identity provider.
-     * 
+     *
      * <p>This method performs the following operations:
      * <ol>
      *   <li>Extracts issuer and audience from token (unverified)</li>
-     *   <li>Resolves the provider configuration based on issuer and audience</li>
+     *   <li>Resolves the provider configuration based on issuer, audience, and tenant ID</li>
      *   <li>Decodes and validates the token signature using JWKS</li>
-     *   <li>Validates standard claims (iss, aud, exp, nbf)</li>
-     *   <li>Extracts and normalizes tenant ID and user type</li>
+     *   <li>Validates standard claims (iss, aud, exp) using default Spring JWT validators</li>
+     *   <li>Sets tenant ID from request parameter and normalizes user type from claims or provider default</li>
      *   <li>Maps roles from JWT claims to Digit roles using MDMS or configuration</li>
-     *   <li>Extracts boundary information from roles</li>
      * </ol>
      *
      * @param token the raw JWT token string to validate
+     * @param tenantId tenant ID for provider resolution and for setting on validated claims
      * @return OidcValidatedJwt containing validated claims and extracted information
-     * @throws OAuth2Exception if token validation fails (invalid signature, expired, wrong audience, etc.)
-     * @throws CustomException if provider configuration is missing or invalid
+     * @throws IdpJwtValidationException if token validation fails (invalid signature, expired, wrong audience, etc.)
+     * @throws OidcProviderConfigException if provider configuration is missing or invalid
      */
     @Override
-    public OidcValidatedJwt validate(String token) {
+    public OidcValidatedJwt validate(String token, String tenantId) {
+        String issuer = extractIssuerUnverified(token);
+        List<String> audiences = extractAudiencesUnverified(token);
+        AuthProperties.Provider provider = resolveProvider(issuer, audiences, tenantId);
+        JwtDecoder decoder = getDecoder(provider);
+
+        Jwt jwt;
         try {
-            Map<String, Object> claims = null;
-            Date expirationTime = null;
-            Date issueTime = null;
-            Set<String> roles = new HashSet<>();
-            String boundary = null;
-            String issuer = extractIssuerUnverified(token);
-            List<String> audiences = extractAudiencesUnverified(token);
-            AuthProperties.Provider provider = resolveProvider(issuer, audiences);
-            JwtDecoder decoder = getDecoder(provider);
-            Jwt jwt = null;
-            try {
-                jwt = decoder.decode(token);
-            } catch (Exception e) {
-                log.error("Error while decoding the jwt token", e);
-                throw new OAuth2Exception(e.getMessage(), e);
+            jwt = decoder.decode(token);
+        } catch (JwtValidationException e) {
+            boolean isExpiry = e.getErrors().stream()
+                    .anyMatch(err -> err.getDescription() != null
+                            && err.getDescription().toLowerCase().contains("expired"));
+            if (isExpiry) {
+                log.warn("JWT token has expired for issuer: {}", issuer);
+                throw IdpJwtValidationException.expired(e.getMessage(), e);
             }
-            try {
-                claims = new HashMap<>(jwt.getClaims());
-                expirationTime = Date.from(jwt.getExpiresAt());
-                issueTime = Date.from(jwt.getIssuedAt());
-                String tenantId = firstNonEmpty((String) claims.get("tenantId"), (String) claims.get("tenant_id"),
-                        provider.getTenantId());
-                String userType = firstNonEmpty((String) claims.get("userType"), (String) claims.get("user_type"),
-                        provider.getUserType());
-                claims.put("tenantId", tenantId);
-                claims.put("userType", userType);
-                roles = extractRoles(provider, claims);
-                boundary = extractBoundary(provider, claims);
-            } catch (Exception e) {
-                log.error("Error while parsing the jwt token", e);
-                throw new OAuth2Exception("Invalid JWT token", e);
-            }
-            return new OidcValidatedJwt(roles, claims, expirationTime, issueTime, provider.getProjectName(),
-                    provider.getHierarchyType(), boundary, token, provider.getId());
+            log.error("JWT signature or claim validation failed for issuer: {}", issuer, e);
+            throw IdpJwtValidationException.invalid(e.getMessage(), e);
         } catch (Exception e) {
-            log.error("Unexpected error during JWT validation", e);
-            throw new OAuth2Exception("JWT validation failed: " + e.getMessage(), e);
+            log.error("Error decoding JWT token", e);
+            throw IdpJwtValidationException.invalid(e.getMessage(), e);
         }
+
+        Map<String, Object> claims;
+        Date expirationTime;
+        Date issueTime;
+        Set<String> roles;
+        try {
+            claims = new HashMap<>(jwt.getClaims());
+            expirationTime = Date.from(jwt.getExpiresAt());
+            issueTime = Date.from(jwt.getIssuedAt());
+            String userType = firstNonEmpty((String) claims.get(JwtConstants.CLAIM_USER_TYPE),
+                    (String) claims.get(JwtConstants.CLAIM_USER_TYPE_ALT), provider.getUserType());
+            claims.put(JwtConstants.CLAIM_TENANT_ID, tenantId);
+            claims.put(JwtConstants.CLAIM_USER_TYPE, userType);
+            roles = extractRoles(provider, claims);
+        } catch (Exception e) {
+            log.error("Error parsing JWT claims", e);
+            throw IdpJwtValidationException.invalid("Failed to extract claims from JWT", e);
+        }
+
+        return new OidcValidatedJwt(roles, claims, expirationTime, issueTime, token, provider.getId());
     }
 
     /**
@@ -194,7 +184,7 @@ public class IDPJwtValidator implements JwtValidator {
      */
     private Set<String> extractRoles(AuthProperties.Provider provider, Map<String, Object> claims) {
         String roleClaimKey = provider.getRoleClaimKey();
-        String tenantId = (String) claims.get("tenantId");
+        String tenantId = (String) claims.get(JwtConstants.CLAIM_TENANT_ID);
         Map<String, String> rolesMapping = fetchRoleMapping(provider, tenantId);
         Set<String> defaultRoles = getDefaultRoles(provider);
 
@@ -295,12 +285,12 @@ public class IDPJwtValidator implements JwtValidator {
         JsonNode response = restTemplate.postForObject(url, mdmsCriteriaReq, JsonNode.class);
 
         // Early return if response is invalid
-        if (response == null || !response.has("MdmsRes")) {
+        if (response == null || !response.has(JwtConstants.MDMS_RES)) {
             log.warn("No SSO role mapping found in MDMS for tenant {}: invalid response", tenantId);
             return Collections.emptyMap();
         }
 
-        JsonNode mdmsRes = response.get("MdmsRes");
+        JsonNode mdmsRes = response.get(JwtConstants.MDMS_RES);
         if (!mdmsRes.has(ssoRoleModuleName)) {
             log.warn("No SSO role mapping found in MDMS for tenant {}: module not found", tenantId);
             return Collections.emptyMap();
@@ -322,7 +312,7 @@ public class IDPJwtValidator implements JwtValidator {
         Map<String, String> mapping = new HashMap<>();
         for (JsonNode entry : masterNode) {
             if (isValidRoleMappingEntry(entry)) {
-                String ssoRole = entry.get("ssoRole").asText();
+                String ssoRole = entry.get(JwtConstants.KEY_SSO_ROLE).asText();
                 String digitRolesStr = extractDigitRoles(entry);
                 if (ssoRole != null && digitRolesStr != null) {
                     mapping.merge(ssoRole, digitRolesStr, (oldVal, newVal) -> oldVal + "," + newVal);
@@ -344,8 +334,8 @@ public class IDPJwtValidator implements JwtValidator {
      */
     private boolean isValidRoleMappingEntry(JsonNode entry) {
         return entry != null 
-                && entry.has("ssoRole") 
-                && (entry.has("digitRoles") || entry.has("digitRole"));
+                && entry.has(JwtConstants.KEY_SSO_ROLE) 
+                && (entry.has(JwtConstants.KEY_DIGIT_ROLES) || entry.has(JwtConstants.KEY_DIGIT_ROLE));
     }
 
     /**
@@ -356,9 +346,9 @@ public class IDPJwtValidator implements JwtValidator {
      * @return comma-separated string of digit roles, or null if not found
      */
     private String extractDigitRoles(JsonNode entry) {
-        JsonNode digitRolesNode = entry.has("digitRoles") 
-                ? entry.get("digitRoles") 
-                : entry.get("digitRole");
+        JsonNode digitRolesNode = entry.has(JwtConstants.KEY_DIGIT_ROLES) 
+                ? entry.get(JwtConstants.KEY_DIGIT_ROLES) 
+                : entry.get(JwtConstants.KEY_DIGIT_ROLE);
         
         if (digitRolesNode == null) {
             return null;
@@ -383,62 +373,6 @@ public class IDPJwtValidator implements JwtValidator {
                 .collect(Collectors.joining(","));
     }
 
-    /**
-     * Extracts boundary code from JWT claims based on roles.
-     * Uses role-to-boundary mapping from provider configuration, with fallback to defaults.
-     *
-     * @param provider the OIDC provider configuration
-     * @param claims the validated JWT claims map
-     * @return boundary code string
-     * @throws OAuth2Exception if no boundary code can be determined
-     */
-    private String extractBoundary(AuthProperties.Provider provider, Map<String, Object> claims) {
-        String roleClaimKey = provider.getRoleClaimKey();
-        Object rolesObject = claims.get(roleClaimKey);
-        
-        // Try to get boundary from role mapping
-        String boundaryCode = extractBoundaryFromRoles(provider, rolesObject);
-        
-        // Fallback to provider default
-        if (boundaryCode == null) {
-            boundaryCode = provider.getDefaultBoundaryCode();
-        }
-        
-        // Fallback to global default
-        if (boundaryCode == null) {
-            boundaryCode = authProperties.getDefaultBoundaryCode();
-        }
-        
-        // Throw exception if still no boundary found
-        if (boundaryCode == null) {
-            log.error("No boundary mapping found for roles {}", rolesObject);
-            throw new OAuth2Exception("No boundaryCode mapping found for roles " + rolesObject);
-        }
-        
-        return boundaryCode;
-    }
-
-    /**
-     * Extracts boundary code from roles using role-to-boundary mapping.
-     *
-     * @param provider the OIDC provider configuration
-     * @param rolesObject the roles object from JWT claims
-     * @return boundary code if found, null otherwise
-     */
-    private String extractBoundaryFromRoles(AuthProperties.Provider provider, Object rolesObject) {
-        Map<String, String> roleProjectMapping = provider.getRoleBoundaryMapping();
-        if (roleProjectMapping == null || !(rolesObject instanceof List)) {
-            return null;
-        }
-        
-        @SuppressWarnings("unchecked")
-        List<String> roles = (List<String>) rolesObject;
-        return roles.stream()
-                .map(roleProjectMapping::get)
-                .filter(Objects::nonNull)
-                .findFirst()
-                .orElse(null);
-    }
 
     /**
      * Extracts the issuer claim from a JWT without full validation.
@@ -452,7 +386,7 @@ public class IDPJwtValidator implements JwtValidator {
         try {
             return JWTParser.parse(jwt).getJWTClaimsSet().getIssuer();
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse JWT", e);
+            throw IdpJwtValidationException.parseFailed(e);
         }
     }
 
@@ -469,18 +403,19 @@ public class IDPJwtValidator implements JwtValidator {
             List<String> aud = JWTParser.parse(jwt).getJWTClaimsSet().getAudience();
             return aud == null ? Collections.emptyList() : aud;
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse JWT", e);
+            throw IdpJwtValidationException.parseFailed(e);
         }
     }
 
     /**
      * Gets or creates a JWT decoder for the given provider.
      * Decoders are cached by provider ID to avoid repeated initialization.
-     * Configures validators for issuer, audience, and timestamps.
+     * Validates provider configuration, builds NimbusJwtDecoder with JWKS URI,
+     * and sets custom JWT validator.
      *
      * @param provider the OIDC provider configuration
      * @return configured JwtDecoder instance
-     * @throws CustomException if JWKS URI or issuer URI is missing
+     * @throws OidcProviderConfigException if JWKS URI or issuer URI is missing
      */
     private JwtDecoder getDecoder(AuthProperties.Provider provider) {
         return decoders.computeIfAbsent(provider.getId(), id -> {
@@ -495,16 +430,14 @@ public class IDPJwtValidator implements JwtValidator {
      * Validates that provider has required configuration for JWT decoding.
      *
      * @param provider the provider to validate
-     * @throws CustomException if required configuration is missing
+     * @throws OidcProviderConfigException if required configuration is missing
      */
     private void validateProviderConfiguration(AuthProperties.Provider provider) {
         if (provider.getJwkSetUri() == null || provider.getJwkSetUri().trim().isEmpty()) {
-            throw new CustomException("OIDC_JWKS_MISSING",
-                    "jwk-set-uri missing for providerId=" + provider.getId());
+            throw OidcProviderConfigException.jwksMissing(provider.getId());
         }
         if (provider.getIssuerUri() == null || provider.getIssuerUri().trim().isEmpty()) {
-            throw new CustomException("OIDC_ISSUER_MISSING", 
-                    "issuer-uri missing for providerId=" + provider.getId());
+            throw OidcProviderConfigException.issuerMissing(provider.getId());
         }
     }
 
@@ -530,27 +463,39 @@ public class IDPJwtValidator implements JwtValidator {
     }
 
     /**
-     * Resolves the provider configuration based on issuer and audience.
+     * Resolves the provider configuration based on issuer, audience, and tenant ID.
      * Handles cases where multiple providers share the same issuer by using audience for disambiguation.
      *
      * @param issuerRaw the raw issuer claim from the token
      * @param tokenAudiences the audience claims from the token
+     * @param tenantId tenant ID to filter providers (optional; if null or empty, not used for filtering)
      * @return the matching provider configuration
-     * @throws CustomException if no provider matches or multiple providers match without disambiguation
+     * @throws OidcProviderConfigException if no provider matches or multiple providers match without disambiguation
      */
-    private AuthProperties.Provider resolveProvider(String issuerRaw, List<String> tokenAudiences) {
+    private AuthProperties.Provider resolveProvider(String issuerRaw, List<String> tokenAudiences, String tenantId) {
         String issuer = normalizeIssuer(issuerRaw);
         if (issuer == null || issuer.isEmpty()) {
-            throw new CustomException("OIDC_ISSUER_MISSING_IN_TOKEN", "Missing issuer (iss) in token");
+            throw OidcProviderConfigException.issuerMissingInToken();
         }
 
         List<AuthProperties.Provider> issuerMatches = oidcProviderSupplier.getProviders().stream()
                 .filter(p -> matchesIssuer(p, issuer))
+                .filter(p -> {
+                    // If no tenantId provided, don't filter by tenantId
+                    if (tenantId == null || tenantId.isEmpty()) {
+                        return true;
+                    }
+                    // If provider has no tenantId configured, don't match
+                    if (p.getTenantId() == null || p.getTenantId().isEmpty()) {
+                        return false;
+                    }
+                    // Match tenantId exactly
+                    return tenantId.equals(p.getTenantId());
+                })
                 .collect(Collectors.toList());
 
         if (issuerMatches.isEmpty()) {
-            throw new CustomException("OIDC_PROVIDER_NOT_FOUND",
-                    "No OIDC provider configured for issuer=" + issuerRaw);
+            throw OidcProviderConfigException.providerNotFound(issuerRaw);
         }
 
         if (issuerMatches.size() == 1) {
@@ -563,19 +508,21 @@ public class IDPJwtValidator implements JwtValidator {
 
     /**
      * Resolves provider from multiple issuer matches using audience disambiguation.
+     * Filters providers by intersecting their configured audiences with token audiences.
      *
      * @param issuerRaw the raw issuer claim for error messages
      * @param issuerMatches list of providers matching the issuer
      * @param tokenAudiences the audience claims from the token
      * @return the matching provider configuration
-     * @throws CustomException if disambiguation fails
+     * @throws OidcProviderConfigException if disambiguation fails:
+     *         - providerAmbiguous when no audiences in token or multiple audience matches
+     *         - providerNotFound when no providers match the token audiences
      */
     private AuthProperties.Provider resolveProviderByAudience(String issuerRaw, 
             List<AuthProperties.Provider> issuerMatches, List<String> tokenAudiences) {
         List<String> aud = tokenAudiences == null ? Collections.emptyList() : tokenAudiences;
         if (aud.isEmpty()) {
-            throw new CustomException("OIDC_PROVIDER_AMBIGUOUS",
-                    "Multiple OIDC providers match issuer=" + issuerRaw + " but token has no audience (aud)");
+            throw OidcProviderConfigException.providerAmbiguous(issuerRaw);
         }
 
         List<AuthProperties.Provider> audMatches = issuerMatches.stream()
@@ -587,15 +534,10 @@ public class IDPJwtValidator implements JwtValidator {
         }
 
         if (audMatches.isEmpty()) {
-            throw new CustomException("OIDC_PROVIDER_NOT_FOUND",
-                    "No OIDC provider matches issuer=" + issuerRaw + " and audience=" + aud);
+            throw OidcProviderConfigException.providerNotFound(issuerRaw);
         }
 
-        String matchedIds = audMatches.stream()
-                .map(AuthProperties.Provider::getId)
-                .collect(Collectors.joining(","));
-        throw new CustomException("OIDC_PROVIDER_AMBIGUOUS",
-                "Multiple OIDC providers match issuer=" + issuerRaw + " and audience=" + aud + " providers=" + matchedIds);
+        throw OidcProviderConfigException.providerAmbiguous(issuerRaw);
     }
 
     /**
@@ -718,7 +660,7 @@ public class IDPJwtValidator implements JwtValidator {
         }
 
         private OAuth2TokenValidatorResult createFailureResult(String message) {
-            OAuth2Error error = new OAuth2Error("invalid_token", message, null);
+            OAuth2Error error = new OAuth2Error(JwtConstants.OAUTH2_ERROR_INVALID_TOKEN, message, null);
             return OAuth2TokenValidatorResult.failure(error);
         }
     }
@@ -761,7 +703,7 @@ public class IDPJwtValidator implements JwtValidator {
         }
 
         private OAuth2TokenValidatorResult createFailureResult(String message) {
-            OAuth2Error error = new OAuth2Error("invalid_token", message, null);
+            OAuth2Error error = new OAuth2Error(JwtConstants.OAUTH2_ERROR_INVALID_TOKEN, message, null);
             return OAuth2TokenValidatorResult.failure(error);
         }
     }

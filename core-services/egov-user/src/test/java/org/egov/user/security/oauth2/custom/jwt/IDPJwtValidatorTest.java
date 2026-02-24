@@ -4,6 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.user.config.AuthProperties;
 import org.egov.user.config.OidcProviderSupplier;
+import org.egov.user.domain.exception.sso.IdpJwtValidationException;
+import org.egov.user.domain.exception.sso.OidcProviderConfigException;
+import org.egov.user.security.oauth2.custom.jwt.SsoErrorCodes;
 import org.egov.user.web.contract.auth.OidcValidatedJwt;
 import org.junit.Before;
 import org.junit.Test;
@@ -23,6 +26,7 @@ import java.util.HashMap;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.times;
@@ -68,13 +72,13 @@ public class IDPJwtValidatorTest {
                 String token = "header.payload.signature";
                 String issuer = "https://sts.windows.net/tenant-id/";
 
+                String tenantId = "pb.amritsar";
                 AuthProperties.Provider provider = new AuthProperties.Provider();
                 provider.setId("azure");
                 provider.setIssuerUri(issuer);
                 provider.setJwkSetUri("http://jwks");
                 provider.setRoleClaimKey("roles");
-                provider.setProjectName("NMCP");
-                provider.setHierarchyType("REVENUE");
+                provider.setTenantId(tenantId);
                 Map<String, String> roleMapping = new HashMap<>();
                 roleMapping.put("AZURE_ROLE_1", "DIGIT_ROLE_1");
                 ReflectionTestUtils.setField(provider, "roleMapping", roleMapping);
@@ -84,10 +88,6 @@ public class IDPJwtValidatorTest {
                 Map<String, Map<String, String>> roleMappingCache = (Map<String, Map<String, String>>) ReflectionTestUtils
                                 .getField(idpJwtValidator, "roleMappingCache");
                 roleMappingCache.put("azure:pb.amritsar", roleMapping);
-
-                Map<String, String> boundaryMapping = new HashMap<>();
-                boundaryMapping.put("AZURE_ROLE_1", "COUNTRY_CODE_TOGO");
-                ReflectionTestUtils.setField(provider, "roleBoundaryMapping", boundaryMapping);
 
                 when(authProperties.getProviders()).thenReturn(Collections.singletonList(provider));
                 when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
@@ -127,11 +127,11 @@ public class IDPJwtValidatorTest {
 
                 when(jwtDecoder.decode(realLookingToken)).thenReturn(jwt);
 
-                OidcValidatedJwt result = idpJwtValidator.validate(realLookingToken);
+                OidcValidatedJwt result = idpJwtValidator.validate(realLookingToken, tenantId);
 
                 assertNotNull(result);
-                assertEquals("NMCP", result.getProjectName());
-                assertEquals("COUNTRY_CODE_TOGO", result.getBoundary());
+                assertEquals("azure", result.getProviderId());
+                assertEquals(tenantId, result.getTenantId());
                 assertEquals(1, result.getRoles().size());
                 assertEquals("DIGIT_ROLE_1", result.getRoles().iterator().next());
         }
@@ -140,16 +140,23 @@ public class IDPJwtValidatorTest {
         public void testValidate_DefaultBoundary() {
                 String token = "header.payload.signature";
                 String issuer = "https://sts.windows.net/tenant-id/";
+                String tenantId = "pb.amritsar";
 
                 AuthProperties.Provider provider = new AuthProperties.Provider();
                 provider.setId("azure");
                 provider.setIssuerUri(issuer);
                 provider.setJwkSetUri("http://jwks");
                 provider.setRoleClaimKey("roles");
-                provider.setDefaultBoundaryCode("DEFAULT_BOUNDARY");
-                // No roleBoundaryMapping provided
-                ReflectionTestUtils.setField(provider, "roleMapping",
-                                Collections.singletonMap("AZURE_ROLE_1", "DIGIT_ROLE_1"));
+                provider.setTenantId(tenantId);
+                Map<String, String> roleMapping = new HashMap<>();
+                roleMapping.put("AZURE_ROLE_1", "DIGIT_ROLE_1");
+                ReflectionTestUtils.setField(provider, "roleMapping", roleMapping);
+
+                // Manually inject role mapping into the cache to bypass MDMS call in test
+                @SuppressWarnings("unchecked")
+                Map<String, Map<String, String>> roleMappingCache = (Map<String, Map<String, String>>) ReflectionTestUtils
+                                .getField(idpJwtValidator, "roleMappingCache");
+                roleMappingCache.put("azure:pb.amritsar", roleMapping);
 
                 when(authProperties.getProviders()).thenReturn(Collections.singletonList(provider));
                 when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
@@ -164,7 +171,7 @@ public class IDPJwtValidatorTest {
                 claims.put("iss", issuer);
                 claims.put("sub", "user-guid");
                 claims.put("roles", Collections.singletonList("AZURE_ROLE_1"));
-                claims.put("tenantId", "pb.amritsar");
+                claims.put("tenantId", tenantId);
                 claims.put("userType", "EMPLOYEE");
 
                 Jwt jwt = new Jwt(token, Instant.now(), Instant.now().plusSeconds(3600),
@@ -176,29 +183,38 @@ public class IDPJwtValidatorTest {
 
                 when(jwtDecoder.decode(realLookingToken)).thenReturn(jwt);
 
-                OidcValidatedJwt result = idpJwtValidator.validate(realLookingToken);
+                OidcValidatedJwt result = idpJwtValidator.validate(realLookingToken, tenantId);
 
                 assertNotNull(result);
-                assertEquals("DEFAULT_BOUNDARY", result.getBoundary());
+                assertEquals("azure", result.getProviderId());
+                assertEquals(tenantId, result.getTenantId());
+                assertEquals(1, result.getRoles().size());
         }
 
         @Test
         public void testValidate_GlobalDefaultBoundary() {
                 String token = "header.payload.signature";
                 String issuer = "https://sts.windows.net/tenant-id/";
+                String tenantId = "pb.amritsar";
 
                 AuthProperties.Provider provider = new AuthProperties.Provider();
                 provider.setId("azure");
                 provider.setIssuerUri(issuer);
                 provider.setJwkSetUri("http://jwks");
                 provider.setRoleClaimKey("roles");
-                // No provider-specific defaultBoundaryCode
-                ReflectionTestUtils.setField(provider, "roleMapping",
-                                Collections.singletonMap("AZURE_ROLE_1", "DIGIT_ROLE_1"));
+                provider.setTenantId(tenantId);
+                Map<String, String> roleMapping = new HashMap<>();
+                roleMapping.put("AZURE_ROLE_1", "DIGIT_ROLE_1");
+                ReflectionTestUtils.setField(provider, "roleMapping", roleMapping);
+
+                // Manually inject role mapping into cache to bypass MDMS call in test
+                @SuppressWarnings("unchecked")
+                Map<String, Map<String, String>> roleMappingCache = (Map<String, Map<String, String>>) ReflectionTestUtils
+                                .getField(idpJwtValidator, "roleMappingCache");
+                roleMappingCache.put("azure:pb.amritsar", roleMapping);
 
                 when(authProperties.getProviders()).thenReturn(Collections.singletonList(provider));
                 when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
-                when(authProperties.getDefaultBoundaryCode()).thenReturn("GLOBAL_DEFAULT_BOUNDARY");
 
                 @SuppressWarnings("unchecked")
                 Map<String, JwtDecoder> decoders = (Map<String, JwtDecoder>) ReflectionTestUtils.getField(
@@ -210,7 +226,7 @@ public class IDPJwtValidatorTest {
                 claims.put("iss", issuer);
                 claims.put("sub", "user-guid");
                 claims.put("roles", Collections.singletonList("AZURE_ROLE_1"));
-                claims.put("tenantId", "pb.amritsar");
+                claims.put("tenantId", tenantId);
                 claims.put("userType", "EMPLOYEE");
 
                 Jwt jwt = new Jwt(token, Instant.now(), Instant.now().plusSeconds(3600),
@@ -222,10 +238,12 @@ public class IDPJwtValidatorTest {
 
                 when(jwtDecoder.decode(realLookingToken)).thenReturn(jwt);
 
-                OidcValidatedJwt result = idpJwtValidator.validate(realLookingToken);
+                OidcValidatedJwt result = idpJwtValidator.validate(realLookingToken, tenantId);
 
                 assertNotNull(result);
-                assertEquals("GLOBAL_DEFAULT_BOUNDARY", result.getBoundary());
+                assertEquals("azure", result.getProviderId());
+                assertEquals(tenantId, result.getTenantId());
+                assertEquals(1, result.getRoles().size());
         }
 
         @Test
@@ -239,9 +257,7 @@ public class IDPJwtValidatorTest {
                 provider.setIssuerUri(issuer);
                 provider.setJwkSetUri("http://jwks");
                 provider.setRoleClaimKey("roles");
-                provider.setProjectName("NMCP");
-                provider.setHierarchyType("REVENUE");
-                provider.setDefaultBoundaryCode("COUNTRY_CODE_TOGO");
+                provider.setTenantId(tenantId);
 
                 when(authProperties.getProviders()).thenReturn(Collections.singletonList(provider));
                 when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
@@ -281,7 +297,7 @@ public class IDPJwtValidatorTest {
 
                 when(jwtDecoder.decode(realLookingToken)).thenReturn(jwt);
 
-                OidcValidatedJwt result = idpJwtValidator.validate(realLookingToken);
+                OidcValidatedJwt result = idpJwtValidator.validate(realLookingToken, tenantId);
 
                 assertNotNull(result);
                 assertEquals(1, result.getRoles().size());
@@ -299,7 +315,7 @@ public class IDPJwtValidatorTest {
                 provider.setIssuerUri(issuer);
                 provider.setJwkSetUri("http://jwks");
                 provider.setRoleClaimKey("roles");
-                provider.setDefaultBoundaryCode("COUNTRY_CODE_TOGO");
+                provider.setTenantId(tenantId);
                 Map<String, String> roleMapping = Collections.singletonMap("AZURE_ROLE_1", "FALLBACK_ROLE");
                 ReflectionTestUtils.setField(provider, "roleMapping", roleMapping);
 
@@ -333,7 +349,7 @@ public class IDPJwtValidatorTest {
 
                 when(jwtDecoder.decode(realLookingToken)).thenReturn(jwt);
 
-                OidcValidatedJwt result = idpJwtValidator.validate(realLookingToken);
+                OidcValidatedJwt result = idpJwtValidator.validate(realLookingToken, tenantId);
 
                 assertNotNull(result);
                 assertEquals(1, result.getRoles().size());
@@ -441,5 +457,57 @@ public class IDPJwtValidatorTest {
                 assertEquals(2, roles.size());
                 org.junit.Assert.assertTrue(roles.contains("ROLE1"));
                 org.junit.Assert.assertTrue(roles.contains("ROLE2"));
+        }
+
+        @Test(expected = IdpJwtValidationException.class)
+        public void testValidate_InvalidToken_ParseFailed_ThrowsIdpJwtValidationException() {
+                AuthProperties.Oidc oidc = new AuthProperties.Oidc();
+                oidc.setEnabled(true);
+                when(authProperties.getOidc()).thenReturn(oidc);
+                when(oidcProviderSupplier.getProviders()).thenReturn(Collections.emptyList());
+
+                idpJwtValidator.validate("not-a-valid-jwt", "pb.amritsar");
+        }
+
+        @Test
+        public void testValidate_InvalidToken_ParseFailed_HasCorrectErrorCode() {
+                AuthProperties.Oidc oidc = new AuthProperties.Oidc();
+                oidc.setEnabled(true);
+                when(authProperties.getOidc()).thenReturn(oidc);
+                when(oidcProviderSupplier.getProviders()).thenReturn(Collections.emptyList());
+
+                try {
+                        idpJwtValidator.validate("not-a-valid-jwt", "pb.amritsar");
+                        org.junit.Assert.fail("Expected IdpJwtValidationException");
+                } catch (IdpJwtValidationException e) {
+                        assertEquals(SsoErrorCodes.JWT_PARSE_FAILED, e.getErrorCode());
+                }
+        }
+
+        @Test(expected = OidcProviderConfigException.class)
+        public void testValidate_UnknownIssuer_ThrowsOidcProviderConfigException() {
+                String token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3Vua25vd24uaXNzdWVyLmNvbS8ifQ.x";
+                AuthProperties.Oidc oidc = new AuthProperties.Oidc();
+                oidc.setEnabled(true);
+                when(authProperties.getOidc()).thenReturn(oidc);
+                when(oidcProviderSupplier.getProviders()).thenReturn(Collections.emptyList());
+
+                idpJwtValidator.validate(token, "pb.amritsar");
+        }
+
+        @Test
+        public void testValidate_UnknownIssuer_HasCorrectErrorCode() {
+                String token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3Vua25vd24uaXNzdWVyLmNvbS8ifQ.x";
+                AuthProperties.Oidc oidc = new AuthProperties.Oidc();
+                oidc.setEnabled(true);
+                when(authProperties.getOidc()).thenReturn(oidc);
+                when(oidcProviderSupplier.getProviders()).thenReturn(Collections.emptyList());
+
+                try {
+                        idpJwtValidator.validate(token, "pb.amritsar");
+                        org.junit.Assert.fail("Expected OidcProviderConfigException");
+                } catch (OidcProviderConfigException e) {
+                        assertEquals(SsoErrorCodes.OIDC_PROVIDER_NOT_FOUND, e.getErrorCode());
+                }
         }
 }

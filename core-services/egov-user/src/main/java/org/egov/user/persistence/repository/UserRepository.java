@@ -691,19 +691,6 @@ public class UserRepository {
         return jdbcTemplate.queryForObject(query, Long.class);
     }
 
-    /**
-     * Next value from seq_eg_employee_username_num for the tenant, in range [0, max-1].
-     * Used for SSO employee username format EMP-{tenantId}-{provider}-{idpRole}-{number}.
-     */
-    public long getNextEmployeeUsernameNumber(String tenantId, int numberLength) {
-        if (numberLength <= 0 || numberLength > 10) {
-            throw new IllegalArgumentException("numberLength must be between 1 and 10");
-        }
-        String query = databaseSchemaUtils.replaceSchemaPlaceholder(SELECT_NEXT_SEQUENCE_EMPLOYEE_USERNAME, tenantId);
-        long nextVal = jdbcTemplate.queryForObject(query, Long.class);
-        int max = (int) Math.pow(10, numberLength);
-        return Math.floorMod(nextVal, max);
-    }
 
     /**
      * This api will save addresses for particular user.

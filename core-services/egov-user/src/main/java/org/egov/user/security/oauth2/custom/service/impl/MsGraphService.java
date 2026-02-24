@@ -1,16 +1,17 @@
-package org.egov.user.security.oauth2.custom;
+package org.egov.user.security.oauth2.custom.service.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.user.config.AuthProperties;
+import org.egov.user.config.OidcConfigConstants;
+import org.egov.user.domain.exception.sso.MfaEnrichmentException;
 import org.egov.user.domain.model.User;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
+import org.egov.user.security.SecurityConstants;
+import org.egov.user.security.oauth2.custom.service.EmployeeCreationProfile;
+import org.egov.user.security.oauth2.custom.service.IdpGraphService;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -19,6 +20,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.Instant;
 import java.util.Date;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -29,7 +31,7 @@ import java.util.regex.Pattern;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class MsGraphService {
+public class MsGraphService implements IdpGraphService {
 
     private static final String PHONE_TYPE = "#microsoft.graph.phoneAuthenticationMethod";
     private static final Pattern LAST_FOUR_DIGITS = Pattern.compile("(\\d{4})\\s*$");
@@ -37,14 +39,21 @@ public class MsGraphService {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
+    @Override
+    public boolean supports(AuthProperties.Provider provider) {
+        return provider != null
+                && OidcConfigConstants.GRAPH_SERVICE_TYPE_AZURE.equals(provider.getGraphServiceType());
+    }
+
     /**
      * Enrich user with MFA details from Graph (phone last 4, device name, registered date, method summary).
-     * No-op if Graph is not configured or call fails.
      *
-     * @param user           user to enrich (MFA fields will be set on this instance)
-     * @param provider       auth provider with Graph config (graphClientId, graphClientSecret, graphTenantId)
-     * @param userOidForGraph Azure object id (oid) for Graph API; use this instead of idpSubject (sub) for Microsoft
+     * @param user           user to enrich
+     * @param provider       auth provider with Graph config
+     * @param userOidForGraph Azure object id (oid) for Graph API
+     * @throws MfaEnrichmentException if Graph is configured but token acquisition or API call fails
      */
+    @Override
     public void enrichUserWithMfaDetails(User user, AuthProperties.Provider provider, String userOidForGraph) {
         if (user == null || provider == null) return;
         if (!StringUtils.hasText(provider.getGraphClientId()) || !StringUtils.hasText(provider.getGraphClientSecret())
@@ -59,11 +68,85 @@ public class MsGraphService {
         }
         try {
             String accessToken = getGraphAccessToken(provider);
-            if (accessToken == null) return;
+            if (accessToken == null) {
+                throw MfaEnrichmentException.tokenAcquisitionFailed(null);
+            }
             fetchAndApplyAuthenticationMethods(user, provider, userOid, accessToken);
+        } catch (MfaEnrichmentException e) {
+            throw e;
         } catch (Exception e) {
-            log.warn("Failed to enrich user with Graph MFA details: {}", e.getMessage());
+            throw MfaEnrichmentException.graphCallFailed(userOid, e);
         }
+    }
+
+    @Override
+    public Optional<EmployeeCreationProfile> getEmployeeCreationProfile(AuthProperties.Provider provider, String userOid) {
+        if (provider == null || !StringUtils.hasText(userOid)) {
+            return Optional.empty();
+        }
+        if (!StringUtils.hasText(provider.getGraphClientId()) || !StringUtils.hasText(provider.getGraphClientSecret())
+                || !StringUtils.hasText(provider.getGraphTenantId())) {
+            log.debug("Graph API not configured; skipping employee creation profile");
+            return Optional.empty();
+        }
+        String usersUrl = provider.getGraphUsersUrl() != null ? provider.getGraphUsersUrl() : OidcConfigConstants.DEFAULT_GRAPH_USERS_URL;
+        if (!StringUtils.hasText(usersUrl)) {
+            return Optional.empty();
+        }
+        try {
+            String accessToken = getGraphAccessToken(provider);
+            if (accessToken == null) {
+                log.debug("Graph token acquisition failed; skipping employee creation profile");
+                return Optional.empty();
+            }
+            return fetchUserProfileForEmployeeCreation(usersUrl, userOid, accessToken);
+        } catch (Exception e) {
+            log.warn("Failed to fetch Graph user profile for employee creation: {}", e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * GET /users/{oid} with $select=department,jobTitle,employeeType and map to EmployeeCreationProfile.
+     * jobTitle is mapped to designation; Graph may also return custom "designation" field.
+     */
+    private Optional<EmployeeCreationProfile> fetchUserProfileForEmployeeCreation(String usersUrl, String userOid, String accessToken) {
+        String url = String.format(usersUrl, userOid) + SecurityConstants.GRAPH_USERS_SELECT_QUERY;
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(SecurityConstants.HEADER_AUTHORIZATION, SecurityConstants.BEARER_PREFIX + accessToken);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    new HttpEntity<>(headers),
+                    String.class);
+            if (response.getBody() == null) return Optional.empty();
+            JsonNode root = objectMapper.readTree(response.getBody());
+            String department = textOrNull(root, SecurityConstants.KEY_DEPARTMENT);
+            String jobTitle = textOrNull(root, SecurityConstants.KEY_JOB_TITLE);
+            String designation = textOrNull(root, SecurityConstants.KEY_DESIGNATION);
+            if (!StringUtils.hasText(designation)) designation = jobTitle;
+            String employeeType = textOrNull(root, SecurityConstants.KEY_EMPLOYEE_TYPE);
+            if (!StringUtils.hasText(department) && !StringUtils.hasText(designation) && !StringUtils.hasText(employeeType)) {
+                return Optional.empty();
+            }
+            EmployeeCreationProfile profile = EmployeeCreationProfile.builder()
+                    .employeeType(employeeType)
+                    .designation(designation)
+                    .department(department)
+                    .build();
+            return Optional.of(profile);
+        } catch (Exception e) {
+            log.warn("Failed to parse Graph user response: {}", e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private static String textOrNull(JsonNode node, String key) {
+        if (node == null || !node.has(key)) return null;
+        JsonNode v = node.get(key);
+        return v == null || v.isNull() ? null : v.asText(null);
     }
 
     /**
@@ -77,22 +160,22 @@ public class MsGraphService {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-        body.add("grant_type", "client_credentials");
-        body.add("client_id", provider.getGraphClientId());
-        body.add("client_secret", provider.getGraphClientSecret());
-        body.add("scope", provider.getGraphScope() != null ? provider.getGraphScope() : "https://graph.microsoft.com/.default");
+        body.add(SecurityConstants.KEY_GRANT_TYPE, SecurityConstants.GRANT_TYPE_CLIENT_CREDENTIALS);
+        body.add(SecurityConstants.KEY_CLIENT_ID, provider.getGraphClientId());
+        body.add(SecurityConstants.KEY_CLIENT_SECRET, provider.getGraphClientSecret());
+        body.add(SecurityConstants.KEY_SCOPE, provider.getGraphScope() != null ? provider.getGraphScope() : SecurityConstants.DEFAULT_GRAPH_SCOPE);
+        ResponseEntity<String> response = restTemplate.exchange(
+                tokenUrl,
+                HttpMethod.POST,
+                new HttpEntity<>(body, headers),
+                String.class);
+        if (response.getBody() == null) return null;
         try {
-            ResponseEntity<String> response = restTemplate.exchange(
-                    tokenUrl,
-                    HttpMethod.POST,
-                    new HttpEntity<>(body, headers),
-                    String.class);
-            if (response.getBody() == null) return null;
             JsonNode node = objectMapper.readTree(response.getBody());
-            JsonNode token = node.get("access_token");
+            JsonNode token = node.get(SecurityConstants.KEY_ACCESS_TOKEN);
             return token != null ? token.asText() : null;
         } catch (Exception e) {
-            log.warn("Failed to get Graph access token: {}", e.getMessage());
+            log.warn("Failed to parse Graph access token response: {}", e.getMessage());
             return null;
         }
     }
@@ -110,7 +193,7 @@ public class MsGraphService {
                                                     String userOid, String accessToken) {
         String methodsUrl = String.format(provider.getGraphMethodsUrl(), userOid);
         HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer " + accessToken);
+        headers.set(SecurityConstants.HEADER_AUTHORIZATION, SecurityConstants.BEARER_PREFIX + accessToken);
         headers.setContentType(MediaType.APPLICATION_JSON);
         try {
             ResponseEntity<String> response = restTemplate.exchange(
@@ -120,7 +203,7 @@ public class MsGraphService {
                     String.class);
             if (response.getBody() == null) return;
             JsonNode root = objectMapper.readTree(response.getBody());
-            JsonNode value = root.get("value");
+            JsonNode value = root.get(SecurityConstants.KEY_VALUE);
             if (value == null || !value.isArray()) return;
 
             String firstPhoneLast4 = null;
@@ -129,10 +212,10 @@ public class MsGraphService {
             StringBuilder details = new StringBuilder();
 
             for (JsonNode method : value) {
-                String type = method.has("@odata.type") ? method.get("@odata.type").asText(null) : null;
-                String displayName = method.has("displayName") ? method.get("displayName").asText(null) : null;
-                String createdStr = method.has("creationDateTime") ? method.get("creationDateTime").asText(null) : null;
-                if (createdStr == null && method.has("createdDateTime")) createdStr = method.get("createdDateTime").asText(null);
+                String type = method.has(SecurityConstants.KEY_ODATA_TYPE) ? method.get(SecurityConstants.KEY_ODATA_TYPE).asText(null) : null;
+                String displayName = method.has(SecurityConstants.KEY_DISPLAY_NAME) ? method.get(SecurityConstants.KEY_DISPLAY_NAME).asText(null) : null;
+                String createdStr = method.has(SecurityConstants.KEY_CREATION_DATE_TIME) ? method.get(SecurityConstants.KEY_CREATION_DATE_TIME).asText(null) : null;
+                if (createdStr == null && method.has(SecurityConstants.KEY_CREATED_DATE_TIME)) createdStr = method.get(SecurityConstants.KEY_CREATED_DATE_TIME).asText(null);
                 Date created = parseIso8601(createdStr);
                 if (type != null) {
                     if (details.length() > 0) details.append(", ");
@@ -142,8 +225,8 @@ public class MsGraphService {
                 if (created != null && (earliestCreated == null || created.before(earliestCreated)))
                     earliestCreated = created;
 
-                if (PHONE_TYPE.equals(type) && method.has("phoneNumber")) {
-                    String phone = method.get("phoneNumber").asText(null);
+                if (PHONE_TYPE.equals(type) && method.has(SecurityConstants.KEY_PHONE_NUMBER)) {
+                    String phone = method.get(SecurityConstants.KEY_PHONE_NUMBER).asText(null);
                     if (phone != null && firstPhoneLast4 == null) {
                         String last4 = extractLastFourDigits(phone);
                         if (last4 != null) firstPhoneLast4 = last4;

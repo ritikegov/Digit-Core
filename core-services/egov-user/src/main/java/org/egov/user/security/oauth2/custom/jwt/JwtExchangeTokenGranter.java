@@ -2,18 +2,12 @@ package org.egov.user.security.oauth2.custom.jwt;
 
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.provider.ClientDetails;
-import org.springframework.security.oauth2.provider.ClientDetailsService;
-import org.springframework.security.oauth2.provider.OAuth2Authentication;
-import org.springframework.security.oauth2.provider.OAuth2Request;
-import org.springframework.security.oauth2.provider.OAuth2RequestFactory;
-import org.springframework.security.oauth2.provider.TokenRequest;
+import org.springframework.security.oauth2.common.exceptions.OAuth2Exception;
+import org.springframework.security.oauth2.provider.*;
 import org.springframework.security.oauth2.provider.token.AbstractTokenGranter;
 import org.springframework.security.oauth2.provider.token.AuthorizationServerTokenServices;
 
 public class JwtExchangeTokenGranter extends AbstractTokenGranter {
-
-    private static final String GRANT_TYPE = "jwt_exchange";
 
     private final AuthenticationManager authenticationManager;
 
@@ -31,7 +25,7 @@ public class JwtExchangeTokenGranter extends AbstractTokenGranter {
             ClientDetailsService clientDetailsService,
             OAuth2RequestFactory requestFactory) {
 
-        super(tokenServices, clientDetailsService, requestFactory, GRANT_TYPE);
+        super(tokenServices, clientDetailsService, requestFactory, JwtConstants.GRANT_TYPE_JWT_EXCHANGE);
         this.authenticationManager = authenticationManager;
     }
 
@@ -48,15 +42,14 @@ public class JwtExchangeTokenGranter extends AbstractTokenGranter {
     protected OAuth2Authentication getOAuth2Authentication(
             ClientDetails client, TokenRequest tokenRequest) {
         try {
-            String jwt = tokenRequest.getRequestParameters().get("assertion");
-            // Accept both auth_token and access_token (Microsoft sends access_token)
-            String authToken = tokenRequest.getRequestParameters().get("auth_token");
+            String jwt = tokenRequest.getRequestParameters().get(JwtConstants.PARAM_ASSERTION);
+            String authToken = tokenRequest.getRequestParameters().get(JwtConstants.PARAM_AUTH_TOKEN);
             if (authToken == null || authToken.isEmpty()) {
-                authToken = tokenRequest.getRequestParameters().get("access_token");
+                authToken = tokenRequest.getRequestParameters().get(JwtConstants.PARAM_ACCESS_TOKEN);
             }
-
+            String tenantId = tokenRequest.getRequestParameters().get(JwtConstants.PARAM_TENANT_ID);
             Authentication authRequest =
-                    new JwtExchangeAuthenticationToken(jwt, authToken);
+                    new JwtExchangeAuthenticationToken(jwt, authToken,tenantId);
 
             Authentication authResult =
                     authenticationManager.authenticate(authRequest);
@@ -66,7 +59,10 @@ public class JwtExchangeTokenGranter extends AbstractTokenGranter {
         } catch (org.springframework.security.core.AuthenticationException e) {
             throw new org.springframework.security.oauth2.common.exceptions.InvalidGrantException(
                     "JWT authentication failed: " + e.getMessage(), e);
-        } catch (Exception e) {
+        }catch (OAuth2Exception e){
+            throw new OAuth2Exception(e.getMessage());
+        }
+        catch (Exception e) {
             throw new org.springframework.security.oauth2.common.exceptions.InvalidGrantException(
                     "Error processing JWT exchange request: " + e.getMessage(), e);
         }

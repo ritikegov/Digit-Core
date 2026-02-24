@@ -15,7 +15,6 @@ import org.springframework.web.client.RestTemplate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -32,7 +31,7 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(name = "auth.oidc.providers-source", havingValue = "mdms")
+@ConditionalOnProperty(name = "auth.oidc.providers-source", havingValue = OidcConfigConstants.PROVIDERS_SOURCE_MDMS)
 public class MdmsOidcProviderSupplier implements OidcProviderSupplier {
 
     private final RestTemplate restTemplate;
@@ -129,11 +128,11 @@ public class MdmsOidcProviderSupplier implements OidcProviderSupplier {
             req.setMdmsCriteria(mdmsCriteria);
 
             JsonNode response = restTemplate.postForObject(url, req, JsonNode.class);
-            if (response == null || !response.has("MdmsRes")) {
+            if (response == null || !response.has(OidcConfigConstants.MDMS_RES)) {
                 log.debug("MDMS OIDC providers: no MdmsRes for tenant {}", tenantId);
                 return null;
             }
-            JsonNode moduleNode = response.get("MdmsRes").get(moduleName);
+            JsonNode moduleNode = response.get(OidcConfigConstants.MDMS_RES).get(moduleName);
             if (moduleNode == null || !moduleNode.has(masterName)) {
                 log.debug("MDMS OIDC providers: missing {}.{} for tenant {}", moduleName, masterName, tenantId);
                 return null;
@@ -167,8 +166,10 @@ public class MdmsOidcProviderSupplier implements OidcProviderSupplier {
     /** When true, provider is included; when false, provider is skipped (deactivated in MDMS). Missing = active. */
     private static boolean isProviderActive(JsonNode n) {
         if (n == null) return true;
-        if (n.has("active") && !n.get("active").isNull()) return n.get("active").asBoolean(true);
-        if (n.has("isActive") && !n.get("isActive").isNull()) return n.get("isActive").asBoolean(true);
+        if (n.has(OidcConfigConstants.KEY_ACTIVE) && !n.get(OidcConfigConstants.KEY_ACTIVE).isNull())
+            return n.get(OidcConfigConstants.KEY_ACTIVE).asBoolean(true);
+        if (n.has(OidcConfigConstants.KEY_IS_ACTIVE) && !n.get(OidcConfigConstants.KEY_IS_ACTIVE).isNull())
+            return n.get(OidcConfigConstants.KEY_IS_ACTIVE).asBoolean(true);
         return true;
     }
 
@@ -178,54 +179,38 @@ public class MdmsOidcProviderSupplier implements OidcProviderSupplier {
 
     private AuthProperties.Provider mapNodeToProvider(JsonNode n) throws Exception {
         AuthProperties.Provider p = new AuthProperties.Provider();
-        if (n.has("id")) p.setId(textOrNull(n.get("id")));
-        if (n.has("issuerUri")) p.setIssuerUri(textOrNull(n.get("issuerUri")));
-        if (n.has("issuerAliases") && n.get("issuerAliases").isArray()) {
+        if (n.has(OidcConfigConstants.KEY_ID)) p.setId(textOrNull(n.get(OidcConfigConstants.KEY_ID)));
+        if (n.has(OidcConfigConstants.KEY_ISSUER_URI)) p.setIssuerUri(textOrNull(n.get(OidcConfigConstants.KEY_ISSUER_URI)));
+        if (n.has(OidcConfigConstants.KEY_ISSUER_ALIASES) && n.get(OidcConfigConstants.KEY_ISSUER_ALIASES).isArray()) {
             List<String> aliases = new ArrayList<>();
-            n.get("issuerAliases").forEach(a -> aliases.add(a.asText()));
+            n.get(OidcConfigConstants.KEY_ISSUER_ALIASES).forEach(a -> aliases.add(a.asText()));
             p.setIssuerAliases(aliases);
         }
-        if (n.has("jwkSetUri")) p.setJwkSetUri(textOrNull(n.get("jwkSetUri")));
-        if (n.has("audiences") && n.get("audiences").isArray()) {
+        if (n.has(OidcConfigConstants.KEY_JWK_SET_URI)) p.setJwkSetUri(textOrNull(n.get(OidcConfigConstants.KEY_JWK_SET_URI)));
+        if (n.has(OidcConfigConstants.KEY_AUDIENCES) && n.get(OidcConfigConstants.KEY_AUDIENCES).isArray()) {
             List<String> aud = new ArrayList<>();
-            n.get("audiences").forEach(a -> aud.add(a.asText()));
+            n.get(OidcConfigConstants.KEY_AUDIENCES).forEach(a -> aud.add(a.asText()));
             p.setAudiences(aud);
         }
-        if (n.has("tenantId")) p.setTenantId(textOrNull(n.get("tenantId")));
-        if (n.has("userType")) p.setUserType(n.has("userType") ? n.get("userType").asText() : "EMPLOYEE");
-        if (n.has("employeeType")) p.setEmployeeType(n.has("employeeType") ? n.get("employeeType").asText() : "PERMANENT");
-        if (n.has("defaultRoleCodes")) p.setDefaultRoleCodes(textOrNull(n.get("defaultRoleCodes")));
-        if (n.has("roleClaimKey")) p.setRoleClaimKey(n.get("roleClaimKey").asText("roles"));
-        if (n.has("roleMapping")) {
-            JsonNode rm = n.get("roleMapping");
+        if (n.has(OidcConfigConstants.KEY_TENANT_ID)) p.setTenantId(textOrNull(n.get(OidcConfigConstants.KEY_TENANT_ID)));
+        if (n.has(OidcConfigConstants.KEY_USER_TYPE)) p.setUserType(textOrNull(n.get(OidcConfigConstants.KEY_USER_TYPE)));
+        if (n.has(OidcConfigConstants.KEY_DEFAULT_ROLE_CODES)) p.setDefaultRoleCodes(textOrNull(n.get(OidcConfigConstants.KEY_DEFAULT_ROLE_CODES)));
+        if (n.has(OidcConfigConstants.KEY_ROLE_CLAIM_KEY)) p.setRoleClaimKey(n.get(OidcConfigConstants.KEY_ROLE_CLAIM_KEY).asText(OidcConfigConstants.DEFAULT_ROLE_CLAIM_KEY));
+        if (n.has(OidcConfigConstants.KEY_ROLE_MAPPING)) {
+            JsonNode rm = n.get(OidcConfigConstants.KEY_ROLE_MAPPING);
             p.setRoleMapping(rm.isTextual() ? rm.asText() : rm.toString());
         }
-        if (n.has("roleBoundaryMapping")) {
-            JsonNode rbm = n.get("roleBoundaryMapping");
-            p.setRoleBoundaryMapping(rbm.isTextual() ? rbm.asText() : rbm.toString());
-        }
-        if (n.has("defaultBoundaryCode")) p.setDefaultBoundaryCode(textOrNull(n.get("defaultBoundaryCode")));
-        if (n.has("hierarchyType")) p.setHierarchyType(textOrNull(n.get("hierarchyType")));
-        if (n.has("projectName")) p.setProjectName(textOrNull(n.get("projectName")));
-        if (n.has("defaultPassword")) p.setDefaultPassword(textOrNull(n.get("defaultPassword")));
-        if (n.has("defaultDob") && !n.get("defaultDob").isNull()) p.setDefaultDob(n.get("defaultDob").asLong());
-        if (n.has("defaultDesignation")) p.setDefaultDesignation(textOrNull(n.get("defaultDesignation")));
-        if (n.has("defaultDepartment")) p.setDefaultDepartment(textOrNull(n.get("defaultDepartment")));
-        if (n.has("mobileNumberPrefix")) p.setMobileNumberPrefix(textOrNull(n.get("mobileNumberPrefix")));
-        if (n.has("mobileNumberLength") && !n.get("mobileNumberLength").isNull()) p.setMobileNumberLength(n.get("mobileNumberLength").asInt());
-        if (n.has("defaultEmployeeStatus")) p.setDefaultEmployeeStatus(n.get("defaultEmployeeStatus").asText("EMPLOYED"));
-        if (n.has("rolePrefix")) p.setRolePrefix(n.get("rolePrefix").asText("ROLE_"));
-        if (n.has("employeeUsernameFormat")) p.setEmployeeUsernameFormat(textOrNull(n.get("employeeUsernameFormat")));
-        if (n.has("employeeUsernameProviderKey")) p.setEmployeeUsernameProviderKey(textOrNull(n.get("employeeUsernameProviderKey")));
-        if (n.has("employeeUsernameNumberLength") && !n.get("employeeUsernameNumberLength").isNull())
-            p.setEmployeeUsernameNumberLength(n.get("employeeUsernameNumberLength").asInt());
-        if (n.has("decryptionPurpose")) p.setDecryptionPurpose(n.get("decryptionPurpose").asText("UserSelf"));
-        if (n.has("graphClientId")) p.setGraphClientId(textOrNull(n.get("graphClientId")));
-        if (n.has("graphClientSecret")) p.setGraphClientSecret(textOrNull(n.get("graphClientSecret")));
-        if (n.has("graphTenantId")) p.setGraphTenantId(textOrNull(n.get("graphTenantId")));
-        if (n.has("graphMethodsUrl")) p.setGraphMethodsUrl(textOrNull(n.get("graphMethodsUrl")));
-        if (n.has("graphTokenUrl")) p.setGraphTokenUrl(textOrNull(n.get("graphTokenUrl")));
-        if (n.has("graphScope")) p.setGraphScope(textOrNull(n.get("graphScope")));
+        if (n.has(OidcConfigConstants.KEY_DEFAULT_DOB) && !n.get(OidcConfigConstants.KEY_DEFAULT_DOB).isNull()) p.setDefaultDob(n.get(OidcConfigConstants.KEY_DEFAULT_DOB).asLong());
+        if (n.has(OidcConfigConstants.KEY_DEFAULT_EMPLOYEE_STATUS)) p.setDefaultEmployeeStatus(n.get(OidcConfigConstants.KEY_DEFAULT_EMPLOYEE_STATUS).asText(OidcConfigConstants.DEFAULT_EMPLOYED_STATUS));
+        if (n.has(OidcConfigConstants.KEY_ROLE_PREFIX)) p.setRolePrefix(n.get(OidcConfigConstants.KEY_ROLE_PREFIX).asText(OidcConfigConstants.DEFAULT_ROLE_PREFIX));
+        if (n.has(OidcConfigConstants.KEY_DECRYPTION_PURPOSE)) p.setDecryptionPurpose(n.get(OidcConfigConstants.KEY_DECRYPTION_PURPOSE).asText(OidcConfigConstants.DEFAULT_DECRYPTION_PURPOSE));
+        if (n.has(OidcConfigConstants.KEY_GRAPH_CLIENT_ID)) p.setGraphClientId(textOrNull(n.get(OidcConfigConstants.KEY_GRAPH_CLIENT_ID)));
+        if (n.has(OidcConfigConstants.KEY_GRAPH_CLIENT_SECRET)) p.setGraphClientSecret(textOrNull(n.get(OidcConfigConstants.KEY_GRAPH_CLIENT_SECRET)));
+        if (n.has(OidcConfigConstants.KEY_GRAPH_TENANT_ID)) p.setGraphTenantId(textOrNull(n.get(OidcConfigConstants.KEY_GRAPH_TENANT_ID)));
+        if (n.has(OidcConfigConstants.KEY_GRAPH_METHODS_URL)) p.setGraphMethodsUrl(textOrNull(n.get(OidcConfigConstants.KEY_GRAPH_METHODS_URL)));
+        if (n.has(OidcConfigConstants.KEY_GRAPH_TOKEN_URL)) p.setGraphTokenUrl(textOrNull(n.get(OidcConfigConstants.KEY_GRAPH_TOKEN_URL)));
+        if (n.has(OidcConfigConstants.KEY_GRAPH_SCOPE)) p.setGraphScope(textOrNull(n.get(OidcConfigConstants.KEY_GRAPH_SCOPE)));
+        if (n.has(OidcConfigConstants.KEY_GRAPH_SERVICE_TYPE)) p.setGraphServiceType(textOrNull(n.get(OidcConfigConstants.KEY_GRAPH_SERVICE_TYPE)));
         return p;
     }
 }
