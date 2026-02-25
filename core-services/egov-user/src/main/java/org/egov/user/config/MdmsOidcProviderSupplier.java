@@ -205,7 +205,6 @@ public class MdmsOidcProviderSupplier implements OidcProviderSupplier {
         if (n.has(OidcConfigConstants.KEY_ROLE_PREFIX)) p.setRolePrefix(n.get(OidcConfigConstants.KEY_ROLE_PREFIX).asText(OidcConfigConstants.DEFAULT_ROLE_PREFIX));
         if (n.has(OidcConfigConstants.KEY_DECRYPTION_PURPOSE)) p.setDecryptionPurpose(n.get(OidcConfigConstants.KEY_DECRYPTION_PURPOSE).asText(OidcConfigConstants.DEFAULT_DECRYPTION_PURPOSE));
         if (n.has(OidcConfigConstants.KEY_GRAPH_CLIENT_ID)) p.setGraphClientId(textOrNull(n.get(OidcConfigConstants.KEY_GRAPH_CLIENT_ID)));
-        if (n.has(OidcConfigConstants.KEY_GRAPH_CLIENT_SECRET)) p.setGraphClientSecret(textOrNull(n.get(OidcConfigConstants.KEY_GRAPH_CLIENT_SECRET)));
         if (n.has(OidcConfigConstants.KEY_GRAPH_TENANT_ID)) p.setGraphTenantId(textOrNull(n.get(OidcConfigConstants.KEY_GRAPH_TENANT_ID)));
         if (n.has(OidcConfigConstants.KEY_GRAPH_METHODS_URL)) p.setGraphMethodsUrl(textOrNull(n.get(OidcConfigConstants.KEY_GRAPH_METHODS_URL)));
         if (n.has(OidcConfigConstants.KEY_GRAPH_TOKEN_URL)) p.setGraphTokenUrl(textOrNull(n.get(OidcConfigConstants.KEY_GRAPH_TOKEN_URL)));

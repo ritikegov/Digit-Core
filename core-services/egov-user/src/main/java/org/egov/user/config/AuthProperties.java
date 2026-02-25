@@ -1,6 +1,5 @@
 package org.egov.user.config;
 
-import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Getter;
 import lombok.Setter;
@@ -9,7 +8,6 @@ import org.springframework.context.annotation.Configuration;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -21,16 +19,8 @@ public class AuthProperties {
     private Oidc oidc = new Oidc();
 
     private Forward forward = new Forward();
-    private Sso sso = new Sso();
     private List<Provider> providers = new ArrayList<>();
     private String defaultBoundaryCode;
-
-    @Getter
-    @Setter
-    public static class Sso {
-        /** Override default password per tenant+provider. Key: tenantId_providerId, e.g. tg_oidc_azure (no dots so Spring binds reliably). */
-        private Map<String, String> defaultPasswordOverride = new HashMap<>();
-    }
 
     @Getter
     @Setter
@@ -70,13 +60,11 @@ public class AuthProperties {
         private String defaultRoleCodes;
         private String roleClaimKey = OidcConfigConstants.DEFAULT_ROLE_CLAIM_KEY;
         private Map<String, String> roleMapping;
-        private String defaultPassword;
         private Long defaultDob;
         private String defaultEmployeeStatus = OidcConfigConstants.DEFAULT_EMPLOYED_STATUS;
         private String rolePrefix = OidcConfigConstants.DEFAULT_ROLE_PREFIX;
         private String decryptionPurpose = OidcConfigConstants.DEFAULT_DECRYPTION_PURPOSE;
         private String graphClientId;
-        private String graphClientSecret;
         private String graphTenantId;
         private String graphMethodsUrl = OidcConfigConstants.DEFAULT_GRAPH_METHODS_URL;
         private String graphUsersUrl = OidcConfigConstants.DEFAULT_GRAPH_USERS_URL;
@@ -88,9 +76,10 @@ public class AuthProperties {
          */
         private String graphServiceType = OidcConfigConstants.GRAPH_SERVICE_TYPE_AZURE;
 
-        @JsonSetter("roleMapping")
+        private static final ObjectMapper ROLE_MAPPING_MAPPER = new ObjectMapper();
+
         public void setRoleMapping(String roleMappingString) throws IOException {
-            roleMapping = (Map<String, String>) new ObjectMapper().readValue(roleMappingString, Map.class);
+            roleMapping = (Map<String, String>) ROLE_MAPPING_MAPPER.readValue(roleMappingString, Map.class);
         }
     }
 }

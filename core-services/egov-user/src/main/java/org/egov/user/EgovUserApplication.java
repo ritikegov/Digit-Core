@@ -17,7 +17,9 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.jedis.JedisConnectionFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -30,6 +32,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 
 import lombok.extern.slf4j.Slf4j;
 import redis.clients.jedis.JedisShardInfo;
@@ -80,11 +83,16 @@ public class EgovUserApplication {
         return converter;
     }
 
+    /**
+     * Shared ObjectMapper for service-layer JSON (tracer, HRMS util, Graph, etc.).
+     * Configured once at startup; must not be mutated by consumers (thread-safe for read-only use only).
+     */
     @Bean
     public ObjectMapper objectMapper() {
-
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.setTimeZone(TimeZone.getTimeZone(timeZone));
+        objectMapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
+        // Immutable after creation; do not mutate.
         return objectMapper;
     }
 
@@ -103,6 +111,11 @@ public class EgovUserApplication {
     @Bean
     public JedisConnectionFactory connectionFactory() {
         return new JedisConnectionFactory(new JedisShardInfo(host));
+    }
+
+    @Bean
+    public StringRedisTemplate stringRedisTemplate(RedisConnectionFactory connectionFactory) {
+        return new StringRedisTemplate(connectionFactory);
     }
 
     public static void main(String[] args) {

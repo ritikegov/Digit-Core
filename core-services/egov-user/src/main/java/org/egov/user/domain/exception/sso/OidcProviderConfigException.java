@@ -34,4 +34,9 @@ public class OidcProviderConfigException extends SsoException {
         return new OidcProviderConfigException(SsoErrorCodes.OIDC_PROVIDER_AMBIGUOUS,
                 "Multiple OIDC providers match issuer: " + issuer + " — unable to disambiguate");
     }
+
+    public static OidcProviderConfigException issuerMismatch(String tokenIssuer, String providerId) {
+        return new OidcProviderConfigException(SsoErrorCodes.OIDC_ISSUER_MISMATCH,
+                "JWT issuer does not match provider configuration: tokenIssuer=" + tokenIssuer + ", providerId=" + providerId);
+    }
 }

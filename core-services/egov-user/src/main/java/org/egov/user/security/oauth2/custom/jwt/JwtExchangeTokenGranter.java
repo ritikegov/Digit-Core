@@ -59,8 +59,8 @@ public class JwtExchangeTokenGranter extends AbstractTokenGranter {
         } catch (org.springframework.security.core.AuthenticationException e) {
             throw new org.springframework.security.oauth2.common.exceptions.InvalidGrantException(
                     "JWT authentication failed: " + e.getMessage(), e);
-        }catch (OAuth2Exception e){
-            throw new OAuth2Exception(e.getMessage());
+        } catch (OAuth2Exception e) {
+            throw new OAuth2Exception(e.getMessage(), e);
         }
         catch (Exception e) {
             throw new org.springframework.security.oauth2.common.exceptions.InvalidGrantException(

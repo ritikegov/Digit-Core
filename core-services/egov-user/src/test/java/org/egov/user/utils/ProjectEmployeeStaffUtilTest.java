@@ -34,14 +34,11 @@ public class ProjectEmployeeStaffUtilTest {
     @Mock
     private RestTemplate restTemplate;
 
-    @Mock
-    private ObjectMapper objectMapper;
-
     private ProjectEmployeeStaffUtil projectEmployeeStaffUtil;
 
     @Before
     public void setup() {
-        projectEmployeeStaffUtil = new ProjectEmployeeStaffUtil(restTemplate, objectMapper);
+        projectEmployeeStaffUtil = new ProjectEmployeeStaffUtil(restTemplate);
         ReflectionTestUtils.setField(projectEmployeeStaffUtil, "hrmsServiceHost", "http://hrms-service");
         ReflectionTestUtils.setField(projectEmployeeStaffUtil, "hrmsEmployeeCreateUrl", "/hrms/employee/v1/_create");
         ReflectionTestUtils.setField(projectEmployeeStaffUtil, "boundaryServiceHost", "http://boundary-service");

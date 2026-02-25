@@ -126,7 +126,8 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
             throw SsoMissingParamException.userTypeMissing();
         }
 
-        AuthProperties.Provider provider = getProviderById(jwt.getProviderId(),tenantId);
+        AuthProperties.Provider provider = getProviderById(jwt.getProviderId(), tenantId);
+        assertIssuerMatchesProvider(jwt, provider);
         AccessTokenMfaDetails mfaDetails = accessTokenMfaExtractor.extract(authToken);
 
         User user;
@@ -153,7 +154,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
             log.info("User not found for oid: {}, creating new user", jwt.getOid(), e);
             requestInfo = getRequestInfo(jwt.getRoles(), jwt.getUserType(), jwt.getOid());
 
-            String password = ssoDefaultPasswordResolver.resolveDefaultPassword(tenantId, provider.getId());
+            String password = ssoDefaultPasswordResolver.generatePassword();
             org.egov.user.domain.model.hrms.User userToCreate = convertJwtToUser(jwt, provider);
             userToCreate.setPassword(password);
             Optional<EmployeeCreationProfile> profileOpt = resolveGraphService(provider)
@@ -258,6 +259,34 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
                 .filter(p -> p.getId() != null && p.getId().trim().equals(providerId) && p.getTenantId() !=null && p.getTenantId().equals(tenantId))
                 .findFirst()
                 .orElseThrow(() -> OidcProviderConfigException.providerNotFound(providerId));
+    }
+
+    /**
+     * Ensures the JWT issuer matches the provider's issuer URI or one of its aliases.
+     * Rejects the token if there is no match (null-safe).
+     *
+     * @param jwt      the validated JWT
+     * @param provider the resolved provider configuration
+     * @throws OidcProviderConfigException if the token issuer does not match the provider
+     */
+    private void assertIssuerMatchesProvider(OidcValidatedJwt jwt, AuthProperties.Provider provider) {
+        String tokenIssuer = jwt.getIssuer();
+        if (!StringUtils.hasText(tokenIssuer)) {
+            throw OidcProviderConfigException.issuerMismatch(String.valueOf(tokenIssuer), provider.getId());
+        }
+        String issuerUri = provider.getIssuerUri();
+        if (StringUtils.hasText(issuerUri) && tokenIssuer.trim().equals(issuerUri.trim())) {
+            return;
+        }
+        List<String> aliases = provider.getIssuerAliases();
+        if (aliases != null) {
+            for (String alias : aliases) {
+                if (StringUtils.hasText(alias) && tokenIssuer.trim().equals(alias.trim())) {
+                    return;
+                }
+            }
+        }
+        throw OidcProviderConfigException.issuerMismatch(tokenIssuer, provider.getId());
     }
 
     /**
@@ -379,24 +408,6 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
                 .build();
     }
 
-    /**
-     * Gets the first raw role from the JWT before Digit role mapping.
-     * For example, Azure "roles" claim like "Digit.Admin" before mapping to "EMPLOYEE".
-     *
-     * @param jwt the validated JWT
-     * @param provider the OIDC provider configuration
-     * @return the first raw role from the JWT, or null if not found
-     */
-    private String getFirstIdpRole(OidcValidatedJwt jwt, AuthProperties.Provider provider) {
-        String claimKey = provider.getRoleClaimKey();
-        if (claimKey == null || jwt.getClaims() == null) return null;
-        Object val = jwt.getClaims().get(claimKey);
-        if (val instanceof List) {
-            List<?> list = (List<?>) val;
-            return list.isEmpty() ? null : (list.get(0) != null ? list.get(0).toString() : null);
-        }
-        return val != null ? val.toString() : null;
-    }
 
     /**
      * Converts a domain User object to a contract User object for API responses.
@@ -466,10 +477,8 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
         copy.setJwtToken(jwt.getRawToken());
         copy.setIdpSubject(jwt.getSubject());
         copy.setIdpIssuer(jwt.getIssuer());
-        copy.setEmailId(jwt.getPreferredUsername());
-
         copy.setName(jwt.getName());
-        copy.setEmailId(jwt.getEmail());
+        copy.setEmailId(jwt.getPreferredUsername());
         copy.setRoles(toDomainRoles(jwt.getRoles(), user.getTenantId()));
         copy.setPassword(null);
         copy.setMobileNumber(null);

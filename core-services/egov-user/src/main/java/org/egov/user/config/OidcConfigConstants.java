@@ -59,8 +59,6 @@ public final class OidcConfigConstants {
     public static final String DEFAULT_DESIGNATION_ID = "1f3572c4-07ce-4d58-86d3-7b6e2458e812";
     public static final String DEFAULT_DEPARTMENT_CODE = "NMCP";
 
-    /** SSO default password: env var prefix (e.g. SSO_DEFAULT_PASSWORD_TG_OIDC_AZURE). */
-    public static final String SSO_DEFAULT_PASSWORD_ENV_PREFIX = "SSO_DEFAULT_PASSWORD_";
-    /** SSO default password: config key for override map (auth.sso.default-password-override). Key format: tenantId_providerId (e.g. tg_oidc_azure). No dots so Spring binds reliably. */
-    public static final String SSO_DEFAULT_PASSWORD_OVERRIDE_CONFIG_KEY = "auth.sso.default-password-override";
+    /** Graph client secret: env var prefix (e.g. GRAPH_CLIENT_SECRET_OIDC_AZURE_TG). */
+    public static final String GRAPH_CLIENT_SECRET_ENV_PREFIX = "GRAPH_CLIENT_SECRET_";
 }

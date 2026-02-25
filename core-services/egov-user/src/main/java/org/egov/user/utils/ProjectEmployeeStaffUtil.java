@@ -44,7 +44,6 @@ public class ProjectEmployeeStaffUtil {
         private static final String PARAM_HIERARCHY_TYPE = "hierarchyType";
 
         private final RestTemplate restTemplate;
-        private final ObjectMapper objectMapper;
 
         @Value("${egov.hrms.host}")
         private String hrmsServiceHost;
@@ -62,10 +61,8 @@ public class ProjectEmployeeStaffUtil {
         private String boundaryRelationshipsSearchUrl;
 
         @Autowired
-        public ProjectEmployeeStaffUtil(RestTemplate restTemplate,
-                        ObjectMapper objectMapper) {
+        public ProjectEmployeeStaffUtil(RestTemplate restTemplate) {
                 this.restTemplate = restTemplate;
-                this.objectMapper = objectMapper;
         }
 
         /**
@@ -281,9 +278,11 @@ public class ProjectEmployeeStaffUtil {
         }
 
         /**
-         * Complete workflow: Search project, create employee in HRMS, and create
-         * project staff.
-         * This is a convenience method that orchestrates the entire flow.
+         * Complete workflow: Create employee in HRMS and return the created user.
+         * This is a convenience method that orchestrates the flow. Employee creation
+         * in HRMS is not rolled back if a subsequent step (e.g. UUID validation) fails;
+         * no compensation (void/delete) is performed. Local DB is not used here, so
+         * {@code @Transactional} does not apply.
          *
          * @param user           The user object containing user details
          * @param employeeType   The type of employee (PERMANENT, TEMPORARY, etc.)
@@ -291,8 +290,9 @@ public class ProjectEmployeeStaffUtil {
          * @param department     The department for the employee assignment
          * @param employeeStatus The status of the employee
          * @param tenantId       The tenant ID
+         * @param createdBy      The creator identifier
          * @param requestInfo    The request info for authentication and tracking
-         * @return The created ProjectStaff object
+         * @return The created user from the HRMS employee response
          * @throws CustomException if any step in the workflow fails
          */
         public User createEmployeeAndProjectStaff(
@@ -319,8 +319,6 @@ public class ProjectEmployeeStaffUtil {
         }
 
         public <T> T fetchResult(StringBuilder uri, Object request, Class<T> clazz) {
-                // Configure the ObjectMapper to ignore empty beans during serialization
-                objectMapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
                 T response;
                 try {
                         // Perform HTTP POST request and receive the response

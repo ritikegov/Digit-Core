@@ -2,6 +2,7 @@ package org.egov.user.security.oauth2.custom.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.user.config.AuthProperties;
+import org.egov.user.config.GraphClientSecretResolver;
 import org.egov.user.config.OidcConfigConstants;
 import org.egov.user.security.oauth2.custom.service.EmployeeCreationProfile;
 import org.junit.Before;
@@ -10,6 +11,7 @@ import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
@@ -30,11 +32,20 @@ import static org.mockito.Mockito.when;
 public class MsGraphServiceTest {
 
     private static final String USER_OID = "26f0a779-36d5-4360-bd5f-954568d301f6";
-    private static final String TOKEN_RESPONSE = "{\"access_token\":\"mock-token\"}";
+    private static final String TOKEN_RESPONSE = "{\"access_token\":\"mock-token\",\"expires_in\":3600}";
     private static final String USER_RESPONSE = "{\"department\":\"IT\",\"jobTitle\":\"Engineer\",\"employeeType\":\"CONTRACT\"}";
 
     @Mock
     private RestTemplate restTemplate;
+
+    @Mock
+    private org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
+
+    @Mock
+    private ValueOperations<String, String> valueOperations;
+
+    @Mock
+    private GraphClientSecretResolver secretResolver;
 
     @Mock
     private AuthProperties.Provider provider;
@@ -43,7 +54,10 @@ public class MsGraphServiceTest {
 
     @Before
     public void setup() {
-        msGraphService = new MsGraphService(restTemplate, new ObjectMapper());
+        when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get(anyString())).thenReturn(null);
+        when(secretResolver.resolve(any(AuthProperties.Provider.class))).thenReturn("secret");
+        msGraphService = new MsGraphService(restTemplate, new ObjectMapper(), stringRedisTemplate, secretResolver);
     }
 
     @Test
@@ -72,10 +86,10 @@ public class MsGraphServiceTest {
     @Test
     public void getEmployeeCreationProfile_WhenTokenFails_ReturnsEmpty() {
         when(provider.getGraphClientId()).thenReturn("client");
-        when(provider.getGraphClientSecret()).thenReturn("secret");
         when(provider.getGraphTenantId()).thenReturn("tenant");
         when(provider.getGraphTokenUrl()).thenReturn("https://login.microsoftonline.com/%s/oauth2/v2.0/token");
         when(provider.getGraphUsersUrl()).thenReturn("https://graph.microsoft.com/v1.0/users/%s");
+        when(secretResolver.resolve(provider)).thenReturn("secret");
         when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
                 .thenReturn(ResponseEntity.ok().body(null));
 
@@ -88,11 +102,11 @@ public class MsGraphServiceTest {
     @Test
     public void getEmployeeCreationProfile_WhenGraphReturnsUser_ParsesProfile() {
         when(provider.getGraphClientId()).thenReturn("client");
-        when(provider.getGraphClientSecret()).thenReturn("secret");
         when(provider.getGraphTenantId()).thenReturn("tenant");
         when(provider.getGraphTokenUrl()).thenReturn("https://login.microsoftonline.com/%s/oauth2/v2.0/token");
         when(provider.getGraphScope()).thenReturn(null);
         when(provider.getGraphUsersUrl()).thenReturn("https://graph.microsoft.com/v1.0/users/%s");
+        when(secretResolver.resolve(provider)).thenReturn("secret");
         when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
                 .thenReturn(ResponseEntity.ok(TOKEN_RESPONSE));
         when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
@@ -115,10 +129,10 @@ public class MsGraphServiceTest {
     @Test
     public void getEmployeeCreationProfile_WhenGraphReturnsEmptyBody_ReturnsEmpty() {
         when(provider.getGraphClientId()).thenReturn("client");
-        when(provider.getGraphClientSecret()).thenReturn("secret");
         when(provider.getGraphTenantId()).thenReturn("tenant");
         when(provider.getGraphTokenUrl()).thenReturn("https://login.microsoftonline.com/%s/oauth2/v2.0/token");
         when(provider.getGraphUsersUrl()).thenReturn("https://graph.microsoft.com/v1.0/users/%s");
+        when(secretResolver.resolve(provider)).thenReturn("secret");
         when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
                 .thenReturn(ResponseEntity.ok(TOKEN_RESPONSE));
         when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))

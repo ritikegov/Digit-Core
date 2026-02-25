@@ -94,7 +94,7 @@ public class JwtExchangeAuthenticationProviderTest {
                 when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
                 when(provider.getId()).thenReturn("oidc-azure");
                 when(provider.getIssuerUri()).thenReturn("issuer");
-                when(ssoDefaultPasswordResolver.resolveDefaultPassword(anyString(), anyString())).thenReturn("eGov@123");
+                when(ssoDefaultPasswordResolver.generatePassword()).thenReturn("eGov@123");
                 when(provider.getDefaultDob()).thenReturn(1157328000000L);
                 when(provider.getDefaultEmployeeStatus()).thenReturn("EMPLOYED");
                 when(provider.getRolePrefix()).thenReturn("ROLE_");
@@ -121,6 +121,7 @@ public class JwtExchangeAuthenticationProviderTest {
                 claims.put("userType", "EMPLOYEE");
                 claims.put("name", "John Doe");
                 claims.put("email", "john@example.com");
+                claims.put("preferred_username", "john@example.com");
 
                 OidcValidatedJwt jwt = oidcJwt(claims, token);
 

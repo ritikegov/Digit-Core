@@ -17,6 +17,7 @@ public final class SsoErrorCodes {
     public static final String OIDC_ISSUER_MISSING_IN_TOKEN = "sso.oidc.issuer_missing_in_token";
     public static final String OIDC_PROVIDER_NOT_FOUND = "sso.oidc.provider_not_found";
     public static final String OIDC_PROVIDER_AMBIGUOUS = "sso.oidc.provider_ambiguous";
+    public static final String OIDC_ISSUER_MISMATCH = "sso.oidc.issuer_mismatch";
 
     public static final String TENANT_ID_MISSING = "sso.param.tenant_id_missing";
     public static final String USER_TYPE_MISSING = "sso.param.user_type_missing";

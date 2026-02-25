@@ -2,15 +2,17 @@ package org.egov.user.security.oauth2.custom.service.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.user.config.AuthProperties;
+import org.egov.user.config.GraphClientSecretResolver;
 import org.egov.user.config.OidcConfigConstants;
 import org.egov.user.domain.exception.sso.MfaEnrichmentException;
 import org.egov.user.domain.model.User;
 import org.egov.user.security.SecurityConstants;
 import org.egov.user.security.oauth2.custom.service.EmployeeCreationProfile;
 import org.egov.user.security.oauth2.custom.service.IdpGraphService;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
@@ -18,11 +20,13 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.Date;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Enriches user with MFA details from Microsoft Graph API (authentication methods).
@@ -30,7 +34,6 @@ import java.util.regex.Pattern;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class MsGraphService implements IdpGraphService {
 
     private static final String PHONE_TYPE = "#microsoft.graph.phoneAuthenticationMethod";
@@ -38,6 +41,19 @@ public class MsGraphService implements IdpGraphService {
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final StringRedisTemplate stringRedisTemplate;
+    private final GraphClientSecretResolver secretResolver;
+
+    @Value("${auth.graph.token-cache-ttl-buffer-seconds:300}")
+    private int tokenCacheTtlBufferSeconds;
+
+    public MsGraphService(RestTemplate restTemplate, ObjectMapper objectMapper,
+                          StringRedisTemplate stringRedisTemplate, GraphClientSecretResolver secretResolver) {
+        this.restTemplate = restTemplate;
+        this.objectMapper = objectMapper;
+        this.stringRedisTemplate = stringRedisTemplate;
+        this.secretResolver = secretResolver;
+    }
 
     @Override
     public boolean supports(AuthProperties.Provider provider) {
@@ -56,7 +72,7 @@ public class MsGraphService implements IdpGraphService {
     @Override
     public void enrichUserWithMfaDetails(User user, AuthProperties.Provider provider, String userOidForGraph) {
         if (user == null || provider == null) return;
-        if (!StringUtils.hasText(provider.getGraphClientId()) || !StringUtils.hasText(provider.getGraphClientSecret())
+        if (!StringUtils.hasText(provider.getGraphClientId()) || !StringUtils.hasText(secretResolver.resolve(provider))
                 || !StringUtils.hasText(provider.getGraphTenantId())) {
             log.debug("Graph API not configured; skipping MFA enrichment");
             return;
@@ -84,7 +100,7 @@ public class MsGraphService implements IdpGraphService {
         if (provider == null || !StringUtils.hasText(userOid)) {
             return Optional.empty();
         }
-        if (!StringUtils.hasText(provider.getGraphClientId()) || !StringUtils.hasText(provider.getGraphClientSecret())
+        if (!StringUtils.hasText(provider.getGraphClientId()) || !StringUtils.hasText(secretResolver.resolve(provider))
                 || !StringUtils.hasText(provider.getGraphTenantId())) {
             log.debug("Graph API not configured; skipping employee creation profile");
             return Optional.empty();
@@ -151,18 +167,31 @@ public class MsGraphService implements IdpGraphService {
 
     /**
      * Obtains an access token from Microsoft Graph API using client credentials flow.
+     * Tokens are cached in Redis by key graph:token:providerId:tenantId with TTL (expires_in - buffer).
      *
      * @param provider the OIDC provider configuration containing Graph API credentials
      * @return the access token string, or null if token acquisition fails
      */
     private String getGraphAccessToken(AuthProperties.Provider provider) {
+        String cacheKey = SecurityConstants.GRAPH_TOKEN_REDIS_KEY_PREFIX
+                + (provider.getId() != null ? provider.getId() : "")
+                + ":"
+                + (provider.getGraphTenantId() != null ? provider.getGraphTenantId() : "");
+
+        String cached = stringRedisTemplate.opsForValue().get(cacheKey);
+        if (StringUtils.hasText(cached)) {
+            log.info("Graph token cache HIT for key: {}", cacheKey);
+            return cached;
+        }
+
+        log.info("Graph token cache MISS for key: {}, fetching new token", cacheKey);
         String tokenUrl = String.format(provider.getGraphTokenUrl(), provider.getGraphTenantId());
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
         body.add(SecurityConstants.KEY_GRANT_TYPE, SecurityConstants.GRANT_TYPE_CLIENT_CREDENTIALS);
         body.add(SecurityConstants.KEY_CLIENT_ID, provider.getGraphClientId());
-        body.add(SecurityConstants.KEY_CLIENT_SECRET, provider.getGraphClientSecret());
+        body.add(SecurityConstants.KEY_CLIENT_SECRET, secretResolver.resolve(provider));
         body.add(SecurityConstants.KEY_SCOPE, provider.getGraphScope() != null ? provider.getGraphScope() : SecurityConstants.DEFAULT_GRAPH_SCOPE);
         ResponseEntity<String> response = restTemplate.exchange(
                 tokenUrl,
@@ -170,14 +199,25 @@ public class MsGraphService implements IdpGraphService {
                 new HttpEntity<>(body, headers),
                 String.class);
         if (response.getBody() == null) return null;
+
+        JsonNode node;
         try {
-            JsonNode node = objectMapper.readTree(response.getBody());
-            JsonNode token = node.get(SecurityConstants.KEY_ACCESS_TOKEN);
-            return token != null ? token.asText() : null;
+            node = objectMapper.readTree(response.getBody());
         } catch (Exception e) {
             log.warn("Failed to parse Graph access token response: {}", e.getMessage());
             return null;
         }
+        JsonNode tokenNode = node.get(SecurityConstants.KEY_ACCESS_TOKEN);
+        String token = tokenNode != null ? tokenNode.asText() : null;
+        if (!StringUtils.hasText(token)) return null;
+
+        JsonNode expiresInNode = node.get(SecurityConstants.KEY_EXPIRES_IN);
+        int expiresInSeconds = expiresInNode != null && !expiresInNode.isNull() ? expiresInNode.asInt(3600) : 3600;
+        long ttlSeconds = Math.max(1L, expiresInSeconds - tokenCacheTtlBufferSeconds);
+
+        log.info("Caching Graph token for key: {} with TTL: {} seconds", cacheKey, ttlSeconds);
+        stringRedisTemplate.opsForValue().set(cacheKey, token, ttlSeconds, TimeUnit.SECONDS);
+        return token;
     }
 
     /**
@@ -190,13 +230,12 @@ public class MsGraphService implements IdpGraphService {
      * @param accessToken the Graph API access token
      */
     private void fetchAndApplyAuthenticationMethods(User user, AuthProperties.Provider provider,
-                                                    String userOid, String accessToken) {
+                                                    String userOid, String accessToken) throws IOException {
         String methodsUrl = String.format(provider.getGraphMethodsUrl(), userOid);
         HttpHeaders headers = new HttpHeaders();
         headers.set(SecurityConstants.HEADER_AUTHORIZATION, SecurityConstants.BEARER_PREFIX + accessToken);
         headers.setContentType(MediaType.APPLICATION_JSON);
-        try {
-            ResponseEntity<String> response = restTemplate.exchange(
+        ResponseEntity<String> response = restTemplate.exchange(
                     methodsUrl,
                     HttpMethod.GET,
                     new HttpEntity<>(headers),
@@ -242,9 +281,6 @@ public class MsGraphService implements IdpGraphService {
                 log.info("Enriched user MFA from Graph: phoneLast4={}, device={}, registeredOn={}, details={}",
                         firstPhoneLast4, firstDeviceName, earliestCreated, details.length() > 0 ? details.toString() : null);
             }
-        } catch (Exception e) {
-            log.warn("Failed to parse Graph methods response: {}", e.getMessage());
-        }
     }
 
     /**
