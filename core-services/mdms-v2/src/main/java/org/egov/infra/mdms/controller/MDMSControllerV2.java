@@ -48,6 +48,18 @@ public class MDMSControllerV2 {
     }
 
     /**
+     * Global search for all tenants present in eg_mdms_data across all schemas.
+     *
+     * @param request request containing only RequestInfo
+     * @return list of unique tenantIds
+     */
+    @RequestMapping(value = "_search/tenants", method = RequestMethod.POST)
+    public ResponseEntity<TenantListResponse> searchTenants(@Valid @RequestBody MdmsTenantListRequest request) {
+        List<String> tenantIds = mdmsServiceV2.getAllTenantIds();
+        return new ResponseEntity<>(ResponseUtil.getTenantListResponse(request.getRequestInfo(), tenantIds), HttpStatus.OK);
+    }
+
+    /**
      * Request handler for serving update requests
      * @param mdmsRequest
      * @param schemaCode

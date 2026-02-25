@@ -7,6 +7,7 @@ import org.egov.infra.mdms.model.Mdms;
 import org.egov.infra.mdms.model.MdmsResponseV2;
 import org.egov.infra.mdms.model.SchemaDefinition;
 import org.egov.infra.mdms.model.SchemaDefinitionResponse;
+import org.egov.infra.mdms.model.TenantListResponse;
 
 import java.util.List;
 
@@ -24,6 +25,11 @@ public class ResponseUtil {
         ResponseInfo responseInfo = ResponseInfoUtil.createResponseInfoFromRequestInfo(requestInfo, Boolean.TRUE);
         MdmsResponseV2 response = MdmsResponseV2.builder().mdms(masterDataList).responseInfo(responseInfo).build();
         return response;
+    }
+
+    public static TenantListResponse getTenantListResponse(RequestInfo requestInfo, List<String> tenantIds) {
+        ResponseInfo responseInfo = ResponseInfoUtil.createResponseInfoFromRequestInfo(requestInfo, Boolean.TRUE);
+        return TenantListResponse.builder().responseInfo(responseInfo).tenantIds(tenantIds).build();
     }
 
 }

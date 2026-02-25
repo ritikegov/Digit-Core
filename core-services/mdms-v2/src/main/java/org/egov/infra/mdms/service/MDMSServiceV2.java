@@ -113,4 +113,14 @@ public class MDMSServiceV2 {
         return Arrays.asList(mdmsRequest.getMdms());
     }
 
+    /**
+     * Fetches all unique tenantIds present in eg_mdms_data across all schemas (global call).
+     *
+     * @return list of distinct tenantIds; empty list if none
+     */
+    public List<String> getAllTenantIds() {
+        List<String> tenantIds = mdmsDataRepository.findDistinctTenantIds();
+        return tenantIds != null ? tenantIds : new ArrayList<>();
+    }
+
 }

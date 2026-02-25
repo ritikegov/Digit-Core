@@ -11,6 +11,8 @@ import org.springframework.util.ObjectUtils;
 import java.util.*;
 
 import static org.egov.common.utils.MultiStateInstanceUtil.SCHEMA_REPLACE_STRING;
+import static org.egov.infra.mdms.utils.MDMSConstants.EG_MDMS_DATA_TABLE;
+import static org.egov.infra.mdms.utils.MDMSConstants.TENANTID_COLUMN;
 
 @Component
 public class MdmsDataQueryBuilderV2 {
@@ -101,6 +103,16 @@ public class MdmsDataQueryBuilderV2 {
         preparedStmtList.add(ObjectUtils.isEmpty(mdmsCriteriaV2.getLimit()) ? config.getDefaultLimit() : mdmsCriteriaV2.getLimit());
 
         return paginatedQuery.toString();
+    }
+
+    /**
+     * Returns query to fetch distinct tenantId from eg_mdms_data.
+     * No WHERE, ORDER BY or pagination. Schema placeholder must be replaced by caller.
+     *
+     * @return query string with SCHEMA_REPLACE_STRING placeholder
+     */
+    public String getDistinctTenantIdsQuery() {
+        return "SELECT DISTINCT " + TENANTID_COLUMN + " FROM " + SCHEMA_REPLACE_STRING + "." + EG_MDMS_DATA_TABLE;
     }
 
 }

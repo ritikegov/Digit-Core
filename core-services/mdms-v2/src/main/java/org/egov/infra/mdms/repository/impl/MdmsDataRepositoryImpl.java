@@ -17,14 +17,29 @@ import org.egov.infra.mdms.repository.rowmapper.MdmsDataRowMapper;
 import org.egov.infra.mdms.repository.rowmapper.MdmsDataRowMapperV2;
 import org.egov.tracer.model.CustomException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 
+import static org.egov.common.utils.MultiStateInstanceUtil.SCHEMA_REPLACE_STRING;
 import static org.egov.infra.mdms.errors.ErrorCodes.INVALID_TENANT_ID_ERR_CODE;
+import static org.egov.infra.mdms.errors.ErrorCodes.TENANT_LIST_FETCH_ERR_CODE;
+import static org.egov.infra.mdms.errors.ErrorCodes.TENANT_LIST_FETCH_ERR_MSG;
+import static org.egov.infra.mdms.utils.MDMSConstants.EG_MDMS_DATA_TABLE;
+import static org.egov.infra.mdms.utils.MDMSConstants.INFO_SCHEMA_TABLES;
+import static org.egov.infra.mdms.utils.MDMSConstants.SCHEMA_INFO_SCHEMA;
+import static org.egov.infra.mdms.utils.MDMSConstants.SCHEMA_PG_CATALOG;
+import static org.egov.infra.mdms.utils.MDMSConstants.TABLE_NAME_COLUMN;
+import static org.egov.infra.mdms.utils.MDMSConstants.TABLE_SCHEMA_COLUMN;
+import static org.egov.infra.mdms.utils.MDMSConstants.DEFAULT_TENANT_ID_FOR_SCHEMA_REPLACE;
+import static org.egov.infra.mdms.utils.MDMSConstants.TENANTID_COLUMN;
 
 @Repository
 @Slf4j
@@ -117,5 +132,49 @@ public class MdmsDataRepositoryImpl implements MdmsDataRepository {
         }
         log.info("Mdms Data search query: {}", query);
         return jdbcTemplate.query(query, preparedStmtList.toArray(), mdmsDataRowMapper);
+    }
+
+    @Override
+    public List<String> findDistinctTenantIds() {
+        try {
+            if (Boolean.FALSE.equals(multiStateInstanceUtil.getIsEnvironmentCentralInstance())) {
+                return findDistinctTenantIdsSingleSchema();
+            }
+            return findDistinctTenantIdsCentralInstance();
+        } catch (InvalidTenantIdException e) {
+            throw new CustomException(INVALID_TENANT_ID_ERR_CODE, e.getMessage());
+        } catch (DataAccessException e) {
+            log.error("Error fetching distinct tenant ids", e);
+            throw new CustomException(TENANT_LIST_FETCH_ERR_CODE, TENANT_LIST_FETCH_ERR_MSG);
+        }
+    }
+
+    private List<String> findDistinctTenantIdsSingleSchema() throws InvalidTenantIdException {
+        String query = mdmsDataQueryBuilderV2.getDistinctTenantIdsQuery();
+        query = multiStateInstanceUtil.replaceSchemaPlaceholder(query, DEFAULT_TENANT_ID_FOR_SCHEMA_REPLACE);
+        log.debug("Distinct tenant ids query (single schema): {}", query);
+        List<String> tenantIds = jdbcTemplate.query(query, (rs, rowNum) -> rs.getString(TENANTID_COLUMN));
+        return tenantIds != null ? tenantIds : new ArrayList<>();
+    }
+
+    private List<String> findDistinctTenantIdsCentralInstance() {
+        String schemaListQuery = "SELECT DISTINCT " + TABLE_SCHEMA_COLUMN + " FROM " + INFO_SCHEMA_TABLES
+                + " WHERE " + TABLE_NAME_COLUMN + " = ? AND " + TABLE_SCHEMA_COLUMN + " NOT IN (?, ?)";
+        List<String> schemas = jdbcTemplate.query(schemaListQuery,
+                new Object[]{EG_MDMS_DATA_TABLE, SCHEMA_PG_CATALOG, SCHEMA_INFO_SCHEMA},
+                (rs, rowNum) -> rs.getString(TABLE_SCHEMA_COLUMN));
+
+        Set<String> allTenantIds = new LinkedHashSet<>();
+        String baseQuery = mdmsDataQueryBuilderV2.getDistinctTenantIdsQuery();
+
+        for (String schemaName : schemas) {
+            String query = baseQuery.replaceAll("(?i)" + Pattern.quote(SCHEMA_REPLACE_STRING), schemaName);
+            log.debug("Distinct tenant ids query for schema {}: {}", schemaName, query);
+            List<String> tenantIds = jdbcTemplate.query(query, (rs, rowNum) -> rs.getString(TENANTID_COLUMN));
+            if (tenantIds != null) {
+                allTenantIds.addAll(tenantIds);
+            }
+        }
+        return new ArrayList<>(allTenantIds);
     }
 }

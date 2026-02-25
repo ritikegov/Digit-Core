@@ -27,4 +27,8 @@ public class ErrorCodes {
 
     public static final String INVALID_TENANT_ID_ERR_CODE = "INVALID_TENANT_ID";
 
+    public static final String TENANT_LIST_FETCH_ERR_CODE = "TENANT_LIST_FETCH_ERR";
+
+    public static final String TENANT_LIST_FETCH_ERR_MSG = "Failed to fetch tenant list from master data";
+
 }
