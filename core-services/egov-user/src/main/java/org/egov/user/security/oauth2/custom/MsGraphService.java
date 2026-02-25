@@ -62,10 +62,20 @@ public class MsGraphService {
             if (accessToken == null) return;
             fetchAndApplyAuthenticationMethods(user, provider, userOid, accessToken);
         } catch (Exception e) {
+            /*
+             * FIXME [Severity: MEDIUM - Observability]
+             * Silently swallowing Graph API failures means MFA data may be stale or missing
+             * without any alerting. Consider emitting a metric or structured log for monitoring.
+             */
             log.warn("Failed to enrich user with Graph MFA details: {}", e.getMessage());
         }
     }
 
+    /*
+     * FIXME [Severity: MEDIUM - Performance]
+     * No token caching — a new client-credentials token is fetched on every SSO login.
+     * Cache the access token until near its expiry to reduce latency and Graph API rate-limit risk.
+     */
     private String getGraphAccessToken(AuthProperties.Provider provider) {
         String tokenUrl = String.format(provider.getGraphTokenUrl(), provider.getGraphTenantId());
         HttpHeaders headers = new HttpHeaders();
@@ -73,6 +83,12 @@ public class MsGraphService {
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
         body.add("grant_type", "client_credentials");
         body.add("client_id", provider.getGraphClientId());
+        /*
+         * FIXME [Severity: HIGH - Security]
+         * Client secret is passed in plain text. Ensure this value is sourced from a
+         * secrets manager or environment variable and never logged or committed to
+         * version control.
+         */
         body.add("client_secret", provider.getGraphClientSecret());
         body.add("scope", provider.getGraphScope() != null ? provider.getGraphScope() : "https://graph.microsoft.com/.default");
         try {

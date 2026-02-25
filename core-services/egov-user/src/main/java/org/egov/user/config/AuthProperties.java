@@ -52,6 +52,14 @@ public class AuthProperties {
         private Map<String, String> roleBoundaryMapping;
         private String hierarchyType;
         private String projectName;
+        /*
+         * FIXME [Severity: CRITICAL - Security]
+         * Storing a default password in plain-text config is insecure. If this must exist,
+         * it should be a strong random value injected from a secrets manager at deployment
+         * time, not committed in application.properties.
+         * 
+         * FIXME there is no value being inhjected, this value is currently null in this class
+         */
         private String defaultPassword;
         private Long defaultDob;
         private String defaultDesignation;
@@ -62,17 +70,34 @@ public class AuthProperties {
         private String defaultBoundaryCode;
         private String decryptionPurpose = "UserSelf";
         private String graphClientId;
+        /*
+         * FIXME [Severity: HIGH - Security]
+         * Client secret must not be in plain-text application.properties. Inject via
+         * environment variable or secrets manager at deployment time.
+         */
         private String graphClientSecret;
         private String graphTenantId;
         private String graphMethodsUrl = "https://graph.microsoft.com/v1.0/users/%s/authentication/methods";
         private String graphTokenUrl = "https://login.microsoftonline.com/%s/oauth2/v2.0/token";
         private String graphScope = "https://graph.microsoft.com/.default";
 
+        /*
+         * FIXME [Severity: LOW - Code Quality]
+         * Creates a new ObjectMapper on every call. Use a static final instance or inject one.
+         * Also, @JsonSetter is not used by Spring Boot property binding (it uses setter method
+         * names). The annotation is misleading — consider removing it for clarity.
+         */
         @JsonSetter("roleMapping")
         public void setRoleMapping(String roleMappingString) throws IOException {
             roleMapping = (Map<String, String>) new ObjectMapper().readValue(roleMappingString, Map.class);
         }
 
+           /*
+         * FIXME [Severity: LOW - Code Quality]
+         * Creates a new ObjectMapper on every call. Use a static final instance or inject one.
+         * Also, @JsonSetter is not used by Spring Boot property binding (it uses setter method
+         * names). The annotation is misleading — consider removing it for clarity.
+         */
         @JsonSetter("roleBoundaryMapping")
         public void setRoleBoundaryMapping(String roleBoundaryMappingString) throws IOException {
             roleBoundaryMapping = (Map<String, String>) new ObjectMapper().readValue(roleBoundaryMappingString,

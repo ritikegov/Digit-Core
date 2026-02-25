@@ -14,6 +14,12 @@ public class OidcValidatedJwt {
     private final String projectName;
     private final String hierarchy;
     private final String boundary;
+    /*
+     * FIXME [Severity: HIGH - Security]
+     * Carrying the raw JWT token through the object graph and into the DB is a security risk.
+     * JWTs are bearer credentials — if the DB is breached, tokens can be replayed until expiry.
+     * Store only a hash or token metadata (jti, exp) instead.
+     */
     private final String rawToken;
     private final String providerId;
 

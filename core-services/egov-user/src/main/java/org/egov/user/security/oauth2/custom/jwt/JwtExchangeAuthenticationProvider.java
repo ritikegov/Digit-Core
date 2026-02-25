@@ -88,9 +88,14 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
             MDC.put(UserServiceConstants.TENANTID_MDC_STRING, tenantId);
         }
 
+        /**
+         * All the error should have code and message 
+         * FIXME
+         */
         if (isEmpty(tenantId)) {
             throw new OAuth2Exception("TenantId is mandatory");
         }
+        // FIXME who is sending the user type and who will act on this error being thrown here?
         if (isEmpty(userType) || isNull(UserType.fromValue(userType))) {
             throw new OAuth2Exception("User Type is mandatory and has to be a valid type");
         }
@@ -108,6 +113,12 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
             applyMfaDetailsToUser(userForUpdate, mfaDetails);
             msGraphService.enrichUserWithMfaDetails(userForUpdate, provider, jwt.getOid());
             requestInfo.getUserInfo().setId(userForUpdate.getId());
+            /*
+             * FIXME [Severity: MEDIUM - Performance]
+             * Every SSO login triggers a full user update (token, MFA, email, roles, name).
+             * This is expensive and creates unnecessary DB writes when nothing changed.
+             * Consider diffing fields and only updating when values actually differ.
+             */
             user = userService.updateWithoutOtpValidation(userForUpdate, requestInfo);
         } catch (UserNotFoundException e) {
             log.info("User not found for user id: {}, creating new user", jwt.getExternalUserId(), e);
@@ -115,6 +126,12 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
 
             String mobileNumber = generateMobileNumber(provider);
             org.egov.user.domain.model.hrms.User userToCreate = convertJwtToUser(jwt, mobileNumber, provider);
+            /*
+             * FIXME [Severity: CRITICAL - Security]
+             * All IDP-provisioned users share the same configured password, allowing direct
+             * login bypassing SSO. Generate a random password per user (e.g. UUID.randomUUID())
+             * or disable password-based auth entirely for IDP-provisioned users.
+             */
             userToCreate.setPassword(provider.getDefaultPassword());
             org.egov.user.domain.model.hrms.User hrmsUser = projectEmployeeStaffUtil.createEmployeeAndProjectStaff(
                     jwt.getProjectName(),
@@ -129,11 +146,18 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
             String userUuid = hrmsUser.getUserServiceUuid();
             log.info("Created HRMS user and staff mapping for user service uuid: {}", userUuid);
             User createdUser = convertHrmsUserToUser(hrmsUser);
+            /* FIXME [Severity: CRITICAL - Security] Same shared default password — see FIXME above. */
             createdUser.setPassword(provider.getDefaultPassword());
             createdUser.setTenantId(tenantId);
             createdUser.setIdpIssuer(jwt.getIssuer());
             createdUser.setIdpSubject(jwt.getSubject());
             createdUser.setAuthProvider(jwt.getProviderId());
+            /*
+             * FIXME [Severity: HIGH - Security]
+             * Storing the raw JWT in the database is a security risk — JWTs are bearer
+             * credentials. If the DB is compromised, all stored tokens can be used for
+             * impersonation until they expire. Store only a hash or token metadata (jti, exp).
+             */
             createdUser.setJwtToken(jwt.getRawToken());
             createdUser.setIdpTokenExp(jwt.getExpirationTime());
             createdUser.setLastSsoLoginAt(jwt.getIssuanceTime());
@@ -255,6 +279,12 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
     }
 
     private String generateMobileNumber(AuthProperties.Provider provider) {
+        /*
+         * FIXME [Severity: HIGH - Security]
+         * java.util.Random is predictable. Use SecureRandom for generating user-linked
+         * identifiers. Also, no collision check — generated number may clash with an
+         * existing user's mobile number, causing a DuplicateUserNameException.
+         */
         Random random = new Random();
         String prefix = provider.getMobileNumberPrefix();
         int length = provider.getMobileNumberLength();
@@ -319,12 +349,23 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
         copy.setJwtToken(jwt.getRawToken());
         copy.setIdpSubject(jwt.getSubject());
         copy.setIdpIssuer(jwt.getIssuer());
+        /*
+         * FIXME [Severity: MEDIUM - Bug]
+         * This setEmailId call is immediately overwritten two lines below — dead code or bug.
+         * If preferred_username should be stored, use a different field.
+         */
         copy.setEmailId(jwt.getPreferredUsername());
 
         copy.setName(jwt.getName());
         copy.setEmailId(jwt.getEmail());
         copy.setRoles(toDomainRoles(jwt.getRoles(), user.getTenantId()));
 
+        /*
+         * FIXME [Severity: HIGH - Data Integrity]
+         * Setting password/mobileNumber/username to null before calling updateWithoutOtpValidation
+         * risks wiping existing data if the update logic doesn't skip null fields. Verify that
+         * the update path treats null as "no change" rather than "set to null".
+         */
         copy.setPassword(null);
         copy.setMobileNumber(null);
         copy.setUsername(null);

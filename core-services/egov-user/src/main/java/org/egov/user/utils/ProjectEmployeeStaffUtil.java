@@ -264,6 +264,12 @@ public class ProjectEmployeeStaffUtil {
                                                       RequestInfo requestInfo) {
         log.info("Starting complete workflow: project search -> HRMS employee creation -> project staff creation");
 
+        /*
+         * FIXME [Severity: HIGH - Reliability]
+         * No compensation/rollback — if HRMS employee creation (step 2) succeeds but step 3
+         * fails, an orphaned employee is left. Add compensation logic or a reconciliation mechanism.
+         */
+
         // Step 1: Search for project
         Project project = searchProjectByNameAndBoundary(projectName, boundaryCode, tenantId, requestInfo);
 
@@ -278,6 +284,11 @@ public class ProjectEmployeeStaffUtil {
                     "User service UUID is missing from HRMS employee response");
         }
 
+        /*
+         * FIXME [Severity: HIGH - Incomplete Feature]
+         * Step 3 (createProjectStaff) is commented out — the orchestration workflow is incomplete.
+         * Either re-enable or remove the dead code and update the method javadoc accordingly.
+         */
 //        ProjectStaff projectStaff = createProjectStaff(userServiceUuid, project.getId(), tenantId, requestInfo);
 
         log.info("Successfully completed workflow for user: {}", user.getName());
@@ -286,7 +297,12 @@ public class ProjectEmployeeStaffUtil {
 
 
     public <T> T fetchResult(StringBuilder uri, Object request, Class<T> clazz) {
-        // Configure the ObjectMapper to ignore empty beans during serialization
+        /*
+         * FIXME [Severity: HIGH - Thread Safety]
+         * Mutates the shared Spring-injected ObjectMapper on every call. Not thread-safe and
+         * changes serialization behavior globally. Configure this once at bean creation or
+         * use a dedicated local ObjectMapper instance.
+         */
         objectMapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
         T response;
         try {

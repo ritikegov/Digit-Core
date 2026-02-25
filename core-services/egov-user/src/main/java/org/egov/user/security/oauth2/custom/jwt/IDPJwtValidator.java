@@ -39,6 +39,11 @@ public class IDPJwtValidator implements JwtValidator {
         this.objectMapper = objectMapper;
     }
 
+    /*
+     * FIXME [Severity: LOW - Design]
+     * The issuer parameter is ignored — always returns the global enabled flag.
+     * Should match issuer against configured providers for per-provider support checks.
+     */
     @Override
     public boolean supports(String issuer) {
         return authProperties.getOidc().isEnabled();
@@ -104,6 +109,11 @@ public class IDPJwtValidator implements JwtValidator {
         Object rolesObject = claims.get(roleClaimKey);
         if (rolesObject instanceof List) {
             List<String> roles = (List<String>) rolesObject;
+            /*
+             * FIXME [Severity: MEDIUM - Logic]
+             * When claim roles are present, defaultRoles are discarded entirely.
+             * If default roles should always be included, merge them here with the mapped roles.
+             */
             return roles.stream().map(rolesMapping::get).filter(Objects::nonNull).collect(Collectors.toSet());
         }
         return defaultRoles;
@@ -136,6 +146,12 @@ public class IDPJwtValidator implements JwtValidator {
         try {
             return JWTParser.parse(jwt).getJWTClaimsSet().getIssuer();
         } catch (ParseException e) {
+            /*
+             * FIXME [Severity: LOW - Error Handling]
+             * Wrapping in RuntimeException loses context. Throw a CustomException or
+             * OAuth2Exception with a meaningful error code (e.g. "INVALID_JWT_FORMAT")
+             * for consistent error handling.
+             */
             throw new RuntimeException(e);
         }
     }
