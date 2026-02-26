@@ -46,7 +46,7 @@ public class AuditRepository {
         this.databaseSchemaUtils = databaseSchemaUtils;
     }    
 
-	public void auditUser(User oldUser, long userId, String uuid) {
+	public void auditUser(User oldUser, Long userId, String uuid) {
 			
 		Map<String, Object> auditInputs = new HashMap<String, Object>();
 

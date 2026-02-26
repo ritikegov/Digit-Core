@@ -556,7 +556,7 @@ public class UserService {
                 log.info("Locked account with uuid {} for {} minutes as exceeded max allowed attempts of {} within {} " +
                                 "minutes",
                         user.getUuid(), accountUnlockCoolDownPeriod, maxInvalidLoginAttempts, maxInvalidLoginAttemptsPeriod);
-                throw new OAuth2Exception("Account locked");
+                throw new OAuth2Exception("Account locked for "+accountUnlockCoolDownPeriod+ " minutes due to maximum invalid login attempts");
             }
 
             userRepository.insertFailedLoginAttempt(user.getTenantId(), new FailedLoginAttempt(user.getUuid(), ipAddress,
