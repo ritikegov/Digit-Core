@@ -36,4 +36,13 @@ public final class SecurityConstants {
 
     /** Redis key prefix for Graph access token cache. Key format: graph:token:providerId:tenantId */
     public static final String GRAPH_TOKEN_REDIS_KEY_PREFIX = "graph:token:";
+
+    /** Encryption key and purpose for Graph token in Redis (egov-enc-service + MDMS DataSecurity). */
+    public static final String GRAPH_TOKEN_ENCRYPTION_KEY = "GraphToken";
+    public static final String GRAPH_TOKEN_DECRYPT_PURPOSE = "SystemDecrypt";
+
+    /** Thrown when Graph token encryption returns plaintext (e.g. missing MDMS GraphToken SecurityPolicy). */
+    public static final String GRAPH_TOKEN_ENCRYPTION_NOOP_CODE = "GRAPH_TOKEN_ENCRYPTION_NOOP";
+    public static final String GRAPH_TOKEN_ENCRYPTION_NOOP_MESSAGE =
+            "Graph token encryption did not change value. Ensure MDMS DataSecurity SecurityPolicy for model 'GraphToken' is configured (see MDMS_GRAPH_TOKEN_ENCRYPTION_POLICY.md).";
 }

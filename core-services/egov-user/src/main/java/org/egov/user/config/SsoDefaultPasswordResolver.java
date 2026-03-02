@@ -20,7 +20,7 @@ public class SsoDefaultPasswordResolver {
     private static final String UPPERCASE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     private static final String LOWERCASE = "abcdefghijklmnopqrstuvwxyz";
     private static final String DIGITS = "0123456789";
-    private static final String SPECIAL = "!@#$%^&*";
+    private static final String SPECIAL = "@#$%";
     private static final int LENGTH = 15;
     private static final int MIN_PER_BUCKET = 1;
 
@@ -28,7 +28,7 @@ public class SsoDefaultPasswordResolver {
 
     /**
      * Generates a cryptographically secure random password for a new SSO user.
-     * 24 chars with at least one from [A-Z], [a-z], [0-9], and [!@#$%^&*], then shuffled.
+     * 15 chars with at least one from [A-Z], [a-z], [0-9], and [@#$%], then shuffled.
      *
      * @return a new random password (never null)
      */

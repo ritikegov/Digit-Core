@@ -1,28 +1,18 @@
 package org.egov.user.security.oauth2.custom.jwt;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jwt.JWTParser;
 import lombok.extern.slf4j.Slf4j;
-import org.egov.common.contract.request.RequestInfo;
-import org.egov.mdms.model.MasterDetail;
-import org.egov.mdms.model.MdmsCriteria;
-import org.egov.mdms.model.MdmsCriteriaReq;
-import org.egov.mdms.model.ModuleDetail;
 import org.egov.user.config.AuthProperties;
 import org.egov.user.config.OidcProviderSupplier;
 import org.egov.user.domain.exception.sso.IdpJwtValidationException;
 import org.egov.user.domain.exception.sso.OidcProviderConfigException;
 import org.egov.user.web.contract.auth.OidcValidatedJwt;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
 
-import javax.annotation.PostConstruct;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -33,53 +23,13 @@ public class IDPJwtValidator implements JwtValidator {
 
     private final AuthProperties authProperties;
     private final OidcProviderSupplier oidcProviderSupplier;
-    private final ObjectMapper objectMapper;
-    private final RestTemplate restTemplate;
-
-    @Value("${mdms.ssoroles.masterName}")
-    private String ssoRoleMasterName;
-
-    @Value("${mdms.ssoroles.moduleName}")
-    private String ssoRoleModuleName;
-
-    @Value("${egov.mdms.host}")
-    private String mdmsHost;
-
-    @Value("${egov.mdms.search.endpoint}")
-    private String mdmsEndpoint;
 
     // cache by providerId
     private final Map<String, JwtDecoder> decoders = new ConcurrentHashMap<>();
 
-    // cache for MDMS role mapping: key is providerId:tenantId
-    private final Map<String, Map<String, String>> roleMappingCache = new ConcurrentHashMap<>();
-
-    public IDPJwtValidator(AuthProperties authProperties, OidcProviderSupplier oidcProviderSupplier,
-            ObjectMapper objectMapper, RestTemplate restTemplate) {
+    public IDPJwtValidator(AuthProperties authProperties, OidcProviderSupplier oidcProviderSupplier) {
         this.authProperties = authProperties;
         this.oidcProviderSupplier = oidcProviderSupplier;
-        this.objectMapper = objectMapper;
-        this.restTemplate = restTemplate;
-    }
-
-    /**
-     * Initializes the JWT validator by pre-loading SSO role mappings from MDMS for all configured providers.
-     * This improves performance by caching role mappings at startup rather than fetching them on-demand.
-     */
-    @PostConstruct
-    public void init() {
-        if (authProperties.getOidc() == null || !authProperties.getOidc().isEnabled()) {
-            return;
-        }
-        
-        log.info("Initializing SSO role mapping cache for OIDC providers...");
-        oidcProviderSupplier.getProviders().stream()
-                .filter(p -> p.getTenantId() != null && !p.getTenantId().isEmpty())
-                .forEach(provider -> {
-                    log.info("Pre-loading role mapping for provider: {} and tenant: {}", 
-                            provider.getId(), provider.getTenantId());
-                    fetchRoleMapping(provider, provider.getTenantId());
-                });
     }
 
     /**
@@ -184,8 +134,7 @@ public class IDPJwtValidator implements JwtValidator {
      */
     private Set<String> extractRoles(AuthProperties.Provider provider, Map<String, Object> claims) {
         String roleClaimKey = provider.getRoleClaimKey();
-        String tenantId = (String) claims.get(JwtConstants.CLAIM_TENANT_ID);
-        Map<String, String> rolesMapping = fetchRoleMapping(provider, tenantId);
+        Map<String, String> rolesMapping = getProviderRoleMapping(provider);
         Set<String> defaultRoles = getDefaultRoles(provider);
 
         if (claims == null || roleClaimKey == null || claims.get(roleClaimKey) == null) {
@@ -226,28 +175,6 @@ public class IDPJwtValidator implements JwtValidator {
     }
 
     /**
-     * Fetches role mapping for a provider and tenant, using cache if available.
-     * Falls back to provider configuration if MDMS fetch fails.
-     *
-     * @param provider the OIDC provider configuration
-     * @param tenantId the tenant ID to fetch role mapping for
-     * @return map of SSO role names to Digit role codes (comma-separated if multiple)
-     */
-    private Map<String, String> fetchRoleMapping(AuthProperties.Provider provider, String tenantId) {
-        String cacheKey = provider.getId() + ":" + tenantId;
-        return roleMappingCache.computeIfAbsent(cacheKey, k -> {
-            try {
-                return fetchRoleMappingFromMdms(tenantId);
-            } catch (Exception e) {
-                log.error("Failed to fetch role mapping from MDMS for tenant {}. Falling back to config.", tenantId, e);
-            }
-            log.info("Falling back to configured role mapping for provider: {} and tenant: {}", 
-                    provider.getId(), tenantId);
-            return getProviderRoleMapping(provider);
-        });
-    }
-
-    /**
      * Gets role mapping from provider configuration.
      *
      * @param provider the OIDC provider configuration
@@ -255,122 +182,6 @@ public class IDPJwtValidator implements JwtValidator {
      */
     private Map<String, String> getProviderRoleMapping(AuthProperties.Provider provider) {
         return provider.getRoleMapping() != null ? provider.getRoleMapping() : Collections.emptyMap();
-    }
-
-    /**
-     * Fetches SSO role mapping from MDMS (Master Data Management Service).
-     * Queries MDMS for role mappings configured for the tenant.
-     *
-     * @param tenantId the tenant ID to fetch role mapping for
-     * @return map of SSO role names to Digit role codes, empty map if not found
-     */
-    private Map<String, String> fetchRoleMappingFromMdms(String tenantId) {
-        String url = mdmsHost + mdmsEndpoint;
-
-        MasterDetail masterDetail = MasterDetail.builder().name(ssoRoleMasterName).build();
-        ModuleDetail moduleDetail = ModuleDetail.builder()
-                .moduleName(ssoRoleModuleName)
-                .masterDetails(Collections.singletonList(masterDetail))
-                .build();
-
-        MdmsCriteria mdmsCriteria = new MdmsCriteria();
-        mdmsCriteria.setTenantId(tenantId);
-        mdmsCriteria.setModuleDetails(Collections.singletonList(moduleDetail));
-
-        MdmsCriteriaReq mdmsCriteriaReq = new MdmsCriteriaReq();
-        mdmsCriteriaReq.setRequestInfo(new RequestInfo());
-        mdmsCriteriaReq.setMdmsCriteria(mdmsCriteria);
-
-        log.debug("Fetching SSO role mapping from MDMS for tenant {}: {}", tenantId, url);
-        JsonNode response = restTemplate.postForObject(url, mdmsCriteriaReq, JsonNode.class);
-
-        // Early return if response is invalid
-        if (response == null || !response.has(JwtConstants.MDMS_RES)) {
-            log.warn("No SSO role mapping found in MDMS for tenant {}: invalid response", tenantId);
-            return Collections.emptyMap();
-        }
-
-        JsonNode mdmsRes = response.get(JwtConstants.MDMS_RES);
-        if (!mdmsRes.has(ssoRoleModuleName)) {
-            log.warn("No SSO role mapping found in MDMS for tenant {}: module not found", tenantId);
-            return Collections.emptyMap();
-        }
-
-        JsonNode moduleNode = mdmsRes.get(ssoRoleModuleName);
-        if (!moduleNode.has(ssoRoleMasterName)) {
-            log.warn("No SSO role mapping found in MDMS for tenant {}: master not found", tenantId);
-            return Collections.emptyMap();
-        }
-
-        JsonNode masterNode = moduleNode.get(ssoRoleMasterName);
-        if (!masterNode.isArray() || masterNode.size() == 0) {
-            log.warn("No SSO role mapping found in MDMS for tenant {}: empty master array", tenantId);
-            return Collections.emptyMap();
-        }
-
-        // Process role mappings from master node array
-        Map<String, String> mapping = new HashMap<>();
-        for (JsonNode entry : masterNode) {
-            if (isValidRoleMappingEntry(entry)) {
-                String ssoRole = entry.get(JwtConstants.KEY_SSO_ROLE).asText();
-                String digitRolesStr = extractDigitRoles(entry);
-                if (ssoRole != null && digitRolesStr != null) {
-                    mapping.merge(ssoRole, digitRolesStr, (oldVal, newVal) -> oldVal + "," + newVal);
-                }
-            }
-        }
-
-        if (mapping.isEmpty()) {
-            log.warn("No SSO role mapping found in MDMS for tenant {}", tenantId);
-        }
-        return mapping;
-    }
-
-    /**
-     * Checks if a JSON entry contains valid role mapping data.
-     *
-     * @param entry the JSON node entry to validate
-     * @return true if entry has ssoRole and either digitRoles or digitRole
-     */
-    private boolean isValidRoleMappingEntry(JsonNode entry) {
-        return entry != null 
-                && entry.has(JwtConstants.KEY_SSO_ROLE) 
-                && (entry.has(JwtConstants.KEY_DIGIT_ROLES) || entry.has(JwtConstants.KEY_DIGIT_ROLE));
-    }
-
-    /**
-     * Extracts digit roles string from a role mapping entry.
-     * Handles both array and string formats.
-     *
-     * @param entry the JSON node entry containing role mapping
-     * @return comma-separated string of digit roles, or null if not found
-     */
-    private String extractDigitRoles(JsonNode entry) {
-        JsonNode digitRolesNode = entry.has(JwtConstants.KEY_DIGIT_ROLES) 
-                ? entry.get(JwtConstants.KEY_DIGIT_ROLES) 
-                : entry.get(JwtConstants.KEY_DIGIT_ROLE);
-        
-        if (digitRolesNode == null) {
-            return null;
-        }
-
-        return digitRolesNode.isArray()
-                ? extractRolesFromArray(digitRolesNode)
-                : digitRolesNode.asText();
-    }
-
-    /**
-     * Extracts roles from a JSON array and returns as comma-separated string.
-     *
-     * @param rolesArray the JSON array node containing roles
-     * @return comma-separated string of roles
-     */
-    private String extractRolesFromArray(JsonNode rolesArray) {
-        return java.util.stream.StreamSupport.stream(
-                java.util.Spliterators.spliteratorUnknownSize(rolesArray.iterator(), 
-                        java.util.Spliterator.ORDERED), false)
-                .map(JsonNode::asText)
-                .collect(Collectors.joining(","));
     }
 
 

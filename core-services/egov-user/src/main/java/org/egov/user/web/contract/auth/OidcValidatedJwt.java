@@ -1,5 +1,7 @@
 package org.egov.user.web.contract.auth;
 
+import org.egov.user.security.oauth2.custom.jwt.JwtConstants;
+
 import java.util.Date;
 import java.util.Map;
 import java.util.Set;
@@ -68,6 +70,15 @@ public class OidcValidatedJwt {
 
     public String getRawToken() {
         return rawToken;
+    }
+
+    /**
+     * Token unique identifier for session tracking. Uses jti if present, else uti.
+     * Returns null if neither claim is present (caller must validate and throw).
+     */
+    public String getTokenId() {
+        String jti = (String) claims.get(JwtConstants.CLAIM_JTI);
+        return jti != null ? jti : (String) claims.get(JwtConstants.CLAIM_UTI);
     }
 
     public String getProviderId() {

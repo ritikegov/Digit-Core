@@ -24,14 +24,24 @@ public final class JwtConstants {
     public static final String CLAIM_USER_TYPE = "userType";
     public static final String CLAIM_USER_TYPE_ALT = "user_type";
     public static final String CLAIM_TENANT_ID = "tenantId";
+    public static final String CLAIM_JTI = "jti";
+    public static final String CLAIM_UTI = "uti";
 
-    /** MDMS / role mapping keys. */
+    /** MDMS / role and designation mapping keys. */
     public static final String MDMS_RES = "MdmsRes";
     public static final String KEY_SSO_ROLE = "ssoRole";
     public static final String KEY_DIGIT_ROLES = "digitRoles";
     public static final String KEY_DIGIT_ROLE = "digitRole";
+    public static final String KEY_IDP_DESIGNATION = "idpDesignation";
+    public static final String KEY_DIGIT_DESIGNATION_CODE = "digitDesignationCode";
 
     /** OAuth2Error error code. */
     public static final String OAUTH2_ERROR_INVALID_TOKEN = "invalid_token";
+
+    /** Error message when IDP token has neither jti nor uti claim. */
+    public static final String ERROR_MISSING_TOKEN_ID = "IDP token must contain jti or uti claim";
+
+    /** Encryption policy model name for UserIdpDetails (MDMS SecurityPolicy). Used when encrypting before persist to eg_user_idp_details. */
+    public static final String ENCRYPTION_MODEL_USER_IDP_DETAILS = "UserIdpDetails";
 
 }

@@ -13,19 +13,23 @@ import org.egov.user.domain.exception.sso.SsoUserMappingException;
 import org.egov.user.domain.model.Role;
 import org.egov.user.domain.model.SecureUser;
 import org.egov.user.domain.model.User;
+import org.egov.user.domain.model.UserIdpDetails;
 import org.egov.user.domain.model.enums.UserType;
 import org.egov.user.domain.service.UserService;
+import org.egov.user.domain.service.utils.EncryptionDecryptionUtil;
+import org.egov.user.persistence.repository.UserIdpDetailsRepository;
 import org.egov.user.security.oauth2.custom.service.EmployeeCreationProfile;
 import org.egov.user.security.oauth2.custom.service.IdpGraphService;
 import org.egov.user.security.oauth2.custom.service.impl.NoOpGraphService;
 import org.egov.user.utils.ProjectEmployeeStaffUtil;
 import org.egov.user.web.contract.auth.OidcValidatedJwt;
-import org.springframework.beans.BeanUtils;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
@@ -52,6 +56,8 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
     private final AccessTokenMfaExtractor accessTokenMfaExtractor;
     private final SsoDefaultPasswordResolver ssoDefaultPasswordResolver;
     private final NoOpGraphService noOpGraphService;
+    private final UserIdpDetailsRepository userIdpDetailsRepository;
+    private final EncryptionDecryptionUtil encryptionDecryptionUtil;
 
     public JwtExchangeAuthenticationProvider(
             JwtValidationService jwtValidationService,
@@ -61,7 +67,9 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
             List<IdpGraphService> graphServices,
             AccessTokenMfaExtractor accessTokenMfaExtractor,
             SsoDefaultPasswordResolver ssoDefaultPasswordResolver,
-            NoOpGraphService noOpGraphService) {
+            NoOpGraphService noOpGraphService,
+            UserIdpDetailsRepository userIdpDetailsRepository,
+            EncryptionDecryptionUtil encryptionDecryptionUtil) {
         this.jwtValidationService = jwtValidationService;
         this.userService = userService;
         this.centraInstanceUtil = centraInstanceUtil;
@@ -72,6 +80,8 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
                 JwtConstants.MFA_EXTRACTOR_REQUIRED_MESSAGE);
         this.ssoDefaultPasswordResolver = ssoDefaultPasswordResolver;
         this.noOpGraphService = noOpGraphService;
+        this.userIdpDetailsRepository = userIdpDetailsRepository;
+        this.encryptionDecryptionUtil = encryptionDecryptionUtil;
     }
 
     /**
@@ -139,17 +149,20 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
             User userForUpdate = createUserForSsoUpdate(user, jwt);
             applyMfaDetailsToUser(userForUpdate, mfaDetails);
             resolveGraphService(provider).enrichUserWithMfaDetails(userForUpdate, provider, jwt.getOid());
-            if (jwt.getOid() != null) {
-                String oidDigits = jwt.getOid().replaceAll("\\D", "");
-                if (!oidDigits.isEmpty()) {
-                    long creatorId = Long.parseLong(oidDigits.substring(0, Math.min(oidDigits.length(), 10)));
-                    userForUpdate.setCreatedBy(creatorId);
-                    userForUpdate.setLastModifiedBy(creatorId);
-                    userForUpdate.setLoggedInUserId(creatorId);
-                }
-            }
             requestInfo.getUserInfo().setId(userForUpdate.getId());
-            user = userService.updateWithoutOtpValidation(userForUpdate, requestInfo);
+            // Preserve original user reference in case decryptObject returns null (mocked tests or unexpected behavior)
+            User originalUser = user;
+            if (rolesChanged(user.getRoles(), userForUpdate.getRoles())) {
+                user = userService.updateWithoutOtpValidation(userForUpdate, requestInfo);
+            } else {
+                User decrypted = encryptionDecryptionUtil.decryptObject(user, "UserSelf", User.class, requestInfo);
+                // Fallback to original user if decryption unexpectedly returns null
+                user = decrypted != null ? decrypted : originalUser;
+            }
+            UserIdpDetails idpDetails = buildIdpDetails(userForUpdate, jwt);
+            UserIdpDetails encryptedIdpDetails = encryptionDecryptionUtil.encryptObject(
+                    idpDetails, JwtConstants.ENCRYPTION_MODEL_USER_IDP_DETAILS, UserIdpDetails.class);
+            userIdpDetailsRepository.upsert(encryptedIdpDetails, tenantId);
         } catch (UserNotFoundException e) {
             log.info("User not found for oid: {}, creating new user", jwt.getOid(), e);
             requestInfo = getRequestInfo(jwt.getRoles(), jwt.getUserType(), jwt.getOid());
@@ -161,8 +174,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
                     .getEmployeeCreationProfile(provider, jwt.getOid());
             String employeeType = profileOpt.map(EmployeeCreationProfile::getEmployeeType).filter(StringUtils::hasText)
                     .orElse(OidcConfigConstants.DEFAULT_EMPLOYEE_TYPE);
-            String designation = profileOpt.map(EmployeeCreationProfile::getDesignation).filter(StringUtils::hasText)
-                    .orElse(OidcConfigConstants.DEFAULT_DESIGNATION_ID);
+            String designation = resolveDesignation(provider, jwt, profileOpt);
             String department = profileOpt.map(EmployeeCreationProfile::getDepartment).filter(StringUtils::hasText)
                     .orElse(OidcConfigConstants.DEFAULT_DEPARTMENT_CODE);
             org.egov.user.domain.model.hrms.User hrmsUser = projectEmployeeStaffUtil.createEmployeeAndProjectStaff(
@@ -173,6 +185,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
                     provider.getDefaultEmployeeStatus(),
                     tenantId,
                     jwt.getOid(),
+                    provider.getDefaultBoundaryHierarchyType(),
                     requestInfo);
             String userUuid = hrmsUser.getUserServiceUuid();
             log.info("Created HRMS user and staff mapping for user service uuid: {}", userUuid);
@@ -182,28 +195,28 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
             createdUser.setIdpIssuer(jwt.getIssuer());
             createdUser.setIdpSubject(jwt.getSubject());
             createdUser.setAuthProvider(jwt.getProviderId());
-            createdUser.setJwtToken(jwt.getRawToken());
+            createdUser.setTokenId(jwt.getTokenId());
             createdUser.setIdpTokenExp(jwt.getExpirationTime());
             createdUser.setLastSsoLoginAt(jwt.getIssuanceTime());
             createdUser.setActive(Boolean.TRUE);
             createdUser.setEmailId(jwt.getPreferredUsername());
-            if (jwt.getOid() != null) {
-                String oidDigits = jwt.getOid().replaceAll("\\D", "");
-                if (!oidDigits.isEmpty()) {
-                    long creatorId = Long.parseLong(oidDigits.substring(0, Math.min(oidDigits.length(), 10)));
-                    createdUser.setCreatedBy(creatorId);
-                    createdUser.setLastModifiedBy(creatorId);
-                }
-            }
+            createdUser.setCreatedBy(requestInfo.getUserInfo().getId());
+            createdUser.setLastModifiedBy(createdUser.getId());
             applyMfaDetailsToUser(createdUser, mfaDetails);
             resolveGraphService(provider).enrichUserWithMfaDetails(createdUser, provider, jwt.getOid());
 
             requestInfo.getUserInfo().setId(createdUser.getId());
             requestInfo.getUserInfo().setUuid(createdUser.getUuid());
-            user = userService.updateWithoutOtpValidation(createdUser, requestInfo);
-        } catch (DuplicateUserNameException e) {
-            log.error("Fatal: duplicate user conflict for oid: {}", jwt.getOid(), e);
-            throw SsoUserMappingException.duplicateUser(e);
+            try {
+                user = userService.updateWithoutOtpValidation(createdUser, requestInfo);
+            } catch (DuplicateUserNameException dupE) {
+                log.error("Fatal: duplicate user conflict for oid: {}", jwt.getOid(), dupE);
+                throw SsoUserMappingException.duplicateUser(dupE);
+            }
+            UserIdpDetails idpDetails = buildIdpDetails(createdUser, jwt);
+            UserIdpDetails encryptedIdpDetails = encryptionDecryptionUtil.encryptObject(
+                    idpDetails, JwtConstants.ENCRYPTION_MODEL_USER_IDP_DETAILS, UserIdpDetails.class);
+            userIdpDetailsRepository.upsert(encryptedIdpDetails, tenantId);
         }
 
         if (user.getActive() == null || !user.getActive()) {
@@ -290,6 +303,55 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
     }
 
     /**
+     * Resolves the DIGIT designation code for a new SSO user using (in order of precedence):
+     * <ol>
+     *   <li>JWT claim configured via designationClaimKey on provider</li>
+     *   <li>Designation from EmployeeCreationProfile (Graph jobTitle/custom designation)</li>
+     *   <li>Provider's designationMapping (IDP designation → DIGIT designation code)</li>
+     *   <li>Provider's defaultDesignationCode</li>
+     *   <li>Global DEFAULT_DESIGNATION_ID constant</li>
+     * </ol>
+     */
+    private String resolveDesignation(AuthProperties.Provider provider, OidcValidatedJwt jwt,
+                                      Optional<EmployeeCreationProfile> profileOpt) {
+        String idpDesignationFromClaim = null;
+        if (provider != null && StringUtils.hasText(provider.getDesignationClaimKey())
+                && jwt != null && jwt.getClaims() != null) {
+            Object claimValue = jwt.getClaims().get(provider.getDesignationClaimKey());
+            if (claimValue != null) {
+                String value = claimValue.toString().trim();
+                if (!value.isEmpty()) {
+                    idpDesignationFromClaim = value;
+                }
+            }
+        }
+
+        String idpDesignation = StringUtils.hasText(idpDesignationFromClaim)
+                ? idpDesignationFromClaim
+                : profileOpt.map(EmployeeCreationProfile::getDesignation)
+                .filter(StringUtils::hasText)
+                .orElse(null);
+
+        String mappedDesignation = null;
+        if (provider != null && provider.getDesignationMapping() != null && idpDesignation != null) {
+            mappedDesignation = provider.getDesignationMapping().get(idpDesignation);
+        }
+
+        String resolved = StringUtils.hasText(mappedDesignation)
+                ? mappedDesignation
+                : StringUtils.hasText(idpDesignation)
+                ? idpDesignation
+                : (provider != null && StringUtils.hasText(provider.getDefaultDesignationCode())
+                ? provider.getDefaultDesignationCode()
+                : null);
+
+        if (!StringUtils.hasText(resolved)) {
+            resolved = OidcConfigConstants.DEFAULT_DESIGNATION_ID;
+        }
+        return resolved;
+    }
+
+    /**
      * Converts an HRMS user object to a domain User object.
      * Maps roles from HRMS format to domain format.
      *
@@ -314,8 +376,11 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
                 .emailId(user.getEmailId())
                 .mobileNumber(user.getMobileNumber())
                 .mobileValidationMandatory(false)
+                .type(UserType.fromValue(user.getType()))
                 .roles(domainRoles)
                 .loggedInUserId(user.getId())
+                .createdBy(user.getId())
+                .lastModifiedBy(user.getId())
                 .build();
     }
 
@@ -452,39 +517,78 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
                 .accountLocked(false)
                 .password(null)
                 .build();
-
-        User updatedUser = userService.updateWithoutOtpValidation(userToBeUpdated, requestInfo);
-        userService.resetFailedLoginAttempts(userToBeUpdated);
-
-        return updatedUser;
+        return userService.updateWithoutOtpValidation(userToBeUpdated, requestInfo);
     }
 
     /**
      * Creates a User object for SSO update from existing user and JWT claims.
-     * Updates user information from JWT while preserving existing user data.
+     * Sets only identity and IdP linkage fields; session/MFA are persisted via eg_user_idp_details.
      *
      * @param user the existing user object
      * @param jwt the validated JWT with updated claims
-     * @return User object ready for update
+     * @return User object ready for update (eg_user only)
      */
     private User createUserForSsoUpdate(User user, OidcValidatedJwt jwt) {
-        User copy = new User();
-        BeanUtils.copyProperties(user, copy);
+        return user.toBuilder()
+                .authProvider(jwt.getProviderId())
+                .idpSubject(jwt.getSubject())
+                .idpIssuer(jwt.getIssuer())
+                .name(jwt.getName())
+                .emailId(jwt.getPreferredUsername())
+                .roles(toDomainRoles(jwt.getRoles(), user.getTenantId()))
+                .createdBy(user.getCreatedBy())
+                .lastModifiedBy(user.getId())
+                .password(null)
+                .mobileNumber(null)
+                .username(null)
+                .build();
+    }
 
-        copy.setIdpTokenExp(jwt.getExpirationTime());
-        copy.setLastSsoLoginAt(jwt.getIssuanceTime());
-        copy.setAuthProvider(jwt.getProviderId());
-        copy.setJwtToken(jwt.getRawToken());
-        copy.setIdpSubject(jwt.getSubject());
-        copy.setIdpIssuer(jwt.getIssuer());
-        copy.setName(jwt.getName());
-        copy.setEmailId(jwt.getPreferredUsername());
-        copy.setRoles(toDomainRoles(jwt.getRoles(), user.getTenantId()));
-        copy.setPassword(null);
-        copy.setMobileNumber(null);
-        copy.setUsername(null);
+    /**
+     * Builds IDP details for upsert into eg_user_idp_details (session and MFA only).
+     * Requires JWT to contain jti or uti claim; throws otherwise.
+     */
+    private UserIdpDetails buildIdpDetails(User user, OidcValidatedJwt jwt) {
+        String tokenId = jwt.getTokenId();
+        if (tokenId == null || tokenId.isEmpty()) {
+            throw new OAuth2AuthenticationException(
+                    new OAuth2Error(JwtConstants.OAUTH2_ERROR_INVALID_TOKEN, JwtConstants.ERROR_MISSING_TOKEN_ID, null));
+        }
+        return UserIdpDetails.builder()
+                .id(user.getId())
+                .tenantId(user.getTenantId())
+                .uuid(user.getUuid())
+                .idpTokenExp(jwt.getExpirationTime())
+                .lastSsoLoginAt(jwt.getIssuanceTime())
+                .tokenId(tokenId)
+                .mfaEnabled(user.getMfaEnabled())
+                .mfaDeviceName(user.getMfaDeviceName())
+                .mfaPhoneLast4(user.getMfaPhoneLast4())
+                .mfaRegisteredOn(user.getMfaRegisteredOn())
+                .mfaDetails(user.getMfaDetails())
+                .createdBy(user.getCreatedBy())
+                .lastModifiedBy(user.getLastModifiedBy())
+                .build();
+    }
 
-        return copy;
+    /**
+     * Returns true if the two role sets differ by role identity (code + tenantId).
+     * Both null or both empty is treated as unchanged.
+     */
+    private boolean rolesChanged(Set<Role> previous, Set<Role> current) {
+        if (CollectionUtils.isEmpty(previous) && CollectionUtils.isEmpty(current)) {
+            return false;
+        }
+        if (CollectionUtils.isEmpty(previous) || CollectionUtils.isEmpty(current)) {
+            return true;
+        }
+        Set<String> previousKeys = previous.stream()
+                .map(r -> (r.getCode() != null ? r.getCode() : "") + "|" + (r.getTenantId() != null ? r.getTenantId() : ""))
+                .collect(Collectors.toSet());
+        Set<String> currentKeys = current.stream()
+                .map(r -> (r.getCode() != null ? r.getCode() : "") + "|" + (r.getTenantId() != null ? r.getTenantId() : ""))
+                .collect(Collectors.toSet());
+        return !previousKeys.equals(currentKeys);
     }
 
     /**

@@ -62,7 +62,7 @@ public class UserResultSetExtractor implements ResultSetExtractor<List<User>> {
                         .idpTokenExp(rs.getTimestamp("idp_token_exp"))
                         .lastSsoLoginAt(rs.getTimestamp("last_sso_login_at"))
                         .authProvider(rs.getString("auth_provider"))
-                        .jwtToken(rs.getString("jwt_token"))
+                        .tokenId(rs.getString("token_id"))
                         .mfaEnabled(rs.getBoolean("mfa_enabled"))
                         .mfaDeviceName(rs.getString("mfa_device_name"))
                         .mfaPhoneLast4(rs.getString("mfa_phone_last4"))

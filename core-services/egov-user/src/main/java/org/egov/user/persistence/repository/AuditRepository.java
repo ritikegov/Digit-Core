@@ -1,34 +1,30 @@
 package org.egov.user.persistence.repository;
 
-import static java.util.Objects.isNull;
-import static org.egov.user.utils.DatabaseSchemaUtils.SCHEMA_REPLACE_STRING;
-import static org.springframework.util.StringUtils.isEmpty;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import org.egov.user.domain.model.User;
 import org.egov.user.domain.model.enums.BloodGroup;
 import org.egov.user.domain.model.enums.Gender;
 import org.egov.user.domain.model.enums.GuardianRelation;
 import org.egov.user.domain.model.enums.UserType;
 import org.egov.user.utils.DatabaseSchemaUtils;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
+
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import static org.egov.user.utils.DatabaseSchemaUtils.SCHEMA_REPLACE_STRING;
+import static org.springframework.util.StringUtils.isEmpty;
 
 @Repository
 public class AuditRepository {
 
     public static final String INSERT_AUDIT_DETAILS = "insert into " + SCHEMA_REPLACE_STRING
             + ".eg_user_audit_table (id,uuid,tenantid,salutation,dob,locale,username,password,pwdexpirydate,mobilenumber,altcontactnumber,emailid,active,name,gender,pan,aadhaarnumber,"
-            + "type,guardian,guardianrelation,signature,accountlocked,bloodgroup,photo,identificationmark,auditcreatedby,auditcreatedtime,idp_issuer,idp_subject,idp_token_exp,last_sso_login_at,auth_provider,jwt_token,mfa_enabled,mfa_device_name,mfa_phone_last4,mfa_registered_on,mfa_details) values (:id,:uuid,:tenantid,:salutation,"
+            + "type,guardian,guardianrelation,signature,accountlocked,bloodgroup,photo,identificationmark,auditcreatedby,auditcreatedtime,idp_issuer,idp_subject,auth_provider) values (:id,:uuid,:tenantid,:salutation,"
             + ":dob,:locale,:username,:password,:pwdexpirydate,:mobilenumber,:alternatemobilenumber,:emailid,:active,:name,:gender,:pan,:aadhaarnumber,:type,:guardian,:guardianrelation,:signature,"
-            + ":accountlocked,:bloodgroup,:photo,:identificationmark,:auditcreatedby,:auditcreatedtime,:idp_issuer,:idp_subject,:idp_token_exp,:last_sso_login_at,:auth_provider,:jwt_token,:mfa_enabled,:mfa_device_name,:mfa_phone_last4,:mfa_registered_on,:mfa_details) ";
+            + ":accountlocked,:bloodgroup,:photo,:identificationmark,:auditcreatedby,:auditcreatedtime,:idp_issuer,:idp_subject,:auth_provider) ";
 
     private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
     private final DatabaseSchemaUtils databaseSchemaUtils;
@@ -155,15 +151,7 @@ public class AuditRepository {
         auditInputs.put("alternatemobilenumber", oldUser.getAlternateMobileNumber());
         auditInputs.put("idp_issuer", oldUser.getIdpIssuer());
         auditInputs.put("idp_subject", oldUser.getIdpSubject());
-        auditInputs.put("idp_token_exp", oldUser.getIdpTokenExp());
-        auditInputs.put("last_sso_login_at", oldUser.getLastSsoLoginAt());
         auditInputs.put("auth_provider", oldUser.getAuthProvider());
-        auditInputs.put("jwt_token", oldUser.getJwtToken());
-        auditInputs.put("mfa_enabled", oldUser.getMfaEnabled());
-        auditInputs.put("mfa_device_name", oldUser.getMfaDeviceName());
-        auditInputs.put("mfa_phone_last4", oldUser.getMfaPhoneLast4());
-        auditInputs.put("mfa_registered_on", oldUser.getMfaRegisteredOn());
-        auditInputs.put("mfa_details", oldUser.getMfaDetails());
 
         String query = INSERT_AUDIT_DETAILS;
         // replaced schema placeholder with tenant specific schema name

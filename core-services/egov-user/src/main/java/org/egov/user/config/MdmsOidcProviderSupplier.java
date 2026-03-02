@@ -7,6 +7,7 @@ import org.egov.mdms.model.MasterDetail;
 import org.egov.mdms.model.MdmsCriteria;
 import org.egov.mdms.model.MdmsCriteriaReq;
 import org.egov.mdms.model.ModuleDetail;
+import org.egov.user.security.oauth2.custom.jwt.JwtConstants;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -15,7 +16,9 @@ import org.springframework.web.client.RestTemplate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -43,7 +46,7 @@ public class MdmsOidcProviderSupplier implements OidcProviderSupplier {
     private final List<String> tenantIds;
 
     private final AtomicReference<List<AuthProperties.Provider>> cache = new AtomicReference<>(null);
-    private static final long CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+    private final long cacheTtlMs;
     private volatile long lastFetchTime = 0;
 
     public MdmsOidcProviderSupplier(
@@ -52,13 +55,17 @@ public class MdmsOidcProviderSupplier implements OidcProviderSupplier {
             @Value("${egov.mdms.search.endpoint}") String mdmsEndpoint,
             @Value("${mdms.oidcproviders.moduleName}") String moduleName,
             @Value("${mdms.oidcproviders.masterName}") String masterName,
-            @Value("${mdms.oidcproviders.tenantId}") String tenantIdConfig) {
+            @Value("${mdms.oidcproviders.tenantId}") String tenantIdConfig,
+            @Value("${mdms.oidcproviders.cache-ttl-ms:300000}") long cacheTtlMs) {
         this.restTemplate = restTemplate;
         this.mdmsHost = mdmsHost;
         this.mdmsEndpoint = mdmsEndpoint;
         this.moduleName = moduleName;
         this.masterName = masterName;
         this.tenantIds = parseTenantIds(tenantIdConfig);
+        this.cacheTtlMs = cacheTtlMs;
+        log.info("MDMS OIDC providers initialized with cache TTL: {} ms ({} minutes)", 
+                cacheTtlMs, cacheTtlMs / 60000.0);
     }
 
     private static List<String> parseTenantIds(String tenantIdConfig) {
@@ -74,7 +81,7 @@ public class MdmsOidcProviderSupplier implements OidcProviderSupplier {
     @Override
     public List<AuthProperties.Provider> getProviders() {
         long now = System.currentTimeMillis();
-        if (cache.get() != null && (now - lastFetchTime) < CACHE_TTL_MS) {
+        if (cache.get() != null && (now - lastFetchTime) < cacheTtlMs) {
             return cache.get();
         }
         List<AuthProperties.Provider> list = fetchFromMdms();
@@ -196,9 +203,83 @@ public class MdmsOidcProviderSupplier implements OidcProviderSupplier {
         if (n.has(OidcConfigConstants.KEY_USER_TYPE)) p.setUserType(textOrNull(n.get(OidcConfigConstants.KEY_USER_TYPE)));
         if (n.has(OidcConfigConstants.KEY_DEFAULT_ROLE_CODES)) p.setDefaultRoleCodes(textOrNull(n.get(OidcConfigConstants.KEY_DEFAULT_ROLE_CODES)));
         if (n.has(OidcConfigConstants.KEY_ROLE_CLAIM_KEY)) p.setRoleClaimKey(n.get(OidcConfigConstants.KEY_ROLE_CLAIM_KEY).asText(OidcConfigConstants.DEFAULT_ROLE_CLAIM_KEY));
-        if (n.has(OidcConfigConstants.KEY_ROLE_MAPPING)) {
+        if (n.has(OidcConfigConstants.KEY_ROLE_MAPPINGS) && n.get(OidcConfigConstants.KEY_ROLE_MAPPINGS).isArray()) {
+            Map<String, String> roleMapping = new HashMap<>();
+            JsonNode mappingsArray = n.get(OidcConfigConstants.KEY_ROLE_MAPPINGS);
+            for (JsonNode mappingNode : mappingsArray) {
+                if (mappingNode == null || !mappingNode.has(JwtConstants.KEY_SSO_ROLE)) {
+                    continue;
+                }
+                String ssoRole = textOrNull(mappingNode.get(JwtConstants.KEY_SSO_ROLE));
+                if (ssoRole == null || ssoRole.trim().isEmpty()) {
+                    continue;
+                }
+                JsonNode digitRolesNode;
+                if (mappingNode.has(JwtConstants.KEY_DIGIT_ROLES)) {
+                    digitRolesNode = mappingNode.get(JwtConstants.KEY_DIGIT_ROLES);
+                } else if (mappingNode.has(JwtConstants.KEY_DIGIT_ROLE)) {
+                    digitRolesNode = mappingNode.get(JwtConstants.KEY_DIGIT_ROLE);
+                } else {
+                    continue;
+                }
+
+                String digitRolesValue;
+                if (digitRolesNode.isArray()) {
+                    List<String> digitRoles = new ArrayList<>();
+                    digitRolesNode.forEach(drNode -> {
+                        String value = textOrNull(drNode);
+                        if (value != null && !value.trim().isEmpty()) {
+                            digitRoles.add(value.trim());
+                        }
+                    });
+                    if (digitRoles.isEmpty()) {
+                        continue;
+                    }
+                    digitRolesValue = String.join(",", digitRoles);
+                } else {
+                    digitRolesValue = textOrNull(digitRolesNode);
+                    if (digitRolesValue == null || digitRolesValue.trim().isEmpty()) {
+                        continue;
+                    }
+                }
+
+                roleMapping.merge(ssoRole, digitRolesValue,
+                        (existing, additional) -> existing + "," + additional);
+            }
+            if (!roleMapping.isEmpty()) {
+                p.setRoleMapping(roleMapping);
+            }
+        } else if (n.has(OidcConfigConstants.KEY_ROLE_MAPPING)) {
+            // Backward compatibility for legacy string-based roleMapping configuration
             JsonNode rm = n.get(OidcConfigConstants.KEY_ROLE_MAPPING);
             p.setRoleMapping(rm.isTextual() ? rm.asText() : rm.toString());
+        }
+        if (n.has(OidcConfigConstants.KEY_DESIGNATION_MAPPINGS) && n.get(OidcConfigConstants.KEY_DESIGNATION_MAPPINGS).isArray()) {
+            Map<String, String> designationMapping = new HashMap<>();
+            JsonNode mappingsArray = n.get(OidcConfigConstants.KEY_DESIGNATION_MAPPINGS);
+            for (JsonNode mappingNode : mappingsArray) {
+                if (mappingNode == null || !mappingNode.has(JwtConstants.KEY_IDP_DESIGNATION)) {
+                    continue;
+                }
+                String idpDesignation = textOrNull(mappingNode.get(JwtConstants.KEY_IDP_DESIGNATION));
+                if (idpDesignation == null || idpDesignation.trim().isEmpty()) {
+                    continue;
+                }
+                if (!mappingNode.has(JwtConstants.KEY_DIGIT_DESIGNATION_CODE)) {
+                    continue;
+                }
+                String digitDesignationCode = textOrNull(mappingNode.get(JwtConstants.KEY_DIGIT_DESIGNATION_CODE));
+                if (digitDesignationCode == null || digitDesignationCode.trim().isEmpty()) {
+                    continue;
+                }
+                designationMapping.put(idpDesignation, digitDesignationCode);
+            }
+            if (!designationMapping.isEmpty()) {
+                p.setDesignationMapping(designationMapping);
+            }
+        } else if (n.has(OidcConfigConstants.KEY_DESIGNATION_MAPPING)) {
+            JsonNode dm = n.get(OidcConfigConstants.KEY_DESIGNATION_MAPPING);
+            p.setDesignationMapping(dm.isTextual() ? dm.asText() : dm.toString());
         }
         if (n.has(OidcConfigConstants.KEY_DEFAULT_DOB) && !n.get(OidcConfigConstants.KEY_DEFAULT_DOB).isNull()) p.setDefaultDob(n.get(OidcConfigConstants.KEY_DEFAULT_DOB).asLong());
         if (n.has(OidcConfigConstants.KEY_DEFAULT_EMPLOYEE_STATUS)) p.setDefaultEmployeeStatus(n.get(OidcConfigConstants.KEY_DEFAULT_EMPLOYEE_STATUS).asText(OidcConfigConstants.DEFAULT_EMPLOYED_STATUS));
@@ -210,6 +291,9 @@ public class MdmsOidcProviderSupplier implements OidcProviderSupplier {
         if (n.has(OidcConfigConstants.KEY_GRAPH_TOKEN_URL)) p.setGraphTokenUrl(textOrNull(n.get(OidcConfigConstants.KEY_GRAPH_TOKEN_URL)));
         if (n.has(OidcConfigConstants.KEY_GRAPH_SCOPE)) p.setGraphScope(textOrNull(n.get(OidcConfigConstants.KEY_GRAPH_SCOPE)));
         if (n.has(OidcConfigConstants.KEY_GRAPH_SERVICE_TYPE)) p.setGraphServiceType(textOrNull(n.get(OidcConfigConstants.KEY_GRAPH_SERVICE_TYPE)));
+        if (n.has(OidcConfigConstants.KEY_DESIGNATION_CLAIM_KEY)) p.setDesignationClaimKey(textOrNull(n.get(OidcConfigConstants.KEY_DESIGNATION_CLAIM_KEY)));
+        if (n.has(OidcConfigConstants.KEY_DEFAULT_DESIGNATION_CODE)) p.setDefaultDesignationCode(textOrNull(n.get(OidcConfigConstants.KEY_DEFAULT_DESIGNATION_CODE)));
+        if (n.has(OidcConfigConstants.KEY_DEFAULT_BOUNDARY_HIERARCHY_TYPE)) p.setDefaultBoundaryHierarchyType(textOrNull(n.get(OidcConfigConstants.KEY_DEFAULT_BOUNDARY_HIERARCHY_TYPE)));
         return p;
     }
 }

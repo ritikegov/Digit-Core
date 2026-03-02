@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.user.config.AuthProperties;
 import org.egov.user.config.GraphClientSecretResolver;
 import org.egov.user.config.OidcConfigConstants;
+import org.egov.user.domain.service.utils.EncryptionDecryptionUtil;
 import org.egov.user.security.oauth2.custom.service.EmployeeCreationProfile;
 import org.junit.Before;
 import org.junit.Test;
@@ -50,6 +51,9 @@ public class MsGraphServiceTest {
     @Mock
     private AuthProperties.Provider provider;
 
+    @Mock
+    private EncryptionDecryptionUtil encryptionDecryptionUtil;
+
     private MsGraphService msGraphService;
 
     @Before
@@ -57,7 +61,12 @@ public class MsGraphServiceTest {
         when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.get(anyString())).thenReturn(null);
         when(secretResolver.resolve(any(AuthProperties.Provider.class))).thenReturn("secret");
-        msGraphService = new MsGraphService(restTemplate, new ObjectMapper(), stringRedisTemplate, secretResolver);
+        when(encryptionDecryptionUtil.encryptGraphToken(anyString())).thenAnswer(inv -> "encrypted-" + inv.getArgumentAt(0, String.class));
+        when(encryptionDecryptionUtil.decryptGraphToken(anyString())).thenAnswer(inv -> {
+            String arg = inv.getArgumentAt(0, String.class);
+            return arg != null && arg.startsWith("encrypted-") ? arg.substring("encrypted-".length()) : arg;
+        });
+        msGraphService = new MsGraphService(restTemplate, new ObjectMapper(), stringRedisTemplate, secretResolver, encryptionDecryptionUtil);
     }
 
     @Test

@@ -97,7 +97,7 @@ public class User {
     private Date idpTokenExp;
     private Date lastSsoLoginAt;
     private String authProvider = "LOCAL";
-    private String jwtToken;
+    private String tokenId;
 
     // MFA (Multi-Factor Authentication) details
     private Boolean mfaEnabled;

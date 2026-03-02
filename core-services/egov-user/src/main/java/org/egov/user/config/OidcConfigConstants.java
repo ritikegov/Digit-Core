@@ -23,22 +23,25 @@ public final class OidcConfigConstants {
     public static final String KEY_DEFAULT_ROLE_CODES = "defaultRoleCodes";
     public static final String KEY_ROLE_CLAIM_KEY = "roleClaimKey";
     public static final String KEY_ROLE_MAPPING = "roleMapping";
+    public static final String KEY_ROLE_MAPPINGS = "roleMappings";
     public static final String KEY_DEFAULT_DOB = "defaultDob";
     public static final String KEY_DEFAULT_EMPLOYEE_STATUS = "defaultEmployeeStatus";
     public static final String KEY_ROLE_PREFIX = "rolePrefix";
     public static final String KEY_DECRYPTION_PURPOSE = "decryptionPurpose";
     public static final String KEY_GRAPH_CLIENT_ID = "graphClientId";
-    public static final String KEY_GRAPH_CLIENT_SECRET = "graphClientSecret";
     public static final String KEY_GRAPH_TENANT_ID = "graphTenantId";
     public static final String KEY_GRAPH_METHODS_URL = "graphMethodsUrl";
     public static final String KEY_GRAPH_TOKEN_URL = "graphTokenUrl";
     public static final String KEY_GRAPH_SCOPE = "graphScope";
     public static final String KEY_GRAPH_SERVICE_TYPE = "graphServiceType";
-    public static final String KEY_GRAPH_USERS_URL = "graphUsersUrl";
+    public static final String KEY_DESIGNATION_MAPPINGS = "designationMappings";
+    public static final String KEY_DESIGNATION_MAPPING = "designationMapping";
+    public static final String KEY_DESIGNATION_CLAIM_KEY = "designationClaimKey";
+    public static final String KEY_DEFAULT_DESIGNATION_CODE = "defaultDesignationCode";
+    public static final String KEY_DEFAULT_BOUNDARY_HIERARCHY_TYPE = "defaultBoundaryHierarchyType";
 
     /** Default values used in code. */
     public static final String DEFAULT_ROLE_CLAIM_KEY = "roles";
-    public static final String DEFAULT_USER_TYPE = "EMPLOYEE";
     public static final String DEFAULT_EMPLOYED_STATUS = "EMPLOYED";
     public static final String DEFAULT_ROLE_PREFIX = "ROLE_";
     public static final String DEFAULT_DECRYPTION_PURPOSE = "UserSelf";

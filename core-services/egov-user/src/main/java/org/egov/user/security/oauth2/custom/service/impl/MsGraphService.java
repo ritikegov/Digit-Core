@@ -3,11 +3,13 @@ package org.egov.user.security.oauth2.custom.service.impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.egov.tracer.model.CustomException;
 import org.egov.user.config.AuthProperties;
 import org.egov.user.config.GraphClientSecretResolver;
 import org.egov.user.config.OidcConfigConstants;
 import org.egov.user.domain.exception.sso.MfaEnrichmentException;
 import org.egov.user.domain.model.User;
+import org.egov.user.domain.service.utils.EncryptionDecryptionUtil;
 import org.egov.user.security.SecurityConstants;
 import org.egov.user.security.oauth2.custom.service.EmployeeCreationProfile;
 import org.egov.user.security.oauth2.custom.service.IdpGraphService;
@@ -43,16 +45,19 @@ public class MsGraphService implements IdpGraphService {
     private final ObjectMapper objectMapper;
     private final StringRedisTemplate stringRedisTemplate;
     private final GraphClientSecretResolver secretResolver;
+    private final EncryptionDecryptionUtil encryptionDecryptionUtil;
 
     @Value("${auth.graph.token-cache-ttl-buffer-seconds:300}")
     private int tokenCacheTtlBufferSeconds;
 
     public MsGraphService(RestTemplate restTemplate, ObjectMapper objectMapper,
-                          StringRedisTemplate stringRedisTemplate, GraphClientSecretResolver secretResolver) {
+                          StringRedisTemplate stringRedisTemplate, GraphClientSecretResolver secretResolver,
+                          EncryptionDecryptionUtil encryptionDecryptionUtil) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
         this.stringRedisTemplate = stringRedisTemplate;
         this.secretResolver = secretResolver;
+        this.encryptionDecryptionUtil = encryptionDecryptionUtil;
     }
 
     @Override
@@ -181,7 +186,12 @@ public class MsGraphService implements IdpGraphService {
         String cached = stringRedisTemplate.opsForValue().get(cacheKey);
         if (StringUtils.hasText(cached)) {
             log.info("Graph token cache HIT for key: {}", cacheKey);
-            return cached;
+            try {
+                return encryptionDecryptionUtil.decryptGraphToken(cached);
+            } catch (CustomException e) {
+                log.warn("Graph token decryption failed (e.g. stale raw token in cache), invalidating key: {}", cacheKey);
+                stringRedisTemplate.delete(cacheKey);
+            }
         }
 
         log.info("Graph token cache MISS for key: {}, fetching new token", cacheKey);
@@ -215,8 +225,9 @@ public class MsGraphService implements IdpGraphService {
         int expiresInSeconds = expiresInNode != null && !expiresInNode.isNull() ? expiresInNode.asInt(3600) : 3600;
         long ttlSeconds = Math.max(1L, expiresInSeconds - tokenCacheTtlBufferSeconds);
 
+        String encryptedToken = encryptionDecryptionUtil.encryptGraphToken(token);
         log.info("Caching Graph token for key: {} with TTL: {} seconds", cacheKey, ttlSeconds);
-        stringRedisTemplate.opsForValue().set(cacheKey, token, ttlSeconds, TimeUnit.SECONDS);
+        stringRedisTemplate.opsForValue().set(cacheKey, encryptedToken, ttlSeconds, TimeUnit.SECONDS);
         return token;
     }
 

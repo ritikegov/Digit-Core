@@ -348,61 +348,10 @@ public class UserRepository {
             updateuserInputs.put("IdpSubject", oldUser.getIdpSubject());
         }
 
-        if (user.getIdpTokenExp() != null) {
-            updateuserInputs.put("IdpTokenExp", user.getIdpTokenExp());
-        } else {
-            updateuserInputs.put("IdpTokenExp", oldUser.getIdpTokenExp());
-        }
-
-        if (user.getLastSsoLoginAt() != null) {
-            updateuserInputs.put("LastSsoLoginAt", user.getLastSsoLoginAt());
-        } else {
-            updateuserInputs.put("LastSsoLoginAt", oldUser.getLastSsoLoginAt());
-        }
         if (user.getAuthProvider() != null) {
             updateuserInputs.put("AuthProvider", user.getAuthProvider());
         } else {
             updateuserInputs.put("AuthProvider", oldUser.getAuthProvider());
-        }
-        if (user.getJwtToken() != null) {
-            updateuserInputs.put("JwtToken", user.getJwtToken());
-        } else {
-            updateuserInputs.put("JwtToken", oldUser.getJwtToken());
-        }
-
-        // MFA enabled handling
-        if (user.getMfaEnabled() != null) {
-            updateuserInputs.put("mfaEnabled", user.getMfaEnabled());
-        } else {
-            updateuserInputs.put("mfaEnabled", oldUser.getMfaEnabled());
-        }
-
-        // MFA device name handling
-        if (user.getMfaDeviceName() != null) {
-            updateuserInputs.put("mfaDeviceName", user.getMfaDeviceName());
-        } else {
-            updateuserInputs.put("mfaDeviceName", oldUser.getMfaDeviceName());
-        }
-
-        // MFA phone last 4 handling
-        if (user.getMfaPhoneLast4() != null) {
-            updateuserInputs.put("mfaPhoneLast4", user.getMfaPhoneLast4());
-        } else {
-            updateuserInputs.put("mfaPhoneLast4", oldUser.getMfaPhoneLast4());
-        }
-
-        // MFA registered on handling
-        if (user.getMfaRegisteredOn() != null) {
-            updateuserInputs.put("mfaRegisteredOn", user.getMfaRegisteredOn());
-        } else {
-            updateuserInputs.put("mfaRegisteredOn", oldUser.getMfaRegisteredOn());
-        }
-
-        // MFA details handling
-        if (user.getMfaDetails() != null) {
-            updateuserInputs.put("mfaDetails", user.getMfaDetails());
-        } else {
-            updateuserInputs.put("mfaDetails", oldUser.getMfaDetails());
         }
 
         updateuserInputs.put("LastModifiedDate", new Date());
@@ -659,15 +608,7 @@ public class UserRepository {
         userInputs.put("alternatemobilenumber", entityUser.getAlternateMobileNumber());
         userInputs.put("idp_issuer", entityUser.getIdpIssuer());
         userInputs.put("idp_subject", entityUser.getIdpSubject());
-        userInputs.put("idp_token_exp", entityUser.getIdpTokenExp());
-        userInputs.put("last_sso_login_at", entityUser.getLastSsoLoginAt());
         userInputs.put("auth_provider", entityUser.getAuthProvider());
-        userInputs.put("jwt_token", entityUser.getJwtToken());
-        userInputs.put("mfa_enabled", entityUser.getMfaEnabled());
-        userInputs.put("mfa_device_name", entityUser.getMfaDeviceName());
-        userInputs.put("mfa_phone_last4", entityUser.getMfaPhoneLast4());
-        userInputs.put("mfa_registered_on", entityUser.getMfaRegisteredOn());
-        userInputs.put("mfa_details", entityUser.getMfaDetails());
 
         // replaced schema placeholder with tenant specific schema name
         String query = databaseSchemaUtils.replaceSchemaPlaceholder(userTypeQueryBuilder.getInsertUserQuery(),

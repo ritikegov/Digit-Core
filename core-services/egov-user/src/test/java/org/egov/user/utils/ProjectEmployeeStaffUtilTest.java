@@ -152,7 +152,7 @@ public class ProjectEmployeeStaffUtilTest {
 
         Employee result = projectEmployeeStaffUtil.createEmployeeInHrms(
                 user, "PERMANENT", "Designation", "Department", "EMPLOYED",
-                System.currentTimeMillis(), "tenant", "oid", requestInfo);
+                System.currentTimeMillis(), "tenant", "oid",null, requestInfo);
 
         assertNotNull(result);
         assertEquals("E1", result.getUuid());
@@ -186,7 +186,7 @@ public class ProjectEmployeeStaffUtilTest {
 
         projectEmployeeStaffUtil.createEmployeeInHrms(
                 user, "PERMANENT", "Designation", "Department", "EMPLOYED",
-                System.currentTimeMillis(), "tenant", "oid", requestInfo);
+                System.currentTimeMillis(), "tenant", "oid", null, requestInfo);
     }
 
     @Test
@@ -224,7 +224,7 @@ public class ProjectEmployeeStaffUtilTest {
 
         User result = projectEmployeeStaffUtil.createEmployeeAndProjectStaff(
                 user, "PERMANENT", "Designation", "Department", "EMPLOYED",
-                "tenant", "oid", requestInfo);
+                "tenant", "oid", null, requestInfo);
 
         assertNotNull(result);
         assertEquals("U1", result.getUserServiceUuid());
@@ -265,6 +265,6 @@ public class ProjectEmployeeStaffUtilTest {
 
         projectEmployeeStaffUtil.createEmployeeAndProjectStaff(
                 user, "PERMANENT", "Designation", "Department", "EMPLOYED",
-                "tenant", "oid", requestInfo);
+                "tenant", "oid", null, requestInfo);
     }
 }

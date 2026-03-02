@@ -68,13 +68,17 @@ public class UserTypeQueryBuilder {
             +
             ".type,  userdata.version, userdata.guardian, userdata.guardianrelation, userdata.signature, userdata.accountlocked, userdata.accountlockeddate, userdata"
             +
-            ".bloodgroup, userdata.photo, userdata.identificationmark,  userdata.tenantid, userdata.id, userdata.uuid, userdata.alternatemobilenumber, userdata.idp_issuer, userdata.idp_subject, userdata.idp_token_exp, userdata.last_sso_login_at, userdata.auth_provider, userdata.jwt_token, userdata.mfa_enabled, userdata.mfa_device_name, userdata.mfa_phone_last4, userdata.mfa_registered_on, userdata.mfa_details, addr.id as addr_id, addr.type as "
+            ".bloodgroup, userdata.photo, userdata.identificationmark,  userdata.tenantid, userdata.id, userdata.uuid, userdata.alternatemobilenumber, userdata.idp_issuer, userdata.idp_subject, userdata.auth_provider, "
+            + "idp.idp_token_exp, idp.last_sso_login_at, idp.token_id, idp.mfa_enabled, idp.mfa_device_name, idp.mfa_phone_last4, idp.mfa_registered_on, idp.mfa_details, "
+            + "addr.id as addr_id, addr.type as "
             +
             "addr_type, addr .address as addr_address,  addr.city as addr_city, addr.pincode as addr_pincode, addr" +
             ".tenantid as " +
             "addr_tenantid, addr.userid as addr_userid, ur.role_code as role_code, ur.role_tenantid as role_tenantid \n"
             +
             "\tFROM " + SCHEMA_REPLACE_STRING + ".eg_user userdata LEFT OUTER JOIN " + SCHEMA_REPLACE_STRING
+            + ".eg_user_idp_details idp ON userdata.id = idp.id AND userdata.tenantid = idp.tenantid "
+            + "LEFT OUTER JOIN " + SCHEMA_REPLACE_STRING
             + ".eg_user_address addr ON userdata.id = addr.userid AND userdata.tenantid = addr" +
             ".tenantid LEFT OUTER JOIN " + SCHEMA_REPLACE_STRING
             + ".eg_userrole_v1 ur ON userdata.id = ur.user_id AND userdata.tenantid = ur.user_tenantid  ";
@@ -319,10 +323,10 @@ public class UserTypeQueryBuilder {
         return "insert into " + SCHEMA_REPLACE_STRING
                 + ".eg_user (id,uuid,tenantid,salutation,dob,locale,username,password,pwdexpirydate,mobilenumber,altcontactnumber,emailid,active,name,gender,pan,aadhaarnumber,"
                 + "type,guardian,guardianrelation,signature,accountlocked,bloodgroup,photo,identificationmark,createddate,lastmodifieddate,createdby,lastmodifiedby,alternatemobilenumber,"
-                + "idp_issuer,idp_subject,idp_token_exp,last_sso_login_at,auth_provider,jwt_token,mfa_enabled,mfa_device_name,mfa_phone_last4,mfa_registered_on,mfa_details) values (:id,:uuid,:tenantid,:salutation,"
+                + "idp_issuer,idp_subject,auth_provider) values (:id,:uuid,:tenantid,:salutation,"
                 + ":dob,:locale,:username,:password,:pwdexpirydate,:mobilenumber,:altcontactnumber,:emailid,:active,:name,:gender,:pan,:aadhaarnumber,:type,:guardian,:guardianrelation,:signature,"
                 + ":accountlocked,:bloodgroup,:photo,:identificationmark,:createddate,:lastmodifieddate,:createdby,:lastmodifiedby,:alternatemobilenumber,"
-                + ":idp_issuer,:idp_subject,:idp_token_exp,:last_sso_login_at,:auth_provider,:jwt_token,:mfa_enabled,:mfa_device_name,:mfa_phone_last4,:mfa_registered_on,:mfa_details) ";
+                + ":idp_issuer,:idp_subject,:auth_provider) ";
     }
 
     public String getUpdateUserQuery() {
@@ -332,7 +336,7 @@ public class UserTypeQueryBuilder {
                 + "accountlocked=:AccountLocked, accountlockeddate=:AccountLockedDate, bloodgroup=:BloodGroup,"
                 + "photo=:Photo, identificationmark=:IdentificationMark,lastmodifieddate=:LastModifiedDate,"
                 + "lastmodifiedby=:LastModifiedBy, alternatemobilenumber=:alternatemobilenumber,"
-                + "idp_issuer=:IdpIssuer,idp_subject=:IdpSubject,idp_token_exp=:IdpTokenExp,last_sso_login_at=:LastSsoLoginAt,auth_provider=:AuthProvider,jwt_token=:JwtToken,mfa_enabled=:mfaEnabled,mfa_device_name=:mfaDeviceName,mfa_phone_last4=:mfaPhoneLast4,mfa_registered_on=:mfaRegisteredOn,mfa_details=:mfaDetails "
+                + "idp_issuer=:IdpIssuer,idp_subject=:IdpSubject,auth_provider=:AuthProvider "
                 + "where username=:username and tenantid=:tenantid and type=:type";
     }
 

@@ -60,6 +60,10 @@ public class AuthProperties {
         private String defaultRoleCodes;
         private String roleClaimKey = OidcConfigConstants.DEFAULT_ROLE_CLAIM_KEY;
         private Map<String, String> roleMapping;
+        private Map<String, String> designationMapping;
+        private String defaultDesignationCode;
+        private String designationClaimKey;
+        private String defaultBoundaryHierarchyType;
         private Long defaultDob;
         private String defaultEmployeeStatus = OidcConfigConstants.DEFAULT_EMPLOYED_STATUS;
         private String rolePrefix = OidcConfigConstants.DEFAULT_ROLE_PREFIX;
@@ -80,6 +84,18 @@ public class AuthProperties {
 
         public void setRoleMapping(String roleMappingString) throws IOException {
             roleMapping = (Map<String, String>) ROLE_MAPPING_MAPPER.readValue(roleMappingString, Map.class);
+        }
+
+        public void setRoleMapping(Map<String, String> roleMapping) {
+            this.roleMapping = roleMapping;
+        }
+
+        public void setDesignationMapping(String designationMappingString) throws IOException {
+            designationMapping = (Map<String, String>) ROLE_MAPPING_MAPPER.readValue(designationMappingString, Map.class);
+        }
+
+        public void setDesignationMapping(Map<String, String> designationMapping) {
+            this.designationMapping = designationMapping;
         }
     }
 }

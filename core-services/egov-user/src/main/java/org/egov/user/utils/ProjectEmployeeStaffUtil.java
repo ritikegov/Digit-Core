@@ -198,10 +198,17 @@ public class ProjectEmployeeStaffUtil {
         public Employee createEmployeeInHrms(User user,
                         String employeeType, String designation, String department,
                         String employeeStatus, Long dateOfAppointment,
-                        String tenantId, String createdBy, RequestInfo requestInfo) {
+                        String tenantId, String createdBy, String defaultBoundaryHierarchyType,
+                        RequestInfo requestInfo) {
                 log.info("Creating employee in HRMS for user: {}", user.getName());
-                BoundaryTypeHierarchyResponse boundaryTypeHierarchyResponse = searchBoundaryHierarchyByTenantId(tenantId, requestInfo);
-                String hierarchyType = getHierarchyTypeOrThrow(boundaryTypeHierarchyResponse, tenantId);
+                String hierarchyType;
+                if (org.springframework.util.StringUtils.hasText(defaultBoundaryHierarchyType)) {
+                        hierarchyType = defaultBoundaryHierarchyType.trim();
+                        log.info("Using boundary hierarchy type from MDMS provider: {}", hierarchyType);
+                } else {
+                        BoundaryTypeHierarchyResponse boundaryTypeHierarchyResponse = searchBoundaryHierarchyByTenantId(tenantId, requestInfo);
+                        hierarchyType = getHierarchyTypeOrThrow(boundaryTypeHierarchyResponse, tenantId);
+                }
                 BoundarySearchResponse boundarySearchResponse = searchBoundaryByHierarchyTypeAndTenantId(hierarchyType, tenantId, requestInfo);
                 BoundaryCodeAndType boundaryCodeAndType = getBoundaryCodeAndTypeOrThrow(boundarySearchResponse, hierarchyType, tenantId);
                 String boundaryCode = boundaryCodeAndType.getCode();
@@ -300,13 +307,13 @@ public class ProjectEmployeeStaffUtil {
                         String employeeType, String designation,
                         String department, String employeeStatus,
                         String tenantId, String createdBy,
+                        String defaultBoundaryHierarchyType,
                         RequestInfo requestInfo) {
-
 
                 // Create employee in HRMS
                 Employee employee = createEmployeeInHrms(user, employeeType,
                                 designation, department, employeeStatus, System.currentTimeMillis(),
-                                tenantId, createdBy, requestInfo);
+                                tenantId, createdBy, defaultBoundaryHierarchyType, requestInfo);
 
                 String userServiceUuid = employee.getUser().getUserServiceUuid();
                 if (userServiceUuid == null || userServiceUuid.isEmpty()) {
