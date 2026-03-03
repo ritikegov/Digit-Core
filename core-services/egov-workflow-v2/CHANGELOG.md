@@ -3,6 +3,9 @@
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## 2.9.2 - 2026-03-03
+- Upgraded tracer version to handle DataAccessException errors through `@ControllerAdvice`
+
 ## 2.9.1-HOTFIX - 2024-05-28
 - Added missing underscore character in the table name in EscalationQueryBuilder.java & EscalationQueryBuilderTest.java
 

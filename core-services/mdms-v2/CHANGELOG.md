@@ -4,6 +4,9 @@
 All notable changes to this module will be documented in this file.
 
 
+## 2.10.1 - 2026-03-03
+- Upgraded tracer version to handle DataAccessException errors through `@ControllerAdvice`
+
 ## 2.10.0 - 2025-05-09
 - Introduced tenant-specific topic for message publishing
 - Database schema resolution as per tenant id and central instance configuration

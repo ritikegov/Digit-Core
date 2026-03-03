@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## 2.10.1 - 2026-03-03
+- Upgraded tracer version to handle DataAccessException errors through `@ControllerAdvice`
+
 ## 2.10.0 - 2025-05-27
 - Introduced tenant-specific database schema support and dynamic schema resolution
 - Refactored repositories and services to use dynamic schema placeholders and centralized schema utilities.
