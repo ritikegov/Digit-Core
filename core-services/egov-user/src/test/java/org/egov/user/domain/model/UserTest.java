@@ -4,7 +4,7 @@ import org.egov.user.domain.exception.InvalidUserCreateException;
 import org.egov.user.domain.exception.InvalidUserUpdateException;
 import org.egov.user.domain.model.enums.Gender;
 import org.egov.user.domain.model.enums.UserType;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.*;
 

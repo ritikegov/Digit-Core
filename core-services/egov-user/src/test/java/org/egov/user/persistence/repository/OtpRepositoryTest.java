@@ -4,10 +4,10 @@
 //import org.egov.user.domain.model.OtpValidationRequest;
 //import org.egov.user.web.contract.Otp;
 //import org.egov.user.web.contract.OtpValidateRequest;
-//import org.junit.Before;
-//import org.junit.Ignore;
-//import org.junit.Test;
-//import org.junit.runner.RunWith;
+//import org.junit.jupiter.api.BeforeEach;
+//import org.junit.jupiter.api.Disabled;
+//import org.junit.jupiter.api.Test;
+//import org.junit.jupiter.api.extension.ExtendWith;
 //import org.mockito.runners.MockitoJUnitRunner;
 //import org.springframework.http.HttpMethod;
 //import org.springframework.http.MediaType;
@@ -26,7 +26,7 @@
 //    private OtpRepository otpRepository;
 //    private MockRestServiceServer server;
 //
-//    @Before
+//    @BeforeEach
 //    public void setUp() throws Exception {
 //        RestTemplate restTemplate = new RestTemplate();
 //        server = MockRestServiceServer.bindTo(restTemplate).build();
@@ -41,7 +41,7 @@
 //        server.expect(once(), requestTo("http://otp-host.com/otp/_search")).andExpect(method(HttpMethod.POST))
 //                .andExpect(content().string(new Resources().getFileContents("otpSearchSuccessRequest.json")))
 //                .andRespond(withSuccess(new Resources().getFileContents("otpSearchValidatedResponse.json"),
-//                        MediaType.APPLICATION_JSON_UTF8));
+//                        MediaType.APPLICATION_JSON));
 //        final OtpValidationRequest request = buildRequest();
 //
 //        boolean isOtpValidated = otpRepository.isOtpValidationComplete(request);
@@ -51,12 +51,12 @@
 //    }
 //
 //    @Test
-//    @Ignore
+//    @Disabled
 //    public void testShouldReturnTrueWhenOtpInValidated() throws Exception {
 //        server.expect(once(), requestTo("http://otp-host.com/otp/_validate")).andExpect(method(HttpMethod.POST))
 //                .andExpect(content().string(new Resources().getFileContents("otpValidationRequest.json")))
 //                .andRespond(withSuccess(new Resources().getFileContents("otpNonValidateResponse.json"),
-//                        MediaType.APPLICATION_JSON_UTF8));
+//                        MediaType.APPLICATION_JSON));
 //        final OtpValidateRequest request = buildValidateRequest();
 //
 //        boolean isOtpValidated = otpRepository.validateOtp(request);
@@ -66,12 +66,12 @@
 //    }
 //
 //    @Test
-//    @Ignore
+//    @Disabled
 //    public void testShouldReturnTrueWhenOtpValidated() throws Exception {
 //        server.expect(once(), requestTo("http://otp-host.com/otp/_validate")).andExpect(method(HttpMethod.POST))
 //                .andExpect(content().string(new Resources().getFileContents("otpValidationRequest.json")))
 //                .andRespond(withSuccess(new Resources().getFileContents("otpValidateResponse.json"),
-//                        MediaType.APPLICATION_JSON_UTF8));
+//                        MediaType.APPLICATION_JSON));
 //        final OtpValidateRequest request = buildValidateRequest();
 //
 //        boolean isOtpValidated = otpRepository.validateOtp(request);
@@ -86,7 +86,7 @@
 //        server.expect(once(), requestTo("http://otp-host.com/otp/_search")).andExpect(method(HttpMethod.POST))
 //                .andExpect(content().string(new Resources().getFileContents("otpSearchSuccessRequest.json")))
 //                .andRespond(withSuccess(new Resources().getFileContents("otpSearchNonValidatedResponse.json"),
-//                        MediaType.APPLICATION_JSON_UTF8));
+//                        MediaType.APPLICATION_JSON));
 //        final OtpValidationRequest request = buildRequest();
 //
 //        boolean isOtpValidated = otpRepository.isOtpValidationComplete(request);
@@ -99,7 +99,7 @@
 //        server.expect(once(), requestTo("http://otp-host.com/otp/_search")).andExpect(method(HttpMethod.POST))
 //                .andExpect(content().string(new Resources().getFileContents("otpSearchSuccessRequest.json")))
 //                .andRespond(withSuccess(new Resources().getFileContents("otpSearchIdentityDifferentResponse.json"),
-//                        MediaType.APPLICATION_JSON_UTF8));
+//                        MediaType.APPLICATION_JSON));
 //        final OtpValidationRequest request = buildRequest();
 //
 //        boolean isOtpValidated = otpRepository.isOtpValidationComplete(request);

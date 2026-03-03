@@ -13,10 +13,10 @@ import org.egov.user.domain.model.enums.Gender;
 import org.egov.user.domain.model.enums.UserType;
 import org.egov.user.repository.builder.UserTypeQueryBuilder;
 import org.egov.user.repository.rowmapper.UserResultSetExtractor;
-import org.junit.Before;
-import org.junit.Ignore;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpMethod;
@@ -25,7 +25,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.jdbc.Sql;
-import org.springframework.test.context.junit4.SpringRunner;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
@@ -38,8 +38,8 @@ import static org.springframework.test.web.client.ExpectedCount.once;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-@Ignore
-@RunWith(SpringRunner.class)
+@Disabled
+@ExtendWith(SpringExtension.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 public class UserRepositoryTest {
 	
@@ -74,7 +74,7 @@ public class UserRepositoryTest {
     @Autowired
     private RestTemplate restTemplate;
 
-    @Before
+    @BeforeEach
     public void before() {
 
         server = MockRestServiceServer.bindTo(restTemplate).build();
@@ -82,7 +82,7 @@ public class UserRepositoryTest {
         server.expect(once(), requestTo("http://localhost:8094/egov-mdms-service/v1/_search"))
                 .andExpect(method(HttpMethod.POST))
                 .andRespond(withSuccess(new Resources().getFileContents("roleSearchValidatedResponse.json"),
-                        MediaType.APPLICATION_JSON_UTF8));
+                        MediaType.APPLICATION_JSON));
 
         userRepository = new UserRepository(roleRepository, userTypeQueryBuilder, addressRepository,
                 userResultSetExtractor,
@@ -321,7 +321,7 @@ public class UserRepositoryTest {
 //		assertThat(actualList.size() == 7);
 //	}
 
-    @Ignore
+    @Disabled
     @Sql(scripts = {"/sql/clearUserRoles.sql", "/sql/clearUsers.sql", "/sql/clearRoles.sql", "/sql/createRoles.sql",
             "/sql/clearAddresses.sql", "/sql/createUsers.sql"})
     public void test_search_user_bytype() {
@@ -342,7 +342,7 @@ public class UserRepositoryTest {
         assertThat(actualList.size() == 2);
     }
 
-    @Ignore
+    @Disabled
     @Test
     public void test_should_update_entity_user() {
         final Set<Role> roles = new HashSet<>();
@@ -369,7 +369,7 @@ public class UserRepositoryTest {
         assertThat(actualUser.getTenantId().equals("ap.public"));
     }
 
-    @Ignore
+    @Disabled
     @Test(expected = InvalidRoleCodeException.class)
     public void test_should_throw_exception_when_updating_user_with_invalid_role_code() {
         final String roleCode = "roleCode1";
@@ -381,7 +381,7 @@ public class UserRepositoryTest {
     }
 
     @Test
-    @Ignore
+    @Disabled
     public void test_should_return_user() {
 
         List<User> actualUsers = userRepository.findAll(UserSearchCriteria.builder().userName("bigcat399")

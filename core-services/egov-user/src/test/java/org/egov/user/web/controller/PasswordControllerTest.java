@@ -1,6 +1,6 @@
 package org.egov.user.web.controller;
 
-import static org.mockito.Matchers.*;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -13,8 +13,8 @@ import org.egov.user.TestConfiguration;
 import org.egov.user.domain.model.NonLoggedInUserUpdatePasswordRequest;
 import org.egov.user.domain.service.UserService;
 import org.egov.user.security.CustomAuthenticationKeyGenerator;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -23,10 +23,10 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.test.context.junit4.SpringRunner;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.servlet.MockMvc;
 
-@RunWith(SpringRunner.class)
+@ExtendWith(SpringExtension.class)
 @WebMvcTest(PasswordController.class)
 @Import({TestConfiguration.class})
 public class PasswordControllerTest {
@@ -55,10 +55,10 @@ public class PasswordControllerTest {
     @WithMockUser
     public void test_should_update_password_for_logged_in_user() throws Exception {
         mockMvc.perform(post("/password/_update")
-                .contentType(MediaType.APPLICATION_JSON_UTF8)
+                .contentType(MediaType.APPLICATION_JSON)
                 .content(resources.getFileContents("loggedInUserUpdatePasswordRequest.json")))
                 .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON_UTF8))
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(content().json(resources.getFileContents("updatePasswordResponse.json")));
 
 //		final LoggedInUserUpdatePasswordRequest expectedRequest = LoggedInUserUpdatePasswordRequest.builder()
@@ -75,10 +75,10 @@ public class PasswordControllerTest {
     @WithMockUser
     public void test_should_update_password_for_non_logged_in_user() throws Exception {
         mockMvc.perform(post("/password/nologin/_update")
-                .contentType(MediaType.APPLICATION_JSON_UTF8)
+                .contentType(MediaType.APPLICATION_JSON)
                 .content(resources.getFileContents("nonLoggedInUserUpdatePasswordRequest.json")))
                 .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON_UTF8))
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(content().json(resources.getFileContents("updatePasswordResponse.json")));
 
         final NonLoggedInUserUpdatePasswordRequest expectedRequest = NonLoggedInUserUpdatePasswordRequest.builder()

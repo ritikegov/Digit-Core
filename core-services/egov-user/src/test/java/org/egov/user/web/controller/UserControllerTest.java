@@ -3,10 +3,10 @@ package org.egov.user.web.controller;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.commons.lang3.ArrayUtils.isEquals;
-import static org.junit.Assert.assertEquals;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyBoolean;
-import static org.mockito.Matchers.argThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -43,12 +43,11 @@ import org.egov.user.domain.model.enums.GuardianRelation;
 import org.egov.user.domain.model.enums.UserType;
 import org.egov.user.domain.service.TokenService;
 import org.egov.user.domain.service.UserService;
-import org.egov.user.security.CustomAuthenticationKeyGenerator;
 import org.egov.user.web.contract.auth.Role;
 import org.egov.user.web.contract.auth.User;
-import org.junit.Ignore;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatcher;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,13 +55,13 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.security.oauth2.provider.OAuth2Authentication;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.test.context.junit4.SpringRunner;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
-@RunWith(SpringRunner.class)
+@ExtendWith(SpringExtension.class)
 @WebMvcTest(UserController.class)
 @Import(TestConfiguration.class)
 public class UserControllerTest {
@@ -92,9 +91,9 @@ public class UserControllerTest {
         when(userService.searchUsers(argThat(new UserSearchActiveFlagMatcher(expectedSearchCriteria)), anyBoolean(), any()))
                 .thenReturn(getUserModels());
 
-        mockMvc.perform(post("/_search/").contentType(MediaType.APPLICATION_JSON_UTF8)
+        mockMvc.perform(post("/_search/").contentType(MediaType.APPLICATION_JSON)
                 .content(getFileContents("getUserByIdRequest.json"))).andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON_UTF8))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(content().json(getFileContents("userSearchResponse.json")));
     }
 
@@ -107,9 +106,9 @@ public class UserControllerTest {
         when(userService.searchUsers(argThat(new UserSearchActiveFlagMatcher(expectedSearchCriteria)), anyBoolean(), any()))
                 .thenReturn(getUserModels());
 
-        mockMvc.perform(post("/_search/").contentType(MediaType.APPLICATION_JSON_UTF8)
+        mockMvc.perform(post("/_search/").contentType(MediaType.APPLICATION_JSON)
                 .content(getFileContents("getAllActiveUsersForGivenTenant.json"))).andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON_UTF8))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(content().json(getFileContents("userSearchResponse.json")));
     }
 
@@ -122,10 +121,10 @@ public class UserControllerTest {
         when(userService.searchUsers(argThat(new UserSearchActiveFlagMatcher(expectedSearchCriteria)), anyBoolean(), any()))
                 .thenReturn(getUserModels());
 
-        mockMvc.perform(post("/_search/").contentType(MediaType.APPLICATION_JSON_UTF8)
+        mockMvc.perform(post("/_search/").contentType(MediaType.APPLICATION_JSON)
                 .content(getFileContents("getAllInActiveUsersForGivenTenant.json")))
                 .andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON_UTF8))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(content().json(getFileContents("userSearchResponse.json")));
     }
 
@@ -138,10 +137,10 @@ public class UserControllerTest {
         when(userService.searchUsers(argThat(new UserSearchActiveFlagMatcher(expectedSearchCriteria)), anyBoolean(), any()))
                 .thenReturn(getUserModels());
 
-        mockMvc.perform(post("/v1/_search/").contentType(MediaType.APPLICATION_JSON_UTF8)
+        mockMvc.perform(post("/v1/_search/").contentType(MediaType.APPLICATION_JSON)
                 .content(getFileContents("getAllActiveAndInActiveUsersForGivenTenantV1.json")))
                 .andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON_UTF8))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(content().json(getFileContents("userSearchResponse.json")));
     }
 
@@ -154,10 +153,10 @@ public class UserControllerTest {
         when(userService.searchUsers(argThat(new UserSearchActiveFlagMatcher(expectedSearchCriteria)), anyBoolean(), any()))
                 .thenReturn(getUserModels());
 
-        mockMvc.perform(post("/v1/_search/").contentType(MediaType.APPLICATION_JSON_UTF8)
+        mockMvc.perform(post("/v1/_search/").contentType(MediaType.APPLICATION_JSON)
                 .content(getFileContents("getAllInActiveUsersForGivenTenantV1.json")))
                 .andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON_UTF8))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(content().json(getFileContents("userSearchResponse.json")));
     }
 
@@ -169,59 +168,59 @@ public class UserControllerTest {
         when(userService.searchUsers(argThat(new UserSearchActiveFlagMatcher(expectedSearchCriteria)), anyBoolean(), any()))
                 .thenReturn(getUserModels());
 
-        mockMvc.perform(post("/v1/_search/").contentType(MediaType.APPLICATION_JSON_UTF8)
+        mockMvc.perform(post("/v1/_search/").contentType(MediaType.APPLICATION_JSON)
                 .content(getFileContents("getAllActiveUsersForGivenTenantV1.json")))
                 .andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON_UTF8))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(content().json(getFileContents("userSearchResponse.json")));
     }
 
 
     @Test
     @WithMockUser
-    @Ignore
+    @Disabled
     public void test_should_return_error_response_when_user_search_is_invalid() throws Exception {
         final UserSearchCriteria invalidSearchCriteria = UserSearchCriteria.builder().build();
         when(userService.searchUsers(any(), true, any())).thenThrow(new InvalidUserSearchCriteriaException(invalidSearchCriteria));
 
-        ResultActions test = mockMvc.perform(post("/_search").contentType(MediaType.APPLICATION_JSON_UTF8)
+        ResultActions test = mockMvc.perform(post("/_search").contentType(MediaType.APPLICATION_JSON)
                 .content(getFileContents("getUserByIdRequest.json")));//				.andExpect(status().isBadRequest())
         ;
-        test.andExpect(content().contentType(MediaType.APPLICATION_JSON_UTF8))
+        test.andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(content().json(getFileContents("userSearchErrorResponse.json")));
     }
 
     @Test
     @WithMockUser
-    @Ignore
+    @Disabled
     public void test_should_update_user_profile() throws Exception {
         when(userService.partialUpdate(any(), any())).thenReturn(org.egov.user.domain.model.User.builder().build());
 
         mockMvc.perform(post("/profile/_update")
-                .contentType(MediaType.APPLICATION_JSON_UTF8)
+                .contentType(MediaType.APPLICATION_JSON)
                 .content(getFileContents("userProfileUpdateRequest.json")))
                 .andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON_UTF8))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(content().json(getFileContents("userProfileUpdateResponse.json")));
     }
 
     @Test
     @WithMockUser
-    @Ignore
+    @Disabled
     public void test_should_update_user_details() throws Exception {
 
         org.egov.user.domain.model.User userRequest = org.egov.user.domain.model.User.builder().name("foo").username("userName").dob(new Date("04/08/1986")).guardian("name of relative").build();
         when(userService.updateWithoutOtpValidation(any(org.egov.user.domain.model.User.class), any())).thenReturn
                 (userRequest);
         mockMvc.perform(post("/users/112/_updatenovalidate")
-                .contentType(MediaType.APPLICATION_JSON_UTF8)
+                .contentType(MediaType.APPLICATION_JSON)
                 .content(getFileContents("userCreateRequest.json")))
                 .andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON_UTF8))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(content().json(getFileContents("userCreateSuccessResponse.json")));
     }
 
-    @Ignore
+    @Disabled
     @Test
     @WithMockUser
     public void test_should_create_citizen() throws Exception {
@@ -235,10 +234,10 @@ public class UserControllerTest {
         when(userService.createCitizen(any(), any())).thenReturn(user);
 
         mockMvc.perform(post("/citizen/_create")
-                .contentType(MediaType.APPLICATION_JSON_UTF8)
+                .contentType(MediaType.APPLICATION_JSON)
                 .content(getFileContents("userCreateRequest.json")))
                 .andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON_UTF8))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(content().json(getFileContents("userCreateSuccessResponse.json")));
     }
 
@@ -257,10 +256,10 @@ public class UserControllerTest {
         when(userService.createUser(argumentCaptor.capture(), any())).thenReturn(expectedUser);
 
         mockMvc.perform(post("/users/_createnovalidate")
-                .contentType(MediaType.APPLICATION_JSON_UTF8)
+                .contentType(MediaType.APPLICATION_JSON)
                 .content(getFileContents("userCreateRequest.json")))
                 .andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON_UTF8))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(content().json(getFileContents("userCreateSuccessResponse.json")));
 
         final org.egov.user.domain.model.User actualUser = argumentCaptor.getValue();
@@ -272,7 +271,7 @@ public class UserControllerTest {
     @Test
     @WithMockUser
     public void testUserDetails() throws Exception {
-        OAuth2Authentication oAuth2Authentication = mock(OAuth2Authentication.class);
+        Authentication oAuth2Authentication = mock(Authentication.class);
         SecureUser secureUser = new SecureUser(getUser());
         when(oAuth2Authentication.getPrincipal()).thenReturn(secureUser);
         when(tokenService.getUser("c80e0ade-f48d-4077-b0d2-4e58526a6bfd"))

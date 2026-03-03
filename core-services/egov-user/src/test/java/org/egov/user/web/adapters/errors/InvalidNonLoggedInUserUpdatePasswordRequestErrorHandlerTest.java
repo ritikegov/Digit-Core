@@ -4,8 +4,8 @@ import org.egov.common.contract.response.Error;
 import org.egov.common.contract.response.ErrorField;
 import org.egov.common.contract.response.ErrorResponse;
 import org.egov.user.domain.model.NonLoggedInUserUpdatePasswordRequest;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
@@ -17,7 +17,7 @@ public class InvalidNonLoggedInUserUpdatePasswordRequestErrorHandlerTest {
 
     private InvalidNonLoggedInUserUpdatePasswordRequestErrorHandler errorHandler;
 
-    @Before
+    @BeforeEach
     public void before() {
         errorHandler = new InvalidNonLoggedInUserUpdatePasswordRequestErrorHandler();
     }

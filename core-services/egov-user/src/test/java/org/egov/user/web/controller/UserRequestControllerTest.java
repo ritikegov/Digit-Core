@@ -1,6 +1,6 @@
 package org.egov.user.web.controller;
 
-import static org.mockito.Matchers.any;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -31,9 +31,9 @@ import org.egov.user.domain.model.enums.UserType;
 import org.egov.user.domain.service.TokenService;
 import org.egov.user.domain.service.UserService;
 import org.egov.user.security.CustomAuthenticationKeyGenerator;
-import org.junit.Ignore;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -41,10 +41,10 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.test.context.junit4.SpringRunner;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.servlet.MockMvc;
 
-@RunWith(SpringRunner.class)
+@ExtendWith(SpringExtension.class)
 @WebMvcTest(UserController.class)
 @Import(TestConfiguration.class)
 public class UserRequestControllerTest {
@@ -76,16 +76,16 @@ public class UserRequestControllerTest {
 
         String fileContents = getFileContents("createCitizenUnsuccessfulRequest.json");
         mockMvc.perform(post("/citizen/_create/")
-                .contentType(MediaType.APPLICATION_JSON_UTF8)
+                .contentType(MediaType.APPLICATION_JSON)
                 .content(fileContents)
         )
                 .andExpect(status().isBadRequest())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON_UTF8))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(content().json(getFileContents("createCitizenUnsuccessfulResponse.json")));
     }
 */
 
-    @Ignore
+    @Disabled
     @Test
     @WithMockUser
     public void testShouldThrowErrorWhileRegisteringCitizenWithPendingOtpValidation() throws Exception {
@@ -94,11 +94,11 @@ public class UserRequestControllerTest {
 
         String fileContents = getFileContents("createValidatedCitizenSuccessRequest.json");
         mockMvc.perform(post("/citizen/_create")
-                .contentType(MediaType.APPLICATION_JSON_UTF8)
+                .contentType(MediaType.APPLICATION_JSON)
                 .content(fileContents)
         )
                 .andExpect(status().isBadRequest())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON_UTF8))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(content().json(getFileContents("createCitizenOtpFailureResponse.json")));
     }
 
@@ -163,17 +163,17 @@ public class UserRequestControllerTest {
 
         String fileContents = getFileContents("updateValidatedCitizenSuccessRequest.json");
         mockMvc.perform(post("/users/_updatenovalidate")
-                .contentType(MediaType.APPLICATION_JSON_UTF8)
+                .contentType(MediaType.APPLICATION_JSON)
                 .content(fileContents)
         )
                 .andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON_UTF8))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(content().json(getFileContents("updateValidatedCitizenSuccessResponse.json")));
     }
 
     @Test
     @WithMockUser
-    @Ignore
+    @Disabled
     public void testShouldThrowErrorWhileUpdatingWithDuplicateCitizen() throws Exception {
         DuplicateUserNameException exception = new DuplicateUserNameException(UserSearchCriteria.builder().userName
                 ("test").build());
@@ -181,17 +181,17 @@ public class UserRequestControllerTest {
 
         String fileContents = getFileContents("updateCitizenUnsuccessfulRequest.json");
         mockMvc.perform(post("/users/1/_updatenovalidate")
-                .contentType(MediaType.APPLICATION_JSON_UTF8)
+                .contentType(MediaType.APPLICATION_JSON)
                 .content(fileContents)
         )
                 .andExpect(status().isBadRequest())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON_UTF8))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(content().json(getFileContents("updateCitizenUnsuccessfulResponse.json")));
     }
 
     @Test
     @WithMockUser
-    @Ignore
+    @Disabled
     public void testShouldThrowErrorWhileUpdatingWithInvalidCitizen() throws Exception {
         UserNotFoundException exception = new UserNotFoundException(UserSearchCriteria.builder().userName
                 ("test").build());
@@ -199,11 +199,11 @@ public class UserRequestControllerTest {
 
         String fileContents = getFileContents("updateCitizenUnsuccessfulRequest.json");
         mockMvc.perform(post("/users/1/_updatenovalidate")
-                .contentType(MediaType.APPLICATION_JSON_UTF8)
+                .contentType(MediaType.APPLICATION_JSON)
                 .content(fileContents)
         )
                 .andExpect(status().isBadRequest())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON_UTF8))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(content().json(getFileContents("updateInvalidCitizenUnsuccessfulResponse.json")));
     }
 }

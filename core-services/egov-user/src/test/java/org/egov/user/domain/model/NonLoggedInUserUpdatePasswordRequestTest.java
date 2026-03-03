@@ -2,7 +2,7 @@ package org.egov.user.domain.model;
 
 import org.egov.user.domain.exception.InvalidNonLoggedInUserUpdatePasswordRequestException;
 import org.egov.user.domain.model.enums.UserType;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import static org.junit.Assert.*;
 
