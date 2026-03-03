@@ -60,6 +60,10 @@ public class IDPJwtValidatorTest {
                 oidc.setEnabled(true);
                 when(authProperties.getOidc()).thenReturn(oidc);
 
+                AuthProperties.Provider provider = new AuthProperties.Provider();
+                provider.setIssuerUri("any");
+                when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
+
                 assertEquals(true, idpJwtValidator.supports("any"));
         }
 
