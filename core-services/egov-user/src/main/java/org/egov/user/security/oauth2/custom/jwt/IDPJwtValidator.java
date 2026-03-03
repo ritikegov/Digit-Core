@@ -33,15 +33,20 @@ public class IDPJwtValidator implements JwtValidator {
     }
 
     /**
-     * Checks if this validator supports tokens from the given issuer.
-     * Returns true if OIDC is enabled in configuration.
+     * Returns true if OIDC is enabled and the given issuer matches any configured provider
+     * (primary issuer URI or issuer alias). Used to route tokens to this validator.
      *
-     * @param issuer the issuer (iss) claim from the JWT token
-     * @return true if OIDC is enabled, false otherwise
+     * @param issuer the token issuer (iss claim), may be null
+     * @return true if this validator supports the issuer
      */
     @Override
     public boolean supports(String issuer) {
-        return authProperties.getOidc().isEnabled();
+        if (issuer == null || issuer.isEmpty() || !authProperties.getOidc().isEnabled()) {
+            return false;
+        }
+        String normalized = normalizeIssuer(issuer);
+        return oidcProviderSupplier.getProviders().stream()
+                .anyMatch(p -> matchesIssuer(p, normalized));
     }
 
     /**
