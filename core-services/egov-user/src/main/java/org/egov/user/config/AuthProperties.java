@@ -20,7 +20,6 @@ public class AuthProperties {
 
     private Forward forward = new Forward();
     private List<Provider> providers = new ArrayList<>();
-    private String defaultBoundaryCode;
 
     @Getter
     @Setter
@@ -74,11 +73,23 @@ public class AuthProperties {
         private String graphUsersUrl = OidcConfigConstants.DEFAULT_GRAPH_USERS_URL;
         private String graphTokenUrl = OidcConfigConstants.DEFAULT_GRAPH_TOKEN_URL;
         private String graphScope = OidcConfigConstants.DEFAULT_GRAPH_SCOPE;
+        private String graphAppRoleAssignmentUrl = OidcConfigConstants.DEFAULT_GRAPH_APP_ROLE_ASSIGNMENTS_URL;
         /**
          * IdP-specific graph/MFA enrichment service type: "azure" (Microsoft Graph), "none", or custom.
          * Property: auth.providers[i].graph-service-type
          */
         private String graphServiceType = OidcConfigConstants.GRAPH_SERVICE_TYPE_AZURE;
+        /**
+         * Azure AD resource ID (UUID) of the app whose app role assignments are checked for IdP user validation.
+         * Property: auth.providers[i].graph-app-resource-id
+         */
+        private String graphAppResourceId;
+        /**
+         * IdP-specific validator for username/password login: when user has non-LOCAL authProvider,
+         * this validator checks if the user still has access at the IdP. "none" = skip validation.
+         * Property: auth.providers[i].idp-user-validator-type
+         */
+        private String idpUserValidatorType = OidcConfigConstants.IDP_USER_VALIDATOR_TYPE_NONE;
 
         private static final ObjectMapper ROLE_MAPPING_MAPPER = new ObjectMapper();
 

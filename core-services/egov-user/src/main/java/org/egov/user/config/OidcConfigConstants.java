@@ -34,6 +34,8 @@ public final class OidcConfigConstants {
     public static final String KEY_GRAPH_TOKEN_URL = "graphTokenUrl";
     public static final String KEY_GRAPH_SCOPE = "graphScope";
     public static final String KEY_GRAPH_SERVICE_TYPE = "graphServiceType";
+    public static final String KEY_GRAPH_APP_RESOURCE_ID = "graphAppResourceId";
+    public static final String KEY_IDP_USER_VALIDATOR_TYPE = "idpUserValidatorType";
     public static final String KEY_DESIGNATION_MAPPINGS = "designationMappings";
     public static final String KEY_DESIGNATION_MAPPING = "designationMapping";
     public static final String KEY_DESIGNATION_CLAIM_KEY = "designationClaimKey";
@@ -52,8 +54,15 @@ public final class OidcConfigConstants {
     public static final String GRAPH_SERVICE_TYPE_AZURE = "azure";
     public static final String GRAPH_SERVICE_TYPE_NONE = "none";
 
+    public static final String IDP_USER_VALIDATOR_TYPE_NONE = "none";
+    public static final String IDP_USER_VALIDATOR_TYPE_AZURE = "azure";
+
+    /** Value of User.authProvider for locally-managed (non-SSO) accounts. */
+    public static final String AUTH_PROVIDER_LOCAL = "LOCAL";
+
     public static final String DEFAULT_GRAPH_METHODS_URL = "https://graph.microsoft.com/v1.0/users/%s/authentication/methods";
     public static final String DEFAULT_GRAPH_USERS_URL = "https://graph.microsoft.com/v1.0/users/%s";
+    public static final String DEFAULT_GRAPH_APP_ROLE_ASSIGNMENTS_URL = "https://graph.microsoft.com/v1.0/users/%s/appRoleAssignments";
     public static final String DEFAULT_GRAPH_TOKEN_URL = "https://login.microsoftonline.com/%s/oauth2/v2.0/token";
     public static final String DEFAULT_GRAPH_SCOPE = "https://graph.microsoft.com/.default";
 

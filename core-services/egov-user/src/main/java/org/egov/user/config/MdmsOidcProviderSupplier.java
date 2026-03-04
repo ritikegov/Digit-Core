@@ -291,6 +291,8 @@ public class MdmsOidcProviderSupplier implements OidcProviderSupplier {
         if (n.has(OidcConfigConstants.KEY_GRAPH_TOKEN_URL)) p.setGraphTokenUrl(textOrNull(n.get(OidcConfigConstants.KEY_GRAPH_TOKEN_URL)));
         if (n.has(OidcConfigConstants.KEY_GRAPH_SCOPE)) p.setGraphScope(textOrNull(n.get(OidcConfigConstants.KEY_GRAPH_SCOPE)));
         if (n.has(OidcConfigConstants.KEY_GRAPH_SERVICE_TYPE)) p.setGraphServiceType(textOrNull(n.get(OidcConfigConstants.KEY_GRAPH_SERVICE_TYPE)));
+        if (n.has(OidcConfigConstants.KEY_GRAPH_APP_RESOURCE_ID)) p.setGraphAppResourceId(textOrNull(n.get(OidcConfigConstants.KEY_GRAPH_APP_RESOURCE_ID)));
+        if (n.has(OidcConfigConstants.KEY_IDP_USER_VALIDATOR_TYPE)) p.setIdpUserValidatorType(textOrNull(n.get(OidcConfigConstants.KEY_IDP_USER_VALIDATOR_TYPE)));
         if (n.has(OidcConfigConstants.KEY_DESIGNATION_CLAIM_KEY)) p.setDesignationClaimKey(textOrNull(n.get(OidcConfigConstants.KEY_DESIGNATION_CLAIM_KEY)));
         if (n.has(OidcConfigConstants.KEY_DEFAULT_DESIGNATION_CODE)) p.setDefaultDesignationCode(textOrNull(n.get(OidcConfigConstants.KEY_DEFAULT_DESIGNATION_CODE)));
         if (n.has(OidcConfigConstants.KEY_DEFAULT_BOUNDARY_HIERARCHY_TYPE)) p.setDefaultBoundaryHierarchyType(textOrNull(n.get(OidcConfigConstants.KEY_DEFAULT_BOUNDARY_HIERARCHY_TYPE)));

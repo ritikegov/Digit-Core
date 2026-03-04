@@ -17,6 +17,8 @@ public final class SecurityConstants {
     /** OAuth2 token response: lifetime in seconds. */
     public static final String KEY_EXPIRES_IN = "expires_in";
     public static final String KEY_VALUE = "value";
+    /** Microsoft Graph appRoleAssignments response: resourceId of the app. */
+    public static final String KEY_RESOURCE_ID = "resourceId";
     public static final String KEY_ODATA_TYPE = "@odata.type";
     public static final String KEY_DISPLAY_NAME = "displayName";
     public static final String KEY_CREATION_DATE_TIME = "creationDateTime";

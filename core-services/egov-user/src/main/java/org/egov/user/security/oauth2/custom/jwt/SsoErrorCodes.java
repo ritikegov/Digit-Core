@@ -26,6 +26,7 @@ public final class SsoErrorCodes {
     public static final String USER_DUPLICATE = "sso.user.duplicate";
     public static final String USER_INACTIVE = "sso.user.inactive";
     public static final String USER_LOCKED = "sso.user.locked";
+    public static final String IDP_USER_ACCESS_REVOKED = "sso.user.idp_access_revoked";
 
     public static final String MFA_ENRICHMENT_FAILED = "sso.mfa.enrichment_failed";
 
