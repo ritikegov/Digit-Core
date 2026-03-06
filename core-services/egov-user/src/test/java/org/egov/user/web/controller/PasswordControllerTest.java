@@ -12,7 +12,6 @@ import org.egov.user.Resources;
 import org.egov.user.TestConfiguration;
 import org.egov.user.domain.model.NonLoggedInUserUpdatePasswordRequest;
 import org.egov.user.domain.service.UserService;
-import org.egov.user.security.CustomAuthenticationKeyGenerator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,7 +27,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @ExtendWith(SpringExtension.class)
 @WebMvcTest(PasswordController.class)
-@Import({TestConfiguration.class})
+@Import({TestConfiguration.class, org.egov.user.security.SecurityConfig.class})
 public class PasswordControllerTest {
 
     @Autowired
@@ -43,9 +42,6 @@ public class PasswordControllerTest {
     @MockBean
     private NamedParameterJdbcTemplate namedParameterJdbcTemplate;
 
-    @MockBean
-    private CustomAuthenticationKeyGenerator authenticationKeyGenerator;
-    
     @MockBean
     private MultiStateInstanceUtil multiStateInstanceUtil;
 

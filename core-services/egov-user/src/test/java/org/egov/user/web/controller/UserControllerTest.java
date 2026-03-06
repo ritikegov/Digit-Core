@@ -29,6 +29,7 @@ import java.util.TimeZone;
 
 import org.apache.commons.io.IOUtils;
 import org.egov.common.utils.MultiStateInstanceUtil;
+import org.egov.user.domain.service.MobileNumberValidator;
 import org.egov.user.TestConfiguration;
 import org.egov.user.domain.exception.InvalidUserSearchCriteriaException;
 import org.egov.user.domain.model.Action;
@@ -63,7 +64,7 @@ import org.springframework.test.web.servlet.ResultActions;
 
 @ExtendWith(SpringExtension.class)
 @WebMvcTest(UserController.class)
-@Import(TestConfiguration.class)
+@Import({TestConfiguration.class, org.egov.user.security.SecurityConfig.class})
 public class UserControllerTest {
 
     @Autowired
@@ -79,7 +80,7 @@ public class UserControllerTest {
     private MultiStateInstanceUtil multiStateInstanceUtil;
 
     @MockBean
-    private CustomAuthenticationKeyGenerator authenticationKeyGenerator;
+    private MobileNumberValidator mobileNumberValidator;
 
     @Test
     @WithMockUser
@@ -91,7 +92,7 @@ public class UserControllerTest {
         when(userService.searchUsers(argThat(new UserSearchActiveFlagMatcher(expectedSearchCriteria)), anyBoolean(), any()))
                 .thenReturn(getUserModels());
 
-        mockMvc.perform(post("/_search/").contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/_search").contentType(MediaType.APPLICATION_JSON)
                 .content(getFileContents("getUserByIdRequest.json"))).andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(content().json(getFileContents("userSearchResponse.json")));
@@ -106,7 +107,7 @@ public class UserControllerTest {
         when(userService.searchUsers(argThat(new UserSearchActiveFlagMatcher(expectedSearchCriteria)), anyBoolean(), any()))
                 .thenReturn(getUserModels());
 
-        mockMvc.perform(post("/_search/").contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/_search").contentType(MediaType.APPLICATION_JSON)
                 .content(getFileContents("getAllActiveUsersForGivenTenant.json"))).andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(content().json(getFileContents("userSearchResponse.json")));
@@ -121,7 +122,7 @@ public class UserControllerTest {
         when(userService.searchUsers(argThat(new UserSearchActiveFlagMatcher(expectedSearchCriteria)), anyBoolean(), any()))
                 .thenReturn(getUserModels());
 
-        mockMvc.perform(post("/_search/").contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/_search").contentType(MediaType.APPLICATION_JSON)
                 .content(getFileContents("getAllInActiveUsersForGivenTenant.json")))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
@@ -137,7 +138,7 @@ public class UserControllerTest {
         when(userService.searchUsers(argThat(new UserSearchActiveFlagMatcher(expectedSearchCriteria)), anyBoolean(), any()))
                 .thenReturn(getUserModels());
 
-        mockMvc.perform(post("/v1/_search/").contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/v1/_search").contentType(MediaType.APPLICATION_JSON)
                 .content(getFileContents("getAllActiveAndInActiveUsersForGivenTenantV1.json")))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
@@ -153,7 +154,7 @@ public class UserControllerTest {
         when(userService.searchUsers(argThat(new UserSearchActiveFlagMatcher(expectedSearchCriteria)), anyBoolean(), any()))
                 .thenReturn(getUserModels());
 
-        mockMvc.perform(post("/v1/_search/").contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/v1/_search").contentType(MediaType.APPLICATION_JSON)
                 .content(getFileContents("getAllInActiveUsersForGivenTenantV1.json")))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
@@ -168,7 +169,7 @@ public class UserControllerTest {
         when(userService.searchUsers(argThat(new UserSearchActiveFlagMatcher(expectedSearchCriteria)), anyBoolean(), any()))
                 .thenReturn(getUserModels());
 
-        mockMvc.perform(post("/v1/_search/").contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/v1/_search").contentType(MediaType.APPLICATION_JSON)
                 .content(getFileContents("getAllActiveUsersForGivenTenantV1.json")))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
@@ -387,7 +388,7 @@ public class UserControllerTest {
         }
     }
 
-    class UserSearchMatcher extends ArgumentMatcher<UserSearchCriteria> {
+    class UserSearchMatcher implements ArgumentMatcher<UserSearchCriteria> {
 
         private UserSearchCriteria expectedUserSearch;
 
@@ -396,8 +397,7 @@ public class UserControllerTest {
         }
 
         @Override
-        public boolean matches(Object o) {
-            UserSearchCriteria userSearch = (UserSearchCriteria) o;
+        public boolean matches(UserSearchCriteria userSearch) {
             return userSearch.getId().equals(expectedUserSearch.getId()) &&
                     userSearch.getUserName().equals(expectedUserSearch.getUserName()) &&
                     userSearch.getName().equals(expectedUserSearch.getName()) &&
@@ -415,7 +415,7 @@ public class UserControllerTest {
         }
     }
 
-    class UserSearchActiveFlagMatcher extends ArgumentMatcher<UserSearchCriteria> {
+    class UserSearchActiveFlagMatcher implements ArgumentMatcher<UserSearchCriteria> {
 
         private UserSearchCriteria expectedUserSearch;
 
@@ -424,8 +424,7 @@ public class UserControllerTest {
         }
 
         @Override
-        public boolean matches(Object o) {
-            UserSearchCriteria userSearch = (UserSearchCriteria) o;
+        public boolean matches(UserSearchCriteria userSearch) {
             return userSearch.getActive() == expectedUserSearch.getActive();
         }
     }

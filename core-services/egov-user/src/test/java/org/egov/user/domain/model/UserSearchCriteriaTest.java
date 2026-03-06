@@ -3,6 +3,8 @@ package org.egov.user.domain.model;
 import org.egov.user.domain.exception.InvalidUserSearchCriteriaException;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 public class UserSearchCriteriaTest {
 
     @Test
@@ -15,13 +17,15 @@ public class UserSearchCriteriaTest {
         searchCriteria.validate(true);
     }
 
-    @Test(expected = InvalidUserSearchCriteriaException.class)
+    @Test
     public void test_should_throw_exception_when_tenant_id_is_not_present() {
-        final UserSearchCriteria searchCriteria = UserSearchCriteria.builder()
-                .tenantId(null)
-                .build();
+        assertThrows(InvalidUserSearchCriteriaException.class, () -> {
+            final UserSearchCriteria searchCriteria = UserSearchCriteria.builder()
+                    .tenantId(null)
+                    .build();
 
-        searchCriteria.validate(true);
+            searchCriteria.validate(true);
+        });
     }
 
 

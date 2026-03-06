@@ -48,10 +48,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.egov.user.security.oauth2.EgovTokenStore;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 public class UserServiceTest {
 
     private static final int DEFAULT_PASSWORD_EXPIRY_IN_DAYS = 90;
@@ -92,6 +95,8 @@ public class UserServiceTest {
         userService = new UserService(userRepository, otpRepository, fileRepository, userUtils, passwordEncoder, encryptionDecryptionUtil,
                 tokenStore, DEFAULT_PASSWORD_EXPIRY_IN_DAYS,
                 isCitizenLoginOtpBased, isEmployeeLoginOtpBased, pwdRegex, pwdMaxLength, pwdMinLength);
+        when(encryptionDecryptionUtil.encryptObject(any(), anyString(), any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(encryptionDecryptionUtil.decryptObject(any(), anyString(), any(), any())).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
 
@@ -509,50 +514,54 @@ public class UserServiceTest {
                 .otpReference("123456")
                 .newPassword("nEwP@ssw0rd")
                 .build();
-        when(otpRepository.validateOtp(any())).thenThrow(Exception.class);
+        when(otpRepository.validateOtp(any())).thenThrow(RuntimeException.class);
         final User domainUser = mock(User.class);
         when(userRepository.findAll(any(UserSearchCriteria.class))).thenReturn(Collections.singletonList(domainUser));
 
-        assertThrows(Exception.class, () -> userService.updatePasswordForNonLoggedInUser(request, any()));
+        assertThrows(RuntimeException.class, () -> userService.updatePasswordForNonLoggedInUser(request, any()));
     }
 
     @SuppressWarnings("unchecked")
-    @Test(expected = InvalidUpdatePasswordRequestException.class)
+    @Test
     public void test_notshould_update_password_whenCitizenotpconfigured_istrue() throws Exception {
-        userService = new UserService(userRepository, otpRepository, fileRepository, userUtils, passwordEncoder,
-                encryptionDecryptionUtil, tokenStore, DEFAULT_PASSWORD_EXPIRY_IN_DAYS,
-                true, false, pwdRegex, pwdMaxLength, pwdMinLength);
-        final NonLoggedInUserUpdatePasswordRequest request = NonLoggedInUserUpdatePasswordRequest.builder()
-                .otpReference("123456")
-                .userName("xyz")
-                .tenantId("default")
-                .type(UserType.CITIZEN)
-                .newPassword("nEwP@ssw0rd")
-                .build();
-        when(otpRepository.validateOtp(any())).thenThrow(Exception.class);
-        final User domainUser = mock(User.class);
-        when(domainUser.getType()).thenReturn(UserType.CITIZEN);
-        when(userRepository.findAll(any(UserSearchCriteria.class))).thenReturn(Collections.singletonList(domainUser));
-        userService.updatePasswordForNonLoggedInUser(request, getValidRequestInfo());
+        assertThrows(InvalidUpdatePasswordRequestException.class, () -> {
+            userService = new UserService(userRepository, otpRepository, fileRepository, userUtils, passwordEncoder,
+                    encryptionDecryptionUtil, tokenStore, DEFAULT_PASSWORD_EXPIRY_IN_DAYS,
+                    true, false, pwdRegex, pwdMaxLength, pwdMinLength);
+            final NonLoggedInUserUpdatePasswordRequest request = NonLoggedInUserUpdatePasswordRequest.builder()
+                    .otpReference("123456")
+                    .userName("xyz")
+                    .tenantId("default")
+                    .type(UserType.CITIZEN)
+                    .newPassword("nEwP@ssw0rd")
+                    .build();
+            when(otpRepository.validateOtp(any())).thenThrow(RuntimeException.class);
+            final User domainUser = mock(User.class);
+            when(domainUser.getType()).thenReturn(UserType.CITIZEN);
+            when(userRepository.findAll(any(UserSearchCriteria.class))).thenReturn(Collections.singletonList(domainUser));
+            userService.updatePasswordForNonLoggedInUser(request, getValidRequestInfo());
+        });
     }
 
     @SuppressWarnings("unchecked")
-    @Test(expected = InvalidNonLoggedInUserUpdatePasswordRequestException.class)
+    @Test
     public void test_notshould_update_password_whenEmployeeotpconfigured_istrue() throws Exception {
-        userService = new UserService(userRepository, otpRepository, fileRepository, userUtils, passwordEncoder,
-                encryptionDecryptionUtil, tokenStore, DEFAULT_PASSWORD_EXPIRY_IN_DAYS,
-                false, true, pwdRegex, pwdMaxLength, pwdMinLength);
-        final NonLoggedInUserUpdatePasswordRequest request = NonLoggedInUserUpdatePasswordRequest.builder()
-                .userName("xyz")
-                .tenantId("default")
-                .type(UserType.EMPLOYEE)
-                .newPassword("nEwP@ssw0rd")
-                .build();
-        when(otpRepository.validateOtp(any())).thenThrow(Exception.class);
-        final User domainUser = mock(User.class);
-        when(domainUser.getType()).thenReturn(UserType.EMPLOYEE);
-        when(userRepository.findAll(any(UserSearchCriteria.class))).thenReturn(Collections.singletonList(domainUser));
-        userService.updatePasswordForNonLoggedInUser(request, getValidRequestInfo());
+        assertThrows(InvalidNonLoggedInUserUpdatePasswordRequestException.class, () -> {
+            userService = new UserService(userRepository, otpRepository, fileRepository, userUtils, passwordEncoder,
+                    encryptionDecryptionUtil, tokenStore, DEFAULT_PASSWORD_EXPIRY_IN_DAYS,
+                    false, true, pwdRegex, pwdMaxLength, pwdMinLength);
+            final NonLoggedInUserUpdatePasswordRequest request = NonLoggedInUserUpdatePasswordRequest.builder()
+                    .userName("xyz")
+                    .tenantId("default")
+                    .type(UserType.EMPLOYEE)
+                    .newPassword("nEwP@ssw0rd")
+                    .build();
+            when(otpRepository.validateOtp(any())).thenThrow(RuntimeException.class);
+            final User domainUser = mock(User.class);
+            when(domainUser.getType()).thenReturn(UserType.EMPLOYEE);
+            when(userRepository.findAll(any(UserSearchCriteria.class))).thenReturn(Collections.singletonList(domainUser));
+            userService.updatePasswordForNonLoggedInUser(request, getValidRequestInfo());
+        });
     }
 
     @Disabled

@@ -28,9 +28,9 @@ import org.egov.user.domain.model.UserSearchCriteria;
 import org.egov.user.domain.model.enums.BloodGroup;
 import org.egov.user.domain.model.enums.Gender;
 import org.egov.user.domain.model.enums.UserType;
+import org.egov.user.domain.service.MobileNumberValidator;
 import org.egov.user.domain.service.TokenService;
 import org.egov.user.domain.service.UserService;
-import org.egov.user.security.CustomAuthenticationKeyGenerator;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,7 +46,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @ExtendWith(SpringExtension.class)
 @WebMvcTest(UserController.class)
-@Import(TestConfiguration.class)
+@Import({TestConfiguration.class, org.egov.user.security.SecurityConfig.class})
 public class UserRequestControllerTest {
 
     @Autowired
@@ -65,7 +65,7 @@ public class UserRequestControllerTest {
     private TokenService tokenService;
 
     @MockBean
-    private CustomAuthenticationKeyGenerator authenticationKeyGenerator;
+    private MobileNumberValidator mobileNumberValidator;
 
 /*
     @Test

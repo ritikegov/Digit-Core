@@ -32,8 +32,9 @@ import org.springframework.web.client.RestTemplate;
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.client.ExpectedCount.once;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
@@ -195,15 +196,17 @@ public class UserRepositoryTest {
         assertThat(actualUser.getPermanentAddress().getPinCode().equals("123"));
     }
 
-    @Test(expected = CustomException.class)
+    @Test
     public void test_should_throw_exception_when_role_does_not_exist_for_given_role_code() {
-        final String roleCode = "roleCode1";
-        final org.egov.user.domain.model.Role domainRole = org.egov.user.domain.model.Role.builder().name(roleCode)
-                .build();
-        User domainUser = User.builder()
-                .tenantId("ap.p")
-                .roles(Collections.singleton(domainRole)).build();
-        userRepository.create(domainUser);
+        assertThrows(CustomException.class, () -> {
+            final String roleCode = "roleCode1";
+            final org.egov.user.domain.model.Role domainRole = org.egov.user.domain.model.Role.builder().name(roleCode)
+                    .build();
+            User domainUser = User.builder()
+                    .tenantId("ap.p")
+                    .roles(Collections.singleton(domainRole)).build();
+            userRepository.create(domainUser);
+        });
     }
 
     @Test
@@ -370,14 +373,16 @@ public class UserRepositoryTest {
     }
 
     @Disabled
-    @Test(expected = InvalidRoleCodeException.class)
+    @Test
     public void test_should_throw_exception_when_updating_user_with_invalid_role_code() {
-        final String roleCode = "roleCode1";
-        final org.egov.user.domain.model.Role domainRole = org.egov.user.domain.model.Role.builder().name(roleCode)
-                .build();
-        User domainUser = User.builder()
-                .roles(Collections.singleton(domainRole)).id(1L).tenantId("ap.public").build();
-        userRepository.update(domainUser, domainUser,domainUser.getId(), domainUser.getUuid() );
+        assertThrows(InvalidRoleCodeException.class, () -> {
+            final String roleCode = "roleCode1";
+            final org.egov.user.domain.model.Role domainRole = org.egov.user.domain.model.Role.builder().name(roleCode)
+                    .build();
+            User domainUser = User.builder()
+                    .roles(Collections.singleton(domainRole)).id(1L).tenantId("ap.public").build();
+            userRepository.update(domainUser, domainUser,domainUser.getId(), domainUser.getUuid() );
+        });
     }
 
     @Test
