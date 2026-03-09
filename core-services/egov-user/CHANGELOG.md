@@ -2,6 +2,9 @@
 All notable changes to this module will be documented in this file.
 
 
+## 1.3.1 - 2026-03-03
+- Added DataAccessExceptionHandler directly to handle DataAccessException errors through `@ControllerAdvice` (added directly as the Java version is old)
+
 ## 1.3.0 - 2025-05-27
 - Introduced tenant-specific database schema support and dynamic schema resolution
 - Refactored repositories and services to use dynamic schema placeholders and centralized schema utilities.
