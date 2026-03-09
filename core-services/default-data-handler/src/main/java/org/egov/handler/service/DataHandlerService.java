@@ -440,7 +440,6 @@ public class DataHandlerService {
             rawJson = rawJson.replace("{tenantid}", targetTenantId);
             JsonNode relationshipArray = objectMapper.readTree(rawJson);
             JsonNode requestInfoNode = objectMapper.valueToTree(requestInfo);
-            log.info("rawJson:::--->>>"+rawJson);
             for (JsonNode relationship : relationshipArray) {
                 try {
                     ObjectNode payload = objectMapper.createObjectNode();
