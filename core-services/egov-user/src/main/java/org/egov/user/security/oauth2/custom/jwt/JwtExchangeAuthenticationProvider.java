@@ -21,6 +21,7 @@ import org.egov.user.persistence.repository.UserIdpDetailsRepository;
 import org.egov.user.security.oauth2.custom.service.EmployeeCreationProfile;
 import org.egov.user.security.oauth2.custom.service.IdpGraphService;
 import org.egov.user.security.oauth2.custom.service.impl.NoOpGraphService;
+import org.egov.tracer.model.CustomException;
 import org.egov.user.utils.ProjectEmployeeStaffUtil;
 import org.egov.user.web.contract.auth.OidcValidatedJwt;
 import org.springframework.security.authentication.AuthenticationProvider;
@@ -273,10 +274,18 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
         String department = profileOpt.map(EmployeeCreationProfile::getDepartment).filter(StringUtils::hasText)
                 .orElse(OidcConfigConstants.DEFAULT_DEPARTMENT_CODE);
 
-        org.egov.user.domain.model.hrms.User hrmsUser = projectEmployeeStaffUtil.createEmployeeAndProjectStaff(
-                userToCreate, employeeType, designation, department,
-                provider.getDefaultEmployeeStatus(), tenantId, jwt.getOid(),
-                provider.getDefaultBoundaryHierarchyType(), requestInfo);
+        org.egov.user.domain.model.hrms.User hrmsUser;
+        try {
+            hrmsUser = projectEmployeeStaffUtil.createEmployeeAndProjectStaff(
+                    userToCreate, employeeType, designation, department,
+                    provider.getDefaultEmployeeStatus(), tenantId, jwt.getOid(),
+                    provider.getDefaultBoundaryHierarchyType(), jwt, requestInfo);
+        } catch (CustomException e) {
+            if ("EMPLOYEE_CREATION_FAILED".equals(e.getCode())) {
+                throw SsoUserMappingException.contactAdminForHrmsConflict();
+            }
+            throw e;
+        }
 
         log.info("Created HRMS user and staff mapping for user service uuid: {}", hrmsUser.getUserServiceUuid());
 

@@ -5,8 +5,10 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.tracer.model.CustomException;
+import org.egov.user.kafka.Producer;
 import org.egov.user.domain.model.boundary.*;
 import org.egov.user.domain.model.hrms.*;
+import org.egov.user.web.contract.auth.OidcValidatedJwt;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -17,6 +19,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Utility class for creating employees in HRMS and project staff mappings.
@@ -39,11 +42,17 @@ public class ProjectEmployeeStaffUtil {
         private static final String CUSTOM_EXCEPTION_USER_SERVICE_UUID_MISSING = "USER_SERVICE_UUID_MISSING";
         private static final String CUSTOM_EXCEPTION_HTTP_CLIENT_ERROR = "HTTP_CLIENT_ERROR";
         private static final String CUSTOM_EXCEPTION_SERVICE_REQUEST_CLIENT_ERROR = "SERVICE_REQUEST_CLIENT_ERROR";
+        private static final String HRMS_ERROR_EVENT_CODE = "EMPLOYEE_CREATION_FAILED";
+        private static final String HRMS_ERROR_EVENT_MESSAGE = "Failed to create employee in HRMS service";
         /** Query/param keys used in code. */
         private static final String PARAM_TENANT_ID = "tenantId";
         private static final String PARAM_HIERARCHY_TYPE = "hierarchyType";
 
         private final RestTemplate restTemplate;
+        private final Producer kafkaProducer;
+
+        @Value("${kafka.topics.hrms.employee.create.error.dlq}")
+        private String hrmsErrorDlqTopic;
 
         @Value("${egov.hrms.host}")
         private String hrmsServiceHost;
@@ -61,8 +70,9 @@ public class ProjectEmployeeStaffUtil {
         private String boundaryRelationshipsSearchUrl;
 
         @Autowired
-        public ProjectEmployeeStaffUtil(RestTemplate restTemplate) {
+        public ProjectEmployeeStaffUtil(RestTemplate restTemplate, Producer kafkaProducer) {
                 this.restTemplate = restTemplate;
+                this.kafkaProducer = kafkaProducer;
         }
 
         /**
@@ -191,6 +201,7 @@ public class ProjectEmployeeStaffUtil {
          * @param employeeStatus    The status of the employee
          * @param dateOfAppointment The date of appointment for the employee
          * @param tenantId          The tenant ID
+         * @param jwt               The jwt
          * @param requestInfo       The request info for authentication and tracking
          * @return The created Employee object with userServiceUuid
          * @throws CustomException if employee creation fails
@@ -198,7 +209,7 @@ public class ProjectEmployeeStaffUtil {
         public Employee createEmployeeInHrms(User user,
                         String employeeType, String designation, String department,
                         String employeeStatus, Long dateOfAppointment,
-                        String tenantId, String createdBy, String defaultBoundaryHierarchyType,
+                        String tenantId, String createdBy, String defaultBoundaryHierarchyType,OidcValidatedJwt jwt,
                         RequestInfo requestInfo) {
                 log.info("Creating employee in HRMS for user: {}", user.getName());
                 String hierarchyType;
@@ -269,19 +280,28 @@ public class ProjectEmployeeStaffUtil {
                 uri.append(hrmsServiceHost)
                                 .append(hrmsEmployeeCreateUrl);
 
-                // Make the API call
-                EmployeeResponse response = fetchResult(uri, employeeRequest, EmployeeResponse.class);
+                try {
+                        // Make the API call
+                        EmployeeResponse response = fetchResult(uri, employeeRequest, EmployeeResponse.class);
 
-                // Validate response
-                if (response == null || CollectionUtils.isEmpty(response.getEmployees())) {
-                        log.error("Failed to create employee in HRMS for user: {}", user.getName());
+                        // Validate response
+                        if (response == null || CollectionUtils.isEmpty(response.getEmployees())) {
+                                log.error("Failed to create employee in HRMS for user: {}", user.getName());
+                                throw new CustomException(CUSTOM_EXCEPTION_EMPLOYEE_CREATION_FAILED,
+                                                HRMS_ERROR_EVENT_MESSAGE);
+                        }
+
+                        Employee createdEmployee = response.getEmployees().get(0);
+                        log.info("Successfully created employee in HRMS with UUID: {}", createdEmployee.getUuid());
+                        return createdEmployee;
+                } catch (Exception e) {
+                        log.error("Exception occurred while creating employee in HRMS for user: {}", user.getName(), e);
+                        publishHrmsCreationErrorToDlq(user, tenantId, employeeType, designation,
+                                        department,jwt, HRMS_ERROR_EVENT_CODE,
+                                        "Exception occurred during HRMS employee creation: " + e.getMessage());
                         throw new CustomException(CUSTOM_EXCEPTION_EMPLOYEE_CREATION_FAILED,
-                                        "Failed to create employee in HRMS service");
+                                        "Exception occurred during HRMS employee creation: " + e.getMessage());
                 }
-
-                Employee createdEmployee = response.getEmployees().get(0);
-                log.info("Successfully created employee in HRMS with UUID: {}", createdEmployee.getUuid());
-                return createdEmployee;
         }
 
         /**
@@ -298,6 +318,7 @@ public class ProjectEmployeeStaffUtil {
          * @param employeeStatus The status of the employee
          * @param tenantId       The tenant ID
          * @param createdBy      The creator identifier
+         * @param jwt      The jwt
          * @param requestInfo    The request info for authentication and tracking
          * @return The created user from the HRMS employee response
          * @throws CustomException if any step in the workflow fails
@@ -308,12 +329,13 @@ public class ProjectEmployeeStaffUtil {
                         String department, String employeeStatus,
                         String tenantId, String createdBy,
                         String defaultBoundaryHierarchyType,
+                        OidcValidatedJwt jwt,
                         RequestInfo requestInfo) {
 
                 // Create employee in HRMS
                 Employee employee = createEmployeeInHrms(user, employeeType,
                                 designation, department, employeeStatus, System.currentTimeMillis(),
-                                tenantId, createdBy, defaultBoundaryHierarchyType, requestInfo);
+                                tenantId, createdBy, defaultBoundaryHierarchyType,jwt, requestInfo);
 
                 String userServiceUuid = employee.getUser().getUserServiceUuid();
                 if (userServiceUuid == null || userServiceUuid.isEmpty()) {
@@ -323,6 +345,39 @@ public class ProjectEmployeeStaffUtil {
 
                 log.info("Successfully completed workflow for user: {}", user.getName());
                 return employee.getUser();
+        }
+
+        private void publishHrmsCreationErrorToDlq(User user, String tenantId,
+                        String employeeType, String designation, String department, OidcValidatedJwt jwt,
+                        String errorCode, String errorMessage) {
+                HrmsEmployeeCreationErrorEvent.HrmsEmployeeCreationErrorEventBuilder eventBuilder =
+                                HrmsEmployeeCreationErrorEvent.builder()
+                                                .eventId(UUID.randomUUID().toString())
+                                                .tenantId(tenantId)
+                                                .userName(user.getUserName())
+                                                .userUuid(user.getUuid())
+                                                .name(user.getName())
+                                                .emailId(user.getUserName())
+                                                .userType(user.getType())
+                                                .employeeType(employeeType)
+                                                .designation(designation)
+                                                .department(department)
+                                                .errorCode(errorCode)
+                                                .errorMessage(errorMessage)
+                                                .occurredAt(System.currentTimeMillis());
+                if (jwt != null) {
+                        eventBuilder.subject(jwt.getSubject())
+                                        .issuer(jwt.getIssuer())
+                                        .provider(jwt.getProviderId())
+                                        .oid(jwt.getOid());
+                }
+                HrmsEmployeeCreationErrorEvent event = eventBuilder.build();
+                try {
+                        kafkaProducer.push(tenantId, hrmsErrorDlqTopic, event);
+                        log.info("HRMS creation error published to DLQ for tenantId: {}", tenantId);
+                } catch (Exception e) {
+                        log.error("Failed to publish HRMS error to DLQ for tenantId: {}", tenantId, e);
+                }
         }
 
         public <T> T fetchResult(StringBuilder uri, Object request, Class<T> clazz) {

@@ -11,6 +11,7 @@ import org.egov.user.domain.model.boundary.HierarchyRelation;
 import org.egov.user.domain.model.hrms.Employee;
 import org.egov.user.domain.model.hrms.EmployeeResponse;
 import org.egov.user.domain.model.hrms.User;
+import org.egov.user.kafka.Producer;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -34,11 +35,14 @@ public class ProjectEmployeeStaffUtilTest {
     @Mock
     private RestTemplate restTemplate;
 
+    @Mock
+    private Producer kafkaProducer;
+
     private ProjectEmployeeStaffUtil projectEmployeeStaffUtil;
 
     @Before
     public void setup() {
-        projectEmployeeStaffUtil = new ProjectEmployeeStaffUtil(restTemplate);
+        projectEmployeeStaffUtil = new ProjectEmployeeStaffUtil(restTemplate, kafkaProducer);
         ReflectionTestUtils.setField(projectEmployeeStaffUtil, "hrmsServiceHost", "http://hrms-service");
         ReflectionTestUtils.setField(projectEmployeeStaffUtil, "hrmsEmployeeCreateUrl", "/hrms/employee/v1/_create");
         ReflectionTestUtils.setField(projectEmployeeStaffUtil, "boundaryServiceHost", "http://boundary-service");
@@ -152,7 +156,7 @@ public class ProjectEmployeeStaffUtilTest {
 
         Employee result = projectEmployeeStaffUtil.createEmployeeInHrms(
                 user, "PERMANENT", "Designation", "Department", "EMPLOYED",
-                System.currentTimeMillis(), "tenant", "oid",null, requestInfo);
+                System.currentTimeMillis(), "tenant", "oid", null, null, requestInfo);
 
         assertNotNull(result);
         assertEquals("E1", result.getUuid());
@@ -186,7 +190,7 @@ public class ProjectEmployeeStaffUtilTest {
 
         projectEmployeeStaffUtil.createEmployeeInHrms(
                 user, "PERMANENT", "Designation", "Department", "EMPLOYED",
-                System.currentTimeMillis(), "tenant", "oid", null, requestInfo);
+                System.currentTimeMillis(), "tenant", "oid", null, null, requestInfo);
     }
 
     @Test
@@ -224,7 +228,7 @@ public class ProjectEmployeeStaffUtilTest {
 
         User result = projectEmployeeStaffUtil.createEmployeeAndProjectStaff(
                 user, "PERMANENT", "Designation", "Department", "EMPLOYED",
-                "tenant", "oid", null, requestInfo);
+                "tenant", "oid", null, null, requestInfo);
 
         assertNotNull(result);
         assertEquals("U1", result.getUserServiceUuid());
@@ -265,6 +269,6 @@ public class ProjectEmployeeStaffUtilTest {
 
         projectEmployeeStaffUtil.createEmployeeAndProjectStaff(
                 user, "PERMANENT", "Designation", "Department", "EMPLOYED",
-                "tenant", "oid", null, requestInfo);
+                "tenant", "oid", null, null, requestInfo);
     }
 }

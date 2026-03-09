@@ -234,7 +234,7 @@ public class JwtExchangeAuthenticationProviderTest {
 
                 when(projectEmployeeStaffUtil.createEmployeeAndProjectStaff(
                                 any(org.egov.user.domain.model.hrms.User.class), anyString(), anyString(), anyString(),
-                                anyString(), anyString(), anyString(), anyString(), any(RequestInfo.class)))
+                                anyString(), anyString(), anyString(), anyString(), any(OidcValidatedJwt.class), any(RequestInfo.class)))
                                 .thenReturn(hrmsUser);
 
                 User createdUser = User.builder().uuid("new-uuid").username("johndoe").type(UserType.EMPLOYEE)
@@ -248,7 +248,7 @@ public class JwtExchangeAuthenticationProviderTest {
                 verify(projectEmployeeStaffUtil).createEmployeeAndProjectStaff(
                                 any(org.egov.user.domain.model.hrms.User.class), eq("PERMANENT"),
                                 eq("1f3572c4-07ce-4d58-86d3-7b6e2458e812"), eq("NMCP"), eq("EMPLOYED"), eq(TENANT_PB),
-                                anyString(), anyString(), any(RequestInfo.class));
+                                anyString(), anyString(), any(OidcValidatedJwt.class), any(RequestInfo.class));
                 verify(userService).updateWithoutOtpValidation(any(), any());
         }
 
@@ -292,7 +292,7 @@ public class JwtExchangeAuthenticationProviderTest {
                                 .build();
                 when(projectEmployeeStaffUtil.createEmployeeAndProjectStaff(
                                 any(org.egov.user.domain.model.hrms.User.class), anyString(), anyString(), anyString(),
-                                anyString(), anyString(), anyString(), anyString(), any(RequestInfo.class)))
+                                anyString(), anyString(), anyString(), anyString(), any(OidcValidatedJwt.class), any(RequestInfo.class)))
                                 .thenReturn(hrmsUser);
 
                 User createdUser = User.builder().uuid("new-uuid").username("johndoe").type(UserType.EMPLOYEE)
@@ -306,7 +306,7 @@ public class JwtExchangeAuthenticationProviderTest {
                 verify(projectEmployeeStaffUtil).createEmployeeAndProjectStaff(
                                 any(org.egov.user.domain.model.hrms.User.class), eq("CONTRACT"),
                                 eq("design-uuid-123"), eq("IT"), eq("EMPLOYED"), eq(TENANT_PB),
-                                anyString(), anyString(), any(RequestInfo.class));
+                                anyString(), anyString(), any(OidcValidatedJwt.class), any(RequestInfo.class));
         }
 
         @Test
@@ -370,7 +370,7 @@ public class JwtExchangeAuthenticationProviderTest {
 
                 when(projectEmployeeStaffUtil.createEmployeeAndProjectStaff(
                                 any(org.egov.user.domain.model.hrms.User.class), anyString(), anyString(), anyString(),
-                                anyString(), anyString(), anyString(), anyString(), any(RequestInfo.class)))
+                                anyString(), anyString(), anyString(), anyString(), any(OidcValidatedJwt.class), any(RequestInfo.class)))
                                 .thenReturn(hrmsUser);
 
                 User createdUser = User.builder().uuid("new-uuid").username("johndoe").type(UserType.EMPLOYEE)
@@ -383,7 +383,7 @@ public class JwtExchangeAuthenticationProviderTest {
                 verify(projectEmployeeStaffUtil).createEmployeeAndProjectStaff(
                                 any(org.egov.user.domain.model.hrms.User.class), anyString(),
                                 eq("FieldOfficer"), anyString(), anyString(), eq(TENANT_PB),
-                                anyString(), anyString(), any(RequestInfo.class));
+                                anyString(), anyString(), any(OidcValidatedJwt.class), any(RequestInfo.class));
         }
 
         @Test
@@ -424,7 +424,7 @@ public class JwtExchangeAuthenticationProviderTest {
 
                 when(projectEmployeeStaffUtil.createEmployeeAndProjectStaff(
                                 any(org.egov.user.domain.model.hrms.User.class), anyString(), anyString(), anyString(),
-                                anyString(), anyString(), anyString(), anyString(), any(RequestInfo.class)))
+                                anyString(), anyString(), anyString(), anyString(), any(OidcValidatedJwt.class), any(RequestInfo.class)))
                                 .thenReturn(hrmsUser);
 
                 User createdUser = User.builder().uuid("new-uuid").username("johndoe").type(UserType.EMPLOYEE)
@@ -437,7 +437,7 @@ public class JwtExchangeAuthenticationProviderTest {
                 verify(projectEmployeeStaffUtil).createEmployeeAndProjectStaff(
                                 any(org.egov.user.domain.model.hrms.User.class), anyString(),
                                 eq("MAPPED_DESIGNATION_ID"), anyString(), anyString(), eq(TENANT_PB),
-                                anyString(), anyString(), any(RequestInfo.class));
+                                anyString(), anyString(), any(OidcValidatedJwt.class), any(RequestInfo.class));
         }
 
         @Test
@@ -749,7 +749,7 @@ public class JwtExchangeAuthenticationProviderTest {
 
                 when(projectEmployeeStaffUtil.createEmployeeAndProjectStaff(
                                 any(org.egov.user.domain.model.hrms.User.class), anyString(), anyString(), anyString(),
-                                anyString(), anyString(), anyString(), anyString(), any(RequestInfo.class)))
+                                anyString(), anyString(), anyString(), anyString(), any(OidcValidatedJwt.class), any(RequestInfo.class)))
                                 .thenReturn(hrmsUser);
 
                 User createdUser = User.builder().uuid("new-uuid").username("johndoe").type(UserType.EMPLOYEE)
@@ -935,7 +935,7 @@ public class JwtExchangeAuthenticationProviderTest {
 
                 when(projectEmployeeStaffUtil.createEmployeeAndProjectStaff(
                                 any(org.egov.user.domain.model.hrms.User.class), anyString(), anyString(), anyString(),
-                                anyString(), anyString(), anyString(), anyString(), any(RequestInfo.class)))
+                                anyString(), anyString(), anyString(), anyString(), any(OidcValidatedJwt.class), any(RequestInfo.class)))
                                 .thenReturn(hrmsUser);
 
                 when(userService.updateWithoutOtpValidation(any(), any()))

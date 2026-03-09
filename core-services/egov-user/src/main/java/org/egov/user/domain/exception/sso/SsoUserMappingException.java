@@ -33,4 +33,10 @@ public class SsoUserMappingException extends SsoException {
         return new SsoUserMappingException(SsoErrorCodes.USER_LOCKED,
                 "Account is locked due to multiple failed login attempts.");
     }
+
+    /** Use when HRMS employee creation fails (e.g. username conflict); show generic contact-admin message in UI. */
+    public static SsoUserMappingException contactAdminForHrmsConflict() {
+        return new SsoUserMappingException(SsoErrorCodes.USER_CONTACT_ADMIN,
+                "A conflict was detected with your account. Please contact your system administrator.");
+    }
 }
