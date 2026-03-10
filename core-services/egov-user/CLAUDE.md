@@ -20,7 +20,7 @@ mvn spring-boot:run
 
 ## Architecture Overview
 
-This is a **Spring Boot 1.5.x microservice** (Java 8) that manages user lifecycle, authentication, and authorization for the DIGIT platform. It is an **OAuth2 authorization server** backed by PostgreSQL with Redis for token storage.
+This is a **Spring Boot 3.5.x microservice** (Java 25) that manages user lifecycle, authentication, and authorization for the DIGIT platform. It uses a **custom OAuth2-compatible token endpoint** backed by PostgreSQL with Redis for token storage.
 
 ### Layered Structure
 
@@ -29,12 +29,12 @@ web/controller/     → REST endpoints (UserController, PasswordController, Logo
 domain/service/     → Business logic (UserService, TokenService, MobileNumberValidator)
 persistence/        → Data access via JDBC (UserRepository, RoleRepository, etc.)
 repository/         → Query builders and ResultSet extractors
-security/           → OAuth2 config and custom authentication providers
+security/           → Spring Security 6.x config, custom token endpoint, Redis token store, auth providers
 ```
 
 ### Key Design Decisions
 
-- **OAuth2 Token Storage:** Redis (`spring.redis.host`), not JWT — tokens are stateful.
+- **OAuth2 Token Storage:** Redis (`spring.redis.host`), not JWT — tokens are stateful. The old `spring-security-oauth2` `@EnableAuthorizationServer` has been replaced by `CustomTokenEndpoint` + `EgovTokenStore`/`RedisEgovTokenStore` to maintain backward-compatible `/oauth/token` API while using Spring Security 6.x.
 - **PII Encryption:** All sensitive fields (mobile, email, Aadhaar) are encrypted via `egov-enc-service` before persistence. `EncryptionDecryptionUtil` wraps all encrypt/decrypt calls. ABAC-based decryption is controlled by `decryption.abac.enabled`.
 - **Dual Login Flow:** Citizens use OTP-based login; employees use password-based login. `CustomAuthenticationProvider` branches on user type. Controlled by `citizen.login.password.otp.enabled` and `employee.login.password.otp.enabled` properties.
 - **Database Migrations:** Flyway manages schema under `src/main/resources/db/migration/`. Flyway is **disabled by default** (`flyway.enabled=false`) — migrations must be run manually or enabled explicitly.
