@@ -105,12 +105,10 @@ public class DataHandlerService {
     public void createDefaultData(DefaultDataRequest defaultDataRequest) {
         if (defaultDataRequest.getSchemaCodes() != null) {
             List<String> schemaCodes = new ArrayList<>(defaultDataRequest.getSchemaCodes());
-			/*
-			 * if (schemaCodes.contains(TENANT_BOUNDARY_SCHEMA)) {
-			 * createTenantBoundarydata(defaultDataRequest.getRequestInfo(),
-			 * defaultDataRequest.getTargetTenantId());
-			 * schemaCodes.remove(TENANT_BOUNDARY_SCHEMA); }
-			 */
+			if (schemaCodes.contains(TENANT_BOUNDARY_SCHEMA)) {
+				createTenantBoundarydata(defaultDataRequest.getRequestInfo(), defaultDataRequest.getTargetTenantId());
+				schemaCodes.remove(TENANT_BOUNDARY_SCHEMA);
+			}
             DefaultMdmsDataRequest defaultMdmsDataRequest = DefaultMdmsDataRequest.builder().requestInfo(defaultDataRequest.getRequestInfo()).targetTenantId(defaultDataRequest.getTargetTenantId()).schemaCodes(schemaCodes).onlySchemas(defaultDataRequest.getOnlySchemas()).defaultTenantId(serviceConfig.getDefaultTenantId()).build();
             mdmsV2Util.createDefaultMdmsData(defaultMdmsDataRequest);
         }
