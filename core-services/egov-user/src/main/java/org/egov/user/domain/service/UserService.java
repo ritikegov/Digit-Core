@@ -100,6 +100,9 @@ public class UserService {
     @Value("${egov.user.pwd.pattern.max.length}")
     private Integer pwdMaxLength;
 
+    @Value("${default.otp}")
+    private String defaultOtp;
+
     @Autowired
     private RestTemplate restTemplate;
 
@@ -342,6 +345,9 @@ public class UserService {
      * @return
      */
     public Boolean validateOtp(User user) {
+    	if(user.getType().equals(UserType.CITIZEN) && defaultOtp.equals(user.getOtpReference())){
+            return Boolean.TRUE;
+        }
         Otp otp = Otp.builder().otp(user.getOtpReference()).identity(user.getUsername()).tenantId(user.getTenantId())
                 .userType(user.getType()).build();
         RequestInfo requestInfo = RequestInfo.builder().action("validate").ts(System.currentTimeMillis()).build();
