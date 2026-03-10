@@ -68,8 +68,8 @@ public class UserTypeQueryBuilder {
             +
             ".type,  userdata.version, userdata.guardian, userdata.guardianrelation, userdata.signature, userdata.accountlocked, userdata.accountlockeddate, userdata"
             +
-            ".bloodgroup, userdata.photo, userdata.identificationmark,  userdata.tenantid, userdata.id, userdata.uuid, userdata.alternatemobilenumber, userdata.idp_issuer, userdata.idp_subject, userdata.auth_provider, "
-            + "idp.idp_token_exp, idp.last_sso_login_at, idp.token_id, idp.mfa_enabled, idp.mfa_device_name, idp.mfa_phone_last4, idp.mfa_registered_on, idp.mfa_details, "
+            ".bloodgroup, userdata.photo, userdata.identificationmark,  userdata.tenantid, userdata.id, userdata.uuid, userdata.alternatemobilenumber, userdata.idpissuer, userdata.idpsubject, userdata.authprovider, "
+            + "idp.idptokenexp, idp.lastssologinat, idp.tokenid, idp.mfaenabled, idp.mfadevicename, idp.mfaphonelast4, idp.mfaregisteredon, idp.mfadetails, "
             + "addr.id as addr_id, addr.type as "
             +
             "addr_type, addr .address as addr_address,  addr.city as addr_city, addr.pincode as addr_pincode, addr" +
@@ -228,13 +228,13 @@ public class UserTypeQueryBuilder {
 
         if (userSearchCriteria.getIdpIssuer() != null) {
             isAppendAndClause = addAndClauseIfRequired(isAppendAndClause, selectQuery);
-            selectQuery.append(" userdata.idp_issuer = ?");
+            selectQuery.append(" userdata.idpissuer = ?");
             preparedStatementValues.add(userSearchCriteria.getIdpIssuer().trim());
         }
 
         if (userSearchCriteria.getIdpSubject() != null) {
             isAppendAndClause = addAndClauseIfRequired(isAppendAndClause, selectQuery);
-            selectQuery.append(" userdata.idp_subject = ?");
+            selectQuery.append(" userdata.idpsubject = ?");
             preparedStatementValues.add(userSearchCriteria.getIdpSubject().trim());
         }
 
@@ -323,10 +323,10 @@ public class UserTypeQueryBuilder {
         return "insert into " + SCHEMA_REPLACE_STRING
                 + ".eg_user (id,uuid,tenantid,salutation,dob,locale,username,password,pwdexpirydate,mobilenumber,altcontactnumber,emailid,active,name,gender,pan,aadhaarnumber,"
                 + "type,guardian,guardianrelation,signature,accountlocked,bloodgroup,photo,identificationmark,createddate,lastmodifieddate,createdby,lastmodifiedby,alternatemobilenumber,"
-                + "idp_issuer,idp_subject,auth_provider) values (:id,:uuid,:tenantid,:salutation,"
+                + "idpissuer,idpsubject,authprovider) values (:id,:uuid,:tenantid,:salutation,"
                 + ":dob,:locale,:username,:password,:pwdexpirydate,:mobilenumber,:altcontactnumber,:emailid,:active,:name,:gender,:pan,:aadhaarnumber,:type,:guardian,:guardianrelation,:signature,"
                 + ":accountlocked,:bloodgroup,:photo,:identificationmark,:createddate,:lastmodifieddate,:createdby,:lastmodifiedby,:alternatemobilenumber,"
-                + ":idp_issuer,:idp_subject,:auth_provider) ";
+                + ":idpissuer,:idpsubject,:authprovider) ";
     }
 
     public String getUpdateUserQuery() {
@@ -336,7 +336,7 @@ public class UserTypeQueryBuilder {
                 + "accountlocked=:AccountLocked, accountlockeddate=:AccountLockedDate, bloodgroup=:BloodGroup,"
                 + "photo=:Photo, identificationmark=:IdentificationMark,lastmodifieddate=:LastModifiedDate,"
                 + "lastmodifiedby=:LastModifiedBy, alternatemobilenumber=:alternatemobilenumber,"
-                + "idp_issuer=:IdpIssuer,idp_subject=:IdpSubject,auth_provider=:AuthProvider "
+                + "idpissuer=:IdpIssuer,idpsubject=:IdpSubject,authprovider=:AuthProvider "
                 + "where username=:username and tenantid=:tenantid and type=:type";
     }
 

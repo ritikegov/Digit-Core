@@ -606,9 +606,9 @@ public class UserRepository {
         userInputs.put("createdby", entityUser.getLoggedInUserId());
         userInputs.put("lastmodifiedby", entityUser.getLoggedInUserId());
         userInputs.put("alternatemobilenumber", entityUser.getAlternateMobileNumber());
-        userInputs.put("idp_issuer", entityUser.getIdpIssuer());
-        userInputs.put("idp_subject", entityUser.getIdpSubject());
-        userInputs.put("auth_provider", entityUser.getAuthProvider());
+        userInputs.put("idpissuer", entityUser.getIdpIssuer());
+        userInputs.put("idpsubject", entityUser.getIdpSubject());
+        userInputs.put("authprovider", entityUser.getAuthProvider());
 
         // replaced schema placeholder with tenant specific schema name
         String query = databaseSchemaUtils.replaceSchemaPlaceholder(userTypeQueryBuilder.getInsertUserQuery(),
