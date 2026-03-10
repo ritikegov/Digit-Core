@@ -94,15 +94,16 @@ public class ElasticsearchUtil {
 
     public void esPost(String uri, String request) {
         try {
-            log.debug("Record being indexed: {}", request);
+            log.info("Record being indexed: {}", request);
 
             final HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON_UTF8);
             headers.add("Authorization", getESEncodedCredentials());
             final HttpEntity<String> entity = new HttpEntity<>(request, headers);
-
+            log.info("before pushing to elastic search::::"+uri);
             String response = restTemplate.postForObject(uri, entity, String.class);
-
+            log.info("after pushing to elastic search::::");
+            log.info("response::::"+response);
             if (uri.contains("_bulk") && JsonPath.read(response, ERRORS_PATH).equals(true)) {
                 log.info("Indexing FAILED!!!!");
                 log.info("Response from ES: {}", response);
