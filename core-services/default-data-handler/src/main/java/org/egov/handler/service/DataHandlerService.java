@@ -50,10 +50,13 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StreamUtils;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -368,6 +371,8 @@ public class DataHandlerService {
 
         createBoundaryDefinitionFromFile(defaultDataRequest.getRequestInfo(), defaultDataRequest.getTargetTenantId());
         createBoundaryEntityFromFile(defaultDataRequest.getRequestInfo(), defaultDataRequest.getTargetTenantId());
+        // wait until boundary data is available
+        waitForBoundaryData(defaultDataRequest.getTargetTenantId(), defaultDataRequest.getRequestInfo());
         createBoundaryRelationshipFromFile(defaultDataRequest.getRequestInfo(), defaultDataRequest.getTargetTenantId());
     }
 
@@ -467,5 +472,63 @@ public class DataHandlerService {
 //            throw new CustomException("BOUNDARY_DATA_CREATE_FAILED", "Failed to create boundary data for " + targetTenantId + " : " + e.getMessage());
         }
     }
+    
+    private void waitForBoundaryData(String tenantId, RequestInfo requestInfo) {
+
+        int maxAttempts = 10;
+        int delay = 2000;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+
+            try {
+
+                if (boundaryEntityDataExists(tenantId, requestInfo)) {
+                    log.info("Boundary entity data available for tenant {}", tenantId);
+                    return;
+                }
+
+            } catch (Exception e) {
+                log.warn("Error while checking boundary data for tenant {}", tenantId, e);
+            }
+
+            log.info("Boundary data not ready for tenant {}. Retry attempt {}", tenantId, attempt);
+
+            try {
+                Thread.sleep(delay);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        throw new RuntimeException("Boundary data not available after waiting for tenant " + tenantId);
+    }
+    
+	private boolean boundaryEntityDataExists(String tenantId, RequestInfo requestInfo) {
+
+		String searchUri = serviceConfig.getBoundaryEntitySearchUri();
+
+	    UriComponentsBuilder builder = UriComponentsBuilder
+	            .fromHttpUrl(searchUri)
+	            .queryParam("tenantId", tenantId);
+
+	    HttpHeaders headers = new HttpHeaders();
+	    headers.setContentType(MediaType.APPLICATION_JSON);
+
+	    ObjectNode payload = objectMapper.createObjectNode();
+	    payload.set("RequestInfo", objectMapper.valueToTree(requestInfo));
+
+	    HttpEntity<JsonNode> entity = new HttpEntity<>(payload, headers);
+
+	    ResponseEntity<JsonNode> response = restTemplate.exchange(
+	            builder.toUriString(),
+	            HttpMethod.POST,
+	            entity,
+	            JsonNode.class
+	    );
+
+	    JsonNode boundaries = response.getBody().path("Boundary");
+
+	    return boundaries.isArray() && boundaries.size() > 0;
+	}
 
 }

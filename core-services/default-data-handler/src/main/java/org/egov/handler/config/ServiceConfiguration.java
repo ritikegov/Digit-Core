@@ -131,4 +131,12 @@ public class ServiceConfiguration {
 
     @Value("${egov.boundary.host}${egov.boundary.relationship.create}")
     private String boundaryRelationshipCreateUri;
+    
+    @Value("${egov.boundary.host}${egov.boundary.entity.search}")
+    private String boundaryEntitySearchUri;
+    
+    @Value("${egov.boundary.host}${egov.boundary.hierarchy.definition.search}")
+    private String hierarchyDefinitionSearchUri;
+    
+    
 }
