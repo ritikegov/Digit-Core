@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonMappingException;
 import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
 import lombok.extern.slf4j.Slf4j;
+import org.egov.common.contract.response.ResponseInfo;
 import org.egov.tracer.config.TracerProperties;
 import org.egov.tracer.http.filters.MultiReadRequestWrapper;
 import org.egov.tracer.kafka.ErrorQueueProducer;
@@ -30,6 +31,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.dao.DataAccessException;
 import org.springframework.web.client.ResourceAccessException;
 
 import jakarta.servlet.ServletInputStream;
@@ -85,7 +87,21 @@ public class ExceptionAdvise {
         List<Error> errors = new ArrayList<>();
 
         try {
-            if (ex instanceof HttpMediaTypeNotSupportedException) {
+            if (ex instanceof DataAccessException) {
+                DataAccessException dataAccessException = (DataAccessException) ex;
+                Throwable rootCause = dataAccessException.getMostSpecificCause();
+                String errorMessage = "Database query failed: "
+                        + (rootCause != null ? rootCause.getMessage() : ex.getMessage());
+                Error error = new Error();
+                error.setCode("QUERY_EXECUTION_ERROR");
+                error.setMessage(errorMessage);
+                error.setDescription(errorMessage);
+                errors.add(error);
+                errorRes.setErrors(errors);
+                errorRes.setResponseInfo(ResponseInfo.builder().status("failed").build());
+                sendErrorMessage(body, ex, request.getRequestURL().toString(), errorRes, isJsonContentType);
+                return new ResponseEntity<>(errorRes, HttpStatus.INTERNAL_SERVER_ERROR);
+            } else if (ex instanceof HttpMediaTypeNotSupportedException) {
                 errorRes.setErrors(new ArrayList<>(Collections.singletonList(new Error("UnsupportedMediaType", "An " +
                         "unsupported media Type was used - " + request.getContentType(), null, null))));
             } else if (ex instanceof ResourceAccessException) {
