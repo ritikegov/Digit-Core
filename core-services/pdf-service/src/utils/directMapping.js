@@ -352,8 +352,8 @@ export const directMapping = async (
   }
   catch (error) {
     logger.error(error.stack || error);
-    let errorMessage = (error?.response?.data?.Errors
-        && error.response.data.Errors[0] && error?.response?.data?.Errors[0]?.message) || error?.message;
+    let errorMessage = (error.response && error.response.data && error.response.data.Errors
+        && error.response.data.Errors[0] && error.response.data.Errors[0].message) || error.message;
     throw { message: `Error in localisation service call: ${errorMessage}` };
   }
 
