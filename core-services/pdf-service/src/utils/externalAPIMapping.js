@@ -168,7 +168,7 @@ export const externalAPIMapping = async function (
       accept: "application/json, text/plain"
     };*/
 
-    header.TENANTID = envVariables.STATE_LEVEL_TENANT_ID;
+    header.TENANTID = getStateLevelTenant(get(requestInfo, "userInfo.tenantId"));
 
     let headerConfig = {
       headers: header
@@ -197,9 +197,11 @@ export const externalAPIMapping = async function (
     responses = await Promise.all(responsePromises)
   } catch (error) {
     logger.error(error.stack || error);
+    let errorMessage = (error.response && error.response.data && error.response.data.Errors
+        && error.response.data.Errors[0] && error.response.data.Errors[0].message) || error.message;
     throw{
-      message: `Error in external service call: ${error.Errors[0].message}`
-    }; 
+      message: `Error in external service call: ${errorMessage}`
+    };
   }
   
   for (let i = 0; i < externalAPIArray.length; i++) {
@@ -394,9 +396,11 @@ export const externalAPIMapping = async function (
   }
   catch (error) {
     logger.error(error.stack || error);
+    let errorMessage = (error.response && error.response.data && error.response.data.Errors
+        && error.response.data.Errors[0] && error.response.data.Errors[0].message) || error.message;
     throw{
-      message: `Error in localisation service call: ${error.Errors[0].message}`
-    }; 
+      message: `Error in localisation service call: ${errorMessage}`
+    };
   }
 
   Object.keys(variableTovalueMap).forEach(function(key) {

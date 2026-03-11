@@ -52,15 +52,11 @@ export const getTransformedLocale = (label) => {
     return cacheData;
   }
   else{
-    let statetenantid = get(
-      requestInfo,
-      "userInfo.tenantId",
-      defaultTenant
-    ).split(".")[0];
-  
-  
+    let requestInfoTenant = get(requestInfo, "userInfo.tenantId", defaultTenant);
+    let statetenantid = getStateLevelTenant(requestInfoTenant);
+
     let url = egovLocHost + egovLocSearchCall;
-  
+
     let request = {
       RequestInfo: requestInfo,
       messageSearchCriteria:{
@@ -69,15 +65,15 @@ export const getTransformedLocale = (label) => {
         codes: []
       }
     };
-  
+
     request.messageSearchCriteria.module = moduleList.toString();
     request.messageSearchCriteria.codes = codeList.toString().split(",");
-  
+
     let headers = {
       headers:{
         "content-type": "application/json;charset=UTF-8",
         accept: "application/json, text/plain, */*",
-        "TENANTID":envVariables.STATE_LEVEL_TENANT_ID
+        "TENANTID": statetenantid
       }
     };
 
@@ -210,19 +206,62 @@ export const convertFooterStringtoFunctionIfExist = (footer) => {
 };
 
 export const isEnvironmentCentralInstance = () => {
-  if (envVariables.IS_ENVIRONMENT_CENTRAL_INSTANCE == true || envVariables.IS_ENVIRONMENT_CENTRAL_INSTANCE == 'true') {
-    return true;
-  } else {
-    return false;
-  }
+  return envVariables.IS_ENVIRONMENT_CENTRAL_INSTANCE == true;
 }
 
 export const getStateSchemaIndexPositionInTenantId = () => {
-  if (envVariables.STATE_SCHEMA_INDEX_POSITION_TENANTID && !isNaN(envVariables.STATE_SCHEMA_INDEX_POSITION_TENANTID)) {
-    parseInt(envVariables.STATE_SCHEMA_INDEX_POSITION_TENANTID);
-  } else {
+  const value = envVariables.STATE_SCHEMA_INDEX_POSITION_TENANTID;
+
+  // Explicitly check for null/undefined before numeric conversion.
+  if (value === null || value === undefined) {
     return 1;
   }
+
+  const num = Number(value);
+
+  // Use Number.isNaN for a robust check; it handles non-numeric strings
+  // correctly while allowing 0.
+  if (Number.isNaN(num)) {
+    return 1;
+  }
+
+  // Use the radix parameter with parseInt.
+  return parseInt(value, 10);
+}
+
+/**
+ * Derives the state-level tenant from a tenantId, mirroring
+ * MultiStateInstanceUtil.getStateLevelTenant() from services-common.
+ *
+ * For central instances:
+ *   - If tenantId has more segments than STATE_LEVEL_TENANT_ID_LENGTH,
+ *     returns the first N segments joined by "."
+ *   - Otherwise returns the full tenantId
+ *
+ * For non-central instances:
+ *   - Returns the first segment of the tenantId
+ *
+ * @param {string} tenantId
+ * @returns {string} state-level tenant
+ */
+export const getStateLevelTenant = (tenantId) => {
+  if (!tenantId) return defaultTenant;
+
+  let tenantArray = tenantId.split(".");
+  let stateTenant = tenantArray[0];
+
+  if (isEnvironmentCentralInstance()) {
+    let stateLevelTenantIdLength = parseInt(envVariables.STATE_LEVEL_TENANT_ID_LENGTH) || 1;
+    if (stateLevelTenantIdLength < tenantArray.length) {
+      for (let i = 1; i < stateLevelTenantIdLength; i++) {
+        stateTenant = stateTenant + "." + tenantArray[i];
+      }
+    } else {
+      stateTenant = tenantId;
+    }
+  }
+
+  return stateTenant;
 }
 
 
