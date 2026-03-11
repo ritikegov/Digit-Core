@@ -66,6 +66,26 @@ CREATE INDEX IF NOT EXISTS idx_eg_user_idp_details_userid_tenantid
 CREATE INDEX IF NOT EXISTS idx_eg_user_idp_details_uuid 
     ON eg_user_idp_details (uuid);
 
+-- =====================================================
+-- Token Replay Protection: Add unique constraint for tokenId
+-- =====================================================
+
+-- Add unique constraint on tokenId within tenant to prevent token replay
+-- This ensures no duplicate tokens can be inserted, solving the race condition
+ALTER TABLE eg_user_idp_details
+    ADD CONSTRAINT IF NOT EXISTS eg_user_idp_details_tokenid_tenantid_key
+        UNIQUE (tokenid, tenantid);
+
+-- Create index for better performance on token replay checks
+CREATE INDEX IF NOT EXISTS idx_eg_user_idp_details_tokenid_tenantid 
+    ON eg_user_idp_details (tokenid, tenantid) 
+    WHERE tokenid IS NOT NULL;
+
+-- Add check constraint to ensure tokenId is not empty when present
+ALTER TABLE eg_user_idp_details
+    ADD CONSTRAINT IF NOT EXISTS eg_user_idp_details_tokenid_not_empty 
+        CHECK (tokenid IS NULL OR length(trim(tokenid)) > 0);
+
 
 -- =====================================================
 -- Table: eg_user_idp_details_audit_table

@@ -3,8 +3,23 @@ package org.egov.user.repository.builder;
 import static org.egov.user.utils.DatabaseSchemaUtils.SCHEMA_REPLACE_STRING;
 
 /**
- * SQL constants for eg_user_idp_details and eg_user_idp_details_audit_table.
- * Schema placeholder {schema} must be replaced via DatabaseSchemaUtils.replaceSchemaPlaceholder.
+ * SQL query builder for user IDP details operations.
+ * 
+ * <p>This class contains SQL constants for managing user identity provider details
+ * in the eg_user_idp_details and eg_user_idp_details_audit_table tables. All queries
+ * use schema placeholders that must be replaced via DatabaseSchemaUtils for proper
+ * multi-tenant support.</p>
+ * 
+ * <p>Key operations supported:</p>
+ * <ul>
+ *   <li>Upsert operations with conflict resolution for IDP details</li>
+ *   <li>Audit trail insertion for tracking changes</li>
+ *   <li>Token replay protection queries</li>
+ * </ul>
+ * 
+ * <p>The upsert operation uses PostgreSQL ON CONFLICT clause to handle concurrent
+ * updates and maintain data consistency. The audit table tracks all changes for
+ * compliance and debugging purposes.</p>
  */
 public final class UserIdpDetailsQueryBuilder {
 

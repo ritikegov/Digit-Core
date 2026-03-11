@@ -45,6 +45,30 @@ import static java.util.Objects.isNull;
 import static java.util.Objects.requireNonNull;
 import static org.springframework.util.StringUtils.isEmpty;
 
+/**
+ * Authentication provider for JWT exchange flow with SSO integration.
+ * 
+ * <p>This provider handles the complete authentication lifecycle for SSO users using
+ * JWT tokens from identity providers. It supports both existing user updates and new
+ * user creation scenarios with comprehensive security features including token replay
+ * protection, MFA enrichment, and HRMS integration.</p>
+ * 
+ * <p>Key capabilities:</p>
+ * <ul>
+ *   <li>JWT token validation and claim extraction</li>
+ *   <li>User lookup by issuer, subject, and tenant</li>
+ *   <li>Automatic user creation with HRMS integration</li>
+ *   <li>Role and designation mapping from JWT claims</li>
+ *   <li>MFA device registration and enforcement</li>
+ *   <li>Token replay protection for security</li>
+ *   <li>Account status validation and unlock functionality</li>
+ *   <li>Multi-tenant support with proper schema routing</li>
+ * </ul>
+ * 
+ * <p>The provider integrates with multiple external services including HRMS for employee
+ * management, Graph services for MFA enrichment, and various identity providers for
+ * SSO authentication.</p>
+ */
 @Slf4j
 @Component
 public class JwtExchangeAuthenticationProvider implements AuthenticationProvider {

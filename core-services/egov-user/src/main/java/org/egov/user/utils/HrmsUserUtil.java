@@ -21,8 +21,32 @@ import java.util.UUID;
 
 /**
  * Utility class for creating HRMS users with employee details.
- * This utility searches for boundary information, creates an employee
- * in egov-hrms with boundary details, and returns the created user.
+ * 
+ * <p>This utility handles the complete workflow for creating employees in the eGov-HRMS system:
+ * <ul>
+ *   <li>Searches for boundary hierarchy definitions using boundary-service</li>
+ *   <li>Retrieves boundary relationships and codes for jurisdiction assignment</li>
+ *   <li>Creates employee records in HRMS with proper boundary assignments</li>
+ *   <li>Publishes error events to DLQ for failed employee creation attempts</li>
+ * </ul>
+ * </p>
+ * 
+ * <p>The utility integrates with multiple external services:
+ * <ul>
+ *   <li>Boundary Service - for retrieving jurisdiction information</li>
+ *   <li>HRMS Service - for employee creation and management</li>
+ *   <li>Kafka - for error event publishing</li>
+ * </ul>
+ * </p>
+ * 
+ * <p><strong>Note:</strong> Employee creation in HRMS is not rolled back if subsequent steps fail.
+ * No compensation (void/delete) operations are performed. Local database operations are not used,
+ * therefore {@code @Transactional} does not apply to these methods.</p>
+ * 
+ * @author eGov User Service
+ * @since 1.0
+ * @see org.egov.user.domain.model.hrms.Employee
+ * @see org.egov.user.domain.model.boundary.BoundaryTypeHierarchyResponse
  */
 @Component
 @Slf4j
@@ -65,6 +89,12 @@ public class HrmsUserUtil {
         @Value("${egov.boundary.relationships.search.url}")
         private String boundaryRelationshipsSearchUrl;
 
+        /**
+         * Constructs a new HrmsUserUtil with required dependencies.
+         *
+         * @param restTemplate the RestTemplate for making HTTP calls to external services
+         * @param kafkaProducer the Kafka producer for publishing error events to DLQ
+         */
         @Autowired
         public HrmsUserUtil(RestTemplate restTemplate, Producer kafkaProducer) {
                 this.restTemplate = restTemplate;
@@ -128,6 +158,14 @@ public class HrmsUserUtil {
                 return response;
         }
 
+        /**
+         * Extracts hierarchy type from boundary hierarchy response or throws exception.
+         * 
+         * @param response the boundary hierarchy response containing hierarchy definitions
+         * @param tenantId the tenant ID for error reporting
+         * @return the hierarchy type (e.g. "REVENUE", "ADMIN")
+         * @throws CustomException if hierarchy is empty or hierarchy type is null/empty
+         */
         private String getHierarchyTypeOrThrow(BoundaryTypeHierarchyResponse response, String tenantId) {
                 List<org.egov.user.domain.model.boundary.BoundaryTypeHierarchyDefinition> hierarchy = response == null
                         ? null
@@ -146,6 +184,15 @@ public class HrmsUserUtil {
                 return type.trim();
         }
 
+        /**
+         * Extracts boundary code and type from boundary search response or throws exception.
+         * 
+         * @param response the boundary search response containing tenant boundaries
+         * @param hierarchyType the hierarchy type for error reporting
+         * @param tenantId the tenant ID for error reporting
+         * @return BoundaryCodeAndType containing the boundary code and type
+         * @throws CustomException if tenant boundary, boundary list, or boundary code is empty/null
+         */
         private BoundaryCodeAndType getBoundaryCodeAndTypeOrThrow(BoundarySearchResponse response,
                         String hierarchyType, String tenantId) {
                 List<HierarchyRelation> tenantBoundary = response == null ? null : response.getTenantBoundary();
@@ -172,19 +219,42 @@ public class HrmsUserUtil {
                 return new BoundaryCodeAndType(code.trim(), boundaryType != null ? boundaryType.trim() : null);
         }
 
+        /**
+         * Immutable data holder for boundary code and boundary type.
+         * 
+         * <p>This private inner class encapsulates the boundary code and type
+         * extracted from the boundary service response, providing type safety
+         * and immutability for boundary information.</p>
+         */
         private static final class BoundaryCodeAndType {
                 private final String code;
                 private final String boundaryType;
 
+                /**
+                 * Constructs a new BoundaryCodeAndType with the specified code and type.
+                 *
+                 * @param code the boundary code (must not be null)
+                 * @param boundaryType the boundary type (may be null)
+                 */
                 BoundaryCodeAndType(String code, String boundaryType) {
                         this.code = code;
                         this.boundaryType = boundaryType;
                 }
 
+                /**
+                 * Gets the boundary code.
+                 *
+                 * @return the boundary code
+                 */
                 String getCode() {
                         return code;
                 }
 
+                /**
+                 * Gets the boundary type.
+                 *
+                 * @return the boundary type, or null if not specified
+                 */
                 String getBoundaryType() {
                         return boundaryType;
                 }
@@ -349,6 +419,25 @@ public class HrmsUserUtil {
                 return employee.getUser();
         }
 
+        /**
+         * Publishes HRMS employee creation error events to the Dead Letter Queue (DLQ).
+         * 
+         * <p>This method creates an error event containing all relevant context about
+         * the failed employee creation attempt and publishes it to the configured DLQ topic.
+         * The event includes user details, employee information, and JWT context if available.</p>
+         * 
+         * <p>If publishing to DLQ fails, the error is logged but does not prevent the
+         * original exception from being propagated to the caller.</p>
+         * 
+         * @param user the user for whom employee creation failed
+         * @param tenantId the tenant ID
+         * @param employeeType the employee type that was being created
+         * @param designation the designation that was being assigned
+         * @param department the department that was being assigned
+         * @param jwt the JWT token (may be null)
+         * @param errorCode the error code for classification
+         * @param errorMessage the detailed error message
+         */
         private void publishHrmsCreationErrorToDlq(User user, String tenantId,
                         String employeeType, String designation, String department, OidcValidatedJwt jwt,
                         String errorCode, String errorMessage) {
@@ -382,6 +471,20 @@ public class HrmsUserUtil {
                 }
         }
 
+        /**
+         * Executes HTTP POST request to external services and returns the response.
+         * 
+         * <p>This generic method handles HTTP POST requests to external services with
+         * proper error handling and response mapping. It converts HTTP client errors
+         * and general exceptions into CustomException with appropriate error codes.</p>
+         * 
+         * @param <T> the expected response type
+         * @param uri the complete URI of the service endpoint
+         * @param request the request body to be sent
+         * @param clazz the response class for type conversion
+         * @return the response object of type T
+         * @throws CustomException if HTTP client error or service request fails
+         */
         public <T> T fetchResult(StringBuilder uri, Object request, Class<T> clazz) {
                 T response;
                 try {

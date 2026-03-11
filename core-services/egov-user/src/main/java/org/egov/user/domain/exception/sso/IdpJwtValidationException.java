@@ -3,7 +3,22 @@ package org.egov.user.domain.exception.sso;
 import org.egov.user.security.oauth2.custom.jwt.SsoErrorCodes;
 import org.springframework.http.HttpStatus;
 
-/** Thrown when IdP JWT validation fails (parse, signature, issuer, expiry). */
+/**
+ * Exception thrown when IdP JWT validation fails.
+ * 
+ * <p>This exception is used for various JWT validation issues during SSO authentication:</p>
+ * <ul>
+ *   <li>JWT parsing failures (malformed tokens)</li>
+ *   <li>Signature validation failures</li>
+ *   <li>Token expiration</li>
+ *   <li>Invalid claims or structure</li>
+ *   <li>Cryptographic validation errors</li>
+ * </ul>
+ * 
+ * <p>Each factory method provides a specific validation error scenario with appropriate
+ * HTTP status codes and error codes for client handling. The exception preserves
+ * the original cause for debugging and logging purposes.</p>
+ */
 public class IdpJwtValidationException extends SsoException {
 
     public IdpJwtValidationException(String errorCode, String message) {

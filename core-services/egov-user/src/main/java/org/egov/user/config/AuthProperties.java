@@ -9,6 +9,25 @@ import org.springframework.context.annotation.Configuration;
 import java.io.IOException;
 import java.util.*;
 
+/**
+ * Configuration properties for authentication and SSO settings.
+ * 
+ * <p>This class holds all configuration related to OIDC/SSO authentication including
+ * provider configurations, forwarding settings, and various authentication parameters.
+ * The configuration is typically loaded from application properties with the "auth" prefix.</p>
+ * 
+ * <p>Key features supported:</p>
+ * <ul>
+ *   <li>OIDC provider configuration (static or MDMS-based)</li>
+ *   <li>Multiple identity provider support with issuer aliases</li>
+ *   <li>Role and designation mapping from JWT claims</li>
+ *   <li>Microsoft Graph integration for MFA enrichment</li>
+ *   <li>Audience validation and security settings</li>
+ * </ul>
+ * 
+ * @see org.egov.user.config.AuthProperties.Oidc
+ * @see org.egov.user.config.AuthProperties.Provider
+ */
 @Getter
 @Setter
 @Configuration
@@ -19,6 +38,12 @@ public class AuthProperties {
     private Forward forward = new Forward();
     private List<Provider> providers = new ArrayList<>();
 
+    /**
+     * OIDC configuration settings.
+     * 
+     * <p>Controls the overall OIDC authentication behavior including provider source
+     * selection and enablement flag. When disabled, OIDC authentication is bypassed.</p>
+     */
     @Getter
     @Setter
     public static class Oidc {
@@ -30,6 +55,13 @@ public class AuthProperties {
         private String providersSource = OidcConfigConstants.PROVIDERS_SOURCE_STATIC;
     }
 
+    /**
+     * Forward authentication configuration.
+     * 
+     * <p>Controls how authentication tokens are forwarded to downstream services
+     * in the request chain. This enables token propagation for microservice
+     * authentication scenarios.</p>
+     */
     @Getter
     @Setter
     public static class Forward {
@@ -37,6 +69,23 @@ public class AuthProperties {
         private boolean requestinfoAuthtoken = false;
     }
 
+    /**
+     * OIDC provider configuration.
+     * 
+     * <p>Represents a complete configuration for an OIDC identity provider including
+     * endpoints, validation rules, role mappings, and integration settings. Each provider
+     * supports comprehensive JWT token validation and user attribute mapping.</p>
+     * 
+     * <p>Key capabilities:</p>
+     * <ul>
+     *   <li>JWT signature validation via JWKS</li>
+     *   <li>Audience and issuer validation</li>
+     *   <li>Role and designation mapping from claims</li>
+     *   <li>Microsoft Graph integration for enrichment</li>
+     *   <li>Multiple issuer URI support via aliases</li>
+     *   <li>IdP user validation for username/password login</li>
+     * </ul>
+     */
     @Getter
     public static class Provider {
         private final String id;

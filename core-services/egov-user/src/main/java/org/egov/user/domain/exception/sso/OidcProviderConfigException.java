@@ -3,7 +3,21 @@ package org.egov.user.domain.exception.sso;
 import org.egov.user.security.oauth2.custom.jwt.SsoErrorCodes;
 import org.springframework.http.HttpStatus;
 
-/** Thrown when OIDC provider configuration is missing or invalid (issuer, JWKS, provider resolution). */
+/**
+ * Exception thrown when OIDC provider configuration is missing or invalid.
+ * 
+ * <p>This exception is used for various OIDC provider configuration issues including:</p>
+ * <ul>
+ *   <li>Missing or invalid JWKS URI</li>
+ *   <li>Missing or invalid issuer URI</li>
+ *   <li>Missing audience configuration</li>
+ *   <li>Provider resolution failures</li>
+ *   <li>Issuer mismatches between token and configuration</li>
+ * </ul>
+ * 
+ * <p>Each factory method provides a specific error scenario with appropriate
+ * HTTP status codes and error codes for client handling.</p>
+ */
 public class OidcProviderConfigException extends SsoException {
 
     public OidcProviderConfigException(String errorCode, String message) {

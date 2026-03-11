@@ -17,6 +17,21 @@ import static org.mockito.Matchers.anyMap;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.*;
 
+/**
+ * Test suite for UserIdpDetailsRepository.
+ * 
+ * <p>Comprehensive unit tests covering all repository operations including:</p>
+ * <ul>
+ *   <li>Upsert operations with proper SQL query generation</li>
+ *   <li>Audit trail insertion for change tracking</li>
+ *   <li>Token replay protection queries</li>
+ *   <li>Schema placeholder replacement for multi-tenant support</li>
+ *   <li>Parameter binding and validation</li>
+ * </ul>
+ * 
+ * <p>Tests use mock objects to isolate the repository logic and verify proper
+ * interaction with the JDBC template and schema utilities.</p>
+ */
 public class UserIdpDetailsRepositoryTest {
 
     private NamedParameterJdbcTemplate jdbcTemplate;
