@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -18,6 +19,6 @@ public class StaticOidcProviderSupplier implements OidcProviderSupplier {
 
     @Override
     public List<AuthProperties.Provider> getProviders() {
-        return authProperties.getProviders();
+        return new ArrayList<>(authProperties.getProviders()); // Defensive copy
     }
 }

@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.log4j.MDC;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.utils.MultiStateInstanceUtil;
+import org.egov.tracer.model.CustomException;
 import org.egov.user.config.*;
 import org.egov.user.domain.exception.DuplicateUserNameException;
 import org.egov.user.domain.exception.UserNotFoundException;
@@ -22,8 +23,7 @@ import org.egov.user.domain.service.utils.EncryptionDecryptionUtil;
 import org.egov.user.security.oauth2.custom.service.EmployeeCreationProfile;
 import org.egov.user.security.oauth2.custom.service.IdpGraphService;
 import org.egov.user.security.oauth2.custom.service.impl.NoOpGraphService;
-import org.egov.tracer.model.CustomException;
-import org.egov.user.utils.ProjectEmployeeStaffUtil;
+import org.egov.user.utils.HrmsUserUtil;
 import org.egov.user.web.contract.auth.OidcValidatedJwt;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -52,7 +52,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
     private final JwtValidationService jwtValidationService;
     private final UserService userService;
     private final MultiStateInstanceUtil centraInstanceUtil;
-    private final ProjectEmployeeStaffUtil projectEmployeeStaffUtil;
+    private final HrmsUserUtil hrmsUserUtil;
     private final OidcProviderSupplier oidcProviderSupplier;
     private final List<IdpGraphService> graphServices;
     private final AccessTokenMfaExtractor accessTokenMfaExtractor;
@@ -64,7 +64,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
     public JwtExchangeAuthenticationProvider(
             JwtValidationService jwtValidationService,
             UserService userService, MultiStateInstanceUtil centraInstanceUtil,
-            ProjectEmployeeStaffUtil projectEmployeeStaffUtil,
+            HrmsUserUtil hrmsUserUtil,
             OidcProviderSupplier oidcProviderSupplier,
             List<IdpGraphService> graphServices,
             AccessTokenMfaExtractor accessTokenMfaExtractor,
@@ -75,7 +75,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
         this.jwtValidationService = jwtValidationService;
         this.userService = userService;
         this.centraInstanceUtil = centraInstanceUtil;
-        this.projectEmployeeStaffUtil = projectEmployeeStaffUtil;
+        this.hrmsUserUtil = hrmsUserUtil;
         this.oidcProviderSupplier = oidcProviderSupplier;
         this.graphServices = graphServices != null ? graphServices : new ArrayList<>();
         this.accessTokenMfaExtractor = requireNonNull(accessTokenMfaExtractor,
@@ -303,7 +303,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
 
         org.egov.user.domain.model.hrms.User hrmsUser;
         try {
-            hrmsUser = projectEmployeeStaffUtil.createEmployeeAndProjectStaff(
+            hrmsUser = hrmsUserUtil.createHrmsUser(
                     userToCreate, employeeType, designation, department,
                     provider.getDefaultEmployeeStatus(), tenantId, jwt.getOid(),
                     provider.getDefaultBoundaryHierarchyType(), jwt, requestInfo);
@@ -314,7 +314,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
             throw e;
         }
 
-        log.info("Created HRMS user and staff mapping for user service uuid: {}", hrmsUser.getUserServiceUuid());
+        log.info("Created HRMS user for user service uuid: {}", hrmsUser.getUserServiceUuid());
 
         User createdUser = convertHrmsUserToUser(hrmsUser);
         createdUser.setPassword(password);
@@ -417,14 +417,15 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
         if (!StringUtils.hasText(tokenIssuer)) {
             throw OidcProviderConfigException.issuerMismatch(String.valueOf(tokenIssuer), provider.getId());
         }
+        String normalizedTokenIssuer = normalizeIssuer(tokenIssuer);
         String issuerUri = provider.getIssuerUri();
-        if (StringUtils.hasText(issuerUri) && tokenIssuer.trim().equals(issuerUri.trim())) {
+        if (StringUtils.hasText(issuerUri) && normalizedTokenIssuer.equals(normalizeIssuer(issuerUri))) {
             return;
         }
         List<String> aliases = provider.getIssuerAliases();
         if (aliases != null) {
             for (String alias : aliases) {
-                if (StringUtils.hasText(alias) && tokenIssuer.trim().equals(alias.trim())) {
+                if (StringUtils.hasText(alias) && normalizedTokenIssuer.equals(normalizeIssuer(alias))) {
                     return;
                 }
             }
@@ -587,10 +588,9 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
         }
 
         String username = jwt.getPreferredUsername();
-
         return org.egov.user.domain.model.hrms.User.builder()
                 .uuid(jwt.getExternalUserId())
-                .emailId(jwt.getEmail())
+                .emailId(jwt.getPreferredUsername())
                 .active(true)
                 .accountLocked(false)
                 .tenantId(jwt.getTenantId())
@@ -760,6 +760,20 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
             user.setMfaDetails(mfa.getMfaDetails());
         if (mfa.getMfaRegisteredOn() != null)
             user.setMfaRegisteredOn(mfa.getMfaRegisteredOn());
+    }
+
+    /**
+     * Normalizes issuer URI by trimming whitespace and removing trailing slashes.
+     * This ensures consistent issuer matching across the authentication flow.
+     *
+     * @param issuer the issuer URI to normalize
+     * @return normalized issuer URI, or null if input is null
+     */
+    private String normalizeIssuer(String issuer) {
+        if (issuer == null) {
+            return null;
+        }
+        return issuer.trim().replaceAll("/+$", "");
     }
 
 }

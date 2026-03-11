@@ -1,6 +1,5 @@
 package org.egov.user.utils;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.tracer.model.CustomException;
 import org.egov.user.domain.model.boundary.BoundarySearchResponse;
@@ -18,19 +17,19 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.when;
+import static org.mockito.Matchers.*;
+import static org.mockito.Mockito.*;
 
 @RunWith(MockitoJUnitRunner.class)
-public class ProjectEmployeeStaffUtilTest {
+public class HrmsUserUtilTest {
 
     @Mock
     private RestTemplate restTemplate;
@@ -38,16 +37,17 @@ public class ProjectEmployeeStaffUtilTest {
     @Mock
     private Producer kafkaProducer;
 
-    private ProjectEmployeeStaffUtil projectEmployeeStaffUtil;
+    private HrmsUserUtil hrmsUserUtil;
 
     @Before
     public void setup() {
-        projectEmployeeStaffUtil = new ProjectEmployeeStaffUtil(restTemplate, kafkaProducer);
-        ReflectionTestUtils.setField(projectEmployeeStaffUtil, "hrmsServiceHost", "http://hrms-service");
-        ReflectionTestUtils.setField(projectEmployeeStaffUtil, "hrmsEmployeeCreateUrl", "/hrms/employee/v1/_create");
-        ReflectionTestUtils.setField(projectEmployeeStaffUtil, "boundaryServiceHost", "http://boundary-service");
-        ReflectionTestUtils.setField(projectEmployeeStaffUtil, "boundaryHierarchySearchUrl", "/boundary/hierarchy/v1/_search");
-        ReflectionTestUtils.setField(projectEmployeeStaffUtil, "boundaryRelationshipsSearchUrl", "/boundary/relationships/v1/_search");
+        hrmsUserUtil = new HrmsUserUtil(restTemplate, kafkaProducer);
+        ReflectionTestUtils.setField(hrmsUserUtil, "hrmsServiceHost", "http://hrms-service");
+        ReflectionTestUtils.setField(hrmsUserUtil, "hrmsEmployeeCreateUrl", "/hrms/employee/v1/_create");
+        ReflectionTestUtils.setField(hrmsUserUtil, "boundaryServiceHost", "http://boundary-service");
+        ReflectionTestUtils.setField(hrmsUserUtil, "boundaryHierarchySearchUrl", "/boundary/hierarchy/v1/_search");
+        ReflectionTestUtils.setField(hrmsUserUtil, "boundaryRelationshipsSearchUrl", "/boundary/relationships/v1/_search");
+        ReflectionTestUtils.setField(hrmsUserUtil, "hrmsErrorDlqTopic", "hrms-error-dlq");
     }
 
     @Test
@@ -66,7 +66,7 @@ public class ProjectEmployeeStaffUtilTest {
         when(restTemplate.postForObject(anyString(), any(), eq(BoundaryTypeHierarchyResponse.class)))
                 .thenReturn(response);
 
-        BoundaryTypeHierarchyResponse result = projectEmployeeStaffUtil.searchBoundaryHierarchyByTenantId(tenantId, requestInfo);
+        BoundaryTypeHierarchyResponse result = hrmsUserUtil.searchBoundaryHierarchyByTenantId(tenantId, requestInfo);
 
         assertNotNull(result);
         assertNotNull(result.getBoundaryHierarchy());
@@ -79,7 +79,7 @@ public class ProjectEmployeeStaffUtilTest {
         when(restTemplate.postForObject(anyString(), any(), eq(BoundaryTypeHierarchyResponse.class)))
                 .thenReturn(null);
 
-        projectEmployeeStaffUtil.searchBoundaryHierarchyByTenantId("tenant", new RequestInfo());
+        hrmsUserUtil.searchBoundaryHierarchyByTenantId("tenant", new RequestInfo());
     }
 
     @Test
@@ -101,7 +101,7 @@ public class ProjectEmployeeStaffUtilTest {
         when(restTemplate.postForObject(anyString(), any(), eq(BoundarySearchResponse.class)))
                 .thenReturn(response);
 
-        BoundarySearchResponse result = projectEmployeeStaffUtil.searchBoundaryByHierarchyTypeAndTenantId(
+        BoundarySearchResponse result = hrmsUserUtil.searchBoundaryByHierarchyTypeAndTenantId(
                 hierarchyType, tenantId, requestInfo);
 
         assertNotNull(result);
@@ -116,7 +116,7 @@ public class ProjectEmployeeStaffUtilTest {
         when(restTemplate.postForObject(anyString(), any(), eq(BoundarySearchResponse.class)))
                 .thenReturn(null);
 
-        projectEmployeeStaffUtil.searchBoundaryByHierarchyTypeAndTenantId("REVENUE", "tenant", new RequestInfo());
+        hrmsUserUtil.searchBoundaryByHierarchyTypeAndTenantId("REVENUE", "tenant", new RequestInfo());
     }
 
     @Test
@@ -154,7 +154,7 @@ public class ProjectEmployeeStaffUtilTest {
         when(restTemplate.postForObject(anyString(), any(), eq(EmployeeResponse.class)))
                 .thenReturn(employeeResponse);
 
-        Employee result = projectEmployeeStaffUtil.createEmployeeInHrms(
+        Employee result = hrmsUserUtil.createEmployeeInHrms(
                 user, "PERMANENT", "Designation", "Department", "EMPLOYED",
                 System.currentTimeMillis(), "tenant", "oid", null, null, requestInfo);
 
@@ -188,13 +188,13 @@ public class ProjectEmployeeStaffUtilTest {
         when(restTemplate.postForObject(anyString(), any(), eq(EmployeeResponse.class)))
                 .thenReturn(EmployeeResponse.builder().employees(Collections.emptyList()).build());
 
-        projectEmployeeStaffUtil.createEmployeeInHrms(
+        hrmsUserUtil.createEmployeeInHrms(
                 user, "PERMANENT", "Designation", "Department", "EMPLOYED",
                 System.currentTimeMillis(), "tenant", "oid", null, null, requestInfo);
     }
 
     @Test
-    public void testCreateEmployeeAndProjectStaff_Success() {
+    public void testCreateHrmsUser_Success() {
         User user = User.builder().name("John").userName("john").build();
         RequestInfo requestInfo = new RequestInfo();
 
@@ -226,7 +226,7 @@ public class ProjectEmployeeStaffUtilTest {
         when(restTemplate.postForObject(anyString(), any(), eq(EmployeeResponse.class)))
                 .thenReturn(employeeResponse);
 
-        User result = projectEmployeeStaffUtil.createEmployeeAndProjectStaff(
+        User result = hrmsUserUtil.createHrmsUser(
                 user, "PERMANENT", "Designation", "Department", "EMPLOYED",
                 "tenant", "oid", null, null, requestInfo);
 
@@ -235,7 +235,7 @@ public class ProjectEmployeeStaffUtilTest {
     }
 
     @Test(expected = CustomException.class)
-    public void testCreateEmployeeAndProjectStaff_UserServiceUuidMissing_ThrowsCustomException() {
+    public void testCreateHrmsUser_UserServiceUuidMissing_ThrowsCustomException() {
         User user = User.builder().name("John").userName("john").build();
         RequestInfo requestInfo = new RequestInfo();
 
@@ -267,8 +267,128 @@ public class ProjectEmployeeStaffUtilTest {
         when(restTemplate.postForObject(anyString(), any(), eq(EmployeeResponse.class)))
                 .thenReturn(employeeResponse);
 
-        projectEmployeeStaffUtil.createEmployeeAndProjectStaff(
+        hrmsUserUtil.createHrmsUser(
                 user, "PERMANENT", "Designation", "Department", "EMPLOYED",
                 "tenant", "oid", null, null, requestInfo);
+    }
+
+    @Test(expected = CustomException.class)
+    public void fetchResult_WhenHttpClientError_ThrowsCustomException() {
+        when(restTemplate.postForObject(anyString(), any(), eq(Object.class)))
+                .thenThrow(new HttpClientErrorException(org.springframework.http.HttpStatus.BAD_REQUEST,
+                        "bad", "error-body".getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8));
+
+        hrmsUserUtil.fetchResult(new StringBuilder("http://some-service"), new Object(), Object.class);
+    }
+
+    @Test(expected = CustomException.class)
+    public void fetchResult_WhenGenericException_ThrowsCustomException() {
+        when(restTemplate.postForObject(anyString(), any(), eq(Object.class)))
+                .thenThrow(new RuntimeException("generic error"));
+
+        hrmsUserUtil.fetchResult(new StringBuilder("http://some-service"), new Object(), Object.class);
+    }
+
+    @Test
+    public void createEmployeeInHrms_WhenHrmsFails_PublishesToDlq() {
+        User user = User.builder().name("John").userName("john").emailId("john@example.com").build();
+        RequestInfo requestInfo = new RequestInfo();
+
+        BoundaryTypeHierarchyDefinition hierarchyDef = BoundaryTypeHierarchyDefinition.builder()
+                .hierarchyType("REVENUE")
+                .build();
+        BoundaryTypeHierarchyResponse hierarchyResponse = BoundaryTypeHierarchyResponse.builder()
+                .boundaryHierarchy(Collections.singletonList(hierarchyDef))
+                .build();
+
+        EnrichedBoundary boundary = EnrichedBoundary.builder().code("B1").boundaryType("Locality").build();
+        BoundarySearchResponse boundaryResponse = BoundarySearchResponse.builder()
+                .tenantBoundary(Collections.singletonList(
+                        HierarchyRelation.builder().boundary(Collections.singletonList(boundary)).build()))
+                .build();
+
+        when(restTemplate.postForObject(contains("boundary/hierarchy"), any(), eq(BoundaryTypeHierarchyResponse.class)))
+                .thenReturn(hierarchyResponse);
+        when(restTemplate.postForObject(contains("boundary/relationships"), any(), eq(BoundarySearchResponse.class)))
+                .thenReturn(boundaryResponse);
+        when(restTemplate.postForObject(contains("/hrms/employee"), any(), eq(EmployeeResponse.class)))
+                .thenThrow(new RuntimeException("hrms failure"));
+
+        try {
+            hrmsUserUtil.createEmployeeInHrms(
+                    user, "PERMANENT", "Designation", "Department", "EMPLOYED",
+                    System.currentTimeMillis(), "tenant", "oid", null, null, requestInfo);
+        } catch (CustomException e) {
+            // expected
+        }
+
+        verify(kafkaProducer).push(eq("tenant"), anyString(), any());
+    }
+
+    @Test
+    public void createEmployeeInHrms_WhenNullResponse_PublishesToDlq() {
+        User user = User.builder().name("John").userName("john").emailId("john@example.com").build();
+        RequestInfo requestInfo = new RequestInfo();
+
+        BoundaryTypeHierarchyDefinition hierarchyDef = BoundaryTypeHierarchyDefinition.builder()
+                .hierarchyType("REVENUE")
+                .build();
+        BoundaryTypeHierarchyResponse hierarchyResponse = BoundaryTypeHierarchyResponse.builder()
+                .boundaryHierarchy(Collections.singletonList(hierarchyDef))
+                .build();
+
+        EnrichedBoundary boundary = EnrichedBoundary.builder().code("B1").boundaryType("Locality").build();
+        BoundarySearchResponse boundaryResponse = BoundarySearchResponse.builder()
+                .tenantBoundary(Collections.singletonList(
+                        HierarchyRelation.builder().boundary(Collections.singletonList(boundary)).build()))
+                .build();
+
+        when(restTemplate.postForObject(contains("boundary/hierarchy"), any(), eq(BoundaryTypeHierarchyResponse.class)))
+                .thenReturn(hierarchyResponse);
+        when(restTemplate.postForObject(contains("boundary/relationships"), any(), eq(BoundarySearchResponse.class)))
+                .thenReturn(boundaryResponse);
+        when(restTemplate.postForObject(contains("/hrms/employee"), any(), eq(EmployeeResponse.class)))
+                .thenReturn(EmployeeResponse.builder().employees(Collections.emptyList()).build());
+
+        try {
+            hrmsUserUtil.createEmployeeInHrms(
+                    user, "PERMANENT", "Designation", "Department", "EMPLOYED",
+                    System.currentTimeMillis(), "tenant", "oid", null, null, requestInfo);
+        } catch (CustomException e) {
+            // expected
+        }
+
+        verify(kafkaProducer, times(2)).push(eq("tenant"), anyString(), any());
+    }
+
+    @Test
+    public void createEmployeeInHrms_WhenDefaultBoundaryHierarchyProvided_SkipsHierarchySearch() {
+        User user = User.builder().name("John").userName("john").emailId("john@example.com").build();
+        RequestInfo requestInfo = new RequestInfo();
+
+        EnrichedBoundary boundary = EnrichedBoundary.builder().code("B1").boundaryType("Locality").build();
+        BoundarySearchResponse boundaryResponse = BoundarySearchResponse.builder()
+                .tenantBoundary(Collections.singletonList(
+                        HierarchyRelation.builder().boundary(Collections.singletonList(boundary)).build()))
+                .build();
+        Employee employee = Employee.builder()
+                .uuid("E1")
+                .user(User.builder().userServiceUuid("U1").build())
+                .build();
+        EmployeeResponse employeeResponse = EmployeeResponse.builder()
+                .employees(Collections.singletonList(employee))
+                .build();
+
+        when(restTemplate.postForObject(contains("boundary/relationships"), any(), eq(BoundarySearchResponse.class)))
+                .thenReturn(boundaryResponse);
+        when(restTemplate.postForObject(contains("/hrms/employee"), any(), eq(EmployeeResponse.class)))
+                .thenReturn(employeeResponse);
+
+        Employee result = hrmsUserUtil.createEmployeeInHrms(
+                user, "PERMANENT", "Designation", "Department", "EMPLOYED",
+                System.currentTimeMillis(), "tenant", "oid", "REVENUE", null, requestInfo);
+
+        assertNotNull(result);
+        verify(restTemplate, never()).postForObject(contains("boundary/hierarchy"), any(), eq(BoundaryTypeHierarchyResponse.class));
     }
 }

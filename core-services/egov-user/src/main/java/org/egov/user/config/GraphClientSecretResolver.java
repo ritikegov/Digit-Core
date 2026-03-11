@@ -14,7 +14,7 @@ import java.util.regex.Pattern;
  */
 @Slf4j
 @Component
-public class  GraphClientSecretResolver {
+public class GraphClientSecretResolver {
 
     private static final Pattern NON_ALPHANUMERIC = Pattern.compile("[^A-Za-z0-9]");
 

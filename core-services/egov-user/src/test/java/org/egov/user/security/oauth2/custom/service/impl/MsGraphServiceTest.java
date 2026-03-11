@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.user.config.AuthProperties;
 import org.egov.user.config.GraphClientSecretResolver;
 import org.egov.user.config.OidcConfigConstants;
+import org.egov.user.domain.exception.sso.MfaEnrichmentException;
+import org.egov.user.domain.model.User;
 import org.egov.user.security.oauth2.custom.service.EmployeeCreationProfile;
 import org.egov.user.security.oauth2.custom.service.GraphAccessTokenProvider;
 import org.junit.Before;
@@ -19,9 +21,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.Optional;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
@@ -143,5 +143,98 @@ public class MsGraphServiceTest {
     public void supports_WhenNotAzure_ReturnsFalse() {
         when(provider.getGraphServiceType()).thenReturn("other");
         assertFalse(msGraphService.supports(provider));
+    }
+
+    @Test(expected = MfaEnrichmentException.class)
+    public void enrichUserWithMfaDetails_WhenRestTemplateThrows_ThrowsMfaEnrichmentException() {
+        when(provider.getGraphClientId()).thenReturn("client");
+        when(provider.getGraphTenantId()).thenReturn("tenant");
+        when(provider.getGraphMethodsUrl()).thenReturn("https://graph.microsoft.com/v1.0/users/%s/authentication/methods");
+        when(secretResolver.resolve(provider)).thenReturn("secret");
+        when(graphAccessTokenProvider.getAccessToken(provider)).thenReturn("mock-token");
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
+                .thenThrow(new RuntimeException("graph error"));
+
+        User user = new User();
+        user.setIdpSubject(USER_OID);
+
+        msGraphService.enrichUserWithMfaDetails(user, provider, USER_OID);
+    }
+
+    @Test
+    public void enrichUserWithMfaDetails_WhenPartialJson_HandlesGracefully() {
+        when(provider.getGraphClientId()).thenReturn("client");
+        when(provider.getGraphTenantId()).thenReturn("tenant");
+        when(provider.getGraphMethodsUrl()).thenReturn("https://graph.microsoft.com/v1.0/users/%s/authentication/methods");
+        when(secretResolver.resolve(provider)).thenReturn("secret");
+        when(graphAccessTokenProvider.getAccessToken(provider)).thenReturn("mock-token");
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(ResponseEntity.ok("{\"other\":\"data\"}"));
+
+        User user = new User();
+        user.setIdpSubject(USER_OID);
+
+        msGraphService.enrichUserWithMfaDetails(user, provider, USER_OID);
+
+        assertNull(user.getMfaPhoneLast4());
+        assertNull(user.getMfaDeviceName());
+        assertNull(user.getMfaRegisteredOn());
+        assertNull(user.getMfaDetails());
+    }
+
+    @Test
+    public void enrichUserWithMfaDetails_WhenValidMethodsResponse_SetsUserFields() {
+        when(provider.getGraphClientId()).thenReturn("client");
+        when(provider.getGraphTenantId()).thenReturn("tenant");
+        when(provider.getGraphMethodsUrl()).thenReturn("https://graph.microsoft.com/v1.0/users/%s/authentication/methods");
+        when(secretResolver.resolve(provider)).thenReturn("secret");
+        when(graphAccessTokenProvider.getAccessToken(provider)).thenReturn("mock-token");
+
+        String body = "{ \"value\": [ { " +
+                "\"@odata.type\": \"#microsoft.graph.phoneAuthenticationMethod\", " +
+                "\"displayName\": \"My phone\", " +
+                "\"createdDateTime\": \"2024-01-01T00:00:00Z\", " +
+                "\"phoneNumber\": \"+91 987651234\" } ] }";
+
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(ResponseEntity.ok(body));
+
+        User user = new User();
+        user.setIdpSubject(USER_OID);
+
+        msGraphService.enrichUserWithMfaDetails(user, provider, USER_OID);
+
+        assertEquals("1234", user.getMfaPhoneLast4());
+        assertEquals("My phone", user.getMfaDeviceName());
+        assertNotNull(user.getMfaRegisteredOn());
+        assertNotNull(user.getMfaDetails());
+        assertTrue(user.getMfaDetails().contains("phoneAuthenticationMethod"));
+    }
+
+    @Test
+    public void enrichUserWithMfaDetails_WhenNullProvider_Skips() {
+        User user = new User();
+        user.setIdpSubject(USER_OID);
+
+        msGraphService.enrichUserWithMfaDetails(user, null, USER_OID);
+
+        assertNull(user.getMfaPhoneLast4());
+        assertNull(user.getMfaDeviceName());
+        assertNull(user.getMfaRegisteredOn());
+        assertNull(user.getMfaDetails());
+    }
+
+    @Test(expected = MfaEnrichmentException.class)
+    public void enrichUserWithMfaDetails_WhenTokenNull_ThrowsMfaEnrichmentException() {
+        when(provider.getGraphClientId()).thenReturn("client");
+        when(provider.getGraphTenantId()).thenReturn("tenant");
+        when(provider.getGraphMethodsUrl()).thenReturn("https://graph.microsoft.com/v1.0/users/%s/authentication/methods");
+        when(secretResolver.resolve(provider)).thenReturn("secret");
+        when(graphAccessTokenProvider.getAccessToken(provider)).thenReturn(null);
+
+        User user = new User();
+        user.setIdpSubject(USER_OID);
+
+        msGraphService.enrichUserWithMfaDetails(user, provider, USER_OID);
     }
 }

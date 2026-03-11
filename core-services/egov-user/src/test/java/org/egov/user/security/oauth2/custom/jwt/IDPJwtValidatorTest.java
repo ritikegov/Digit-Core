@@ -19,17 +19,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.class)
@@ -55,13 +47,32 @@ public class IDPJwtValidatorTest {
         }
 
         @Test
+        public void testSupports_NullIssuer_ReturnsFalse() {
+                AuthProperties.Oidc oidc = new AuthProperties.Oidc();
+                oidc.setEnabled(true);
+                when(authProperties.getOidc()).thenReturn(oidc);
+
+                assertFalse(idpJwtValidator.supports(null));
+        }
+
+        @Test
+        public void testSupports_EmptyIssuer_ReturnsFalse() {
+                AuthProperties.Oidc oidc = new AuthProperties.Oidc();
+                oidc.setEnabled(true);
+                when(authProperties.getOidc()).thenReturn(oidc);
+
+                assertFalse(idpJwtValidator.supports(""));
+        }
+
+        @Test
         public void testSupports_Enabled() {
                 AuthProperties.Oidc oidc = new AuthProperties.Oidc();
                 oidc.setEnabled(true);
                 when(authProperties.getOidc()).thenReturn(oidc);
 
-                AuthProperties.Provider provider = new AuthProperties.Provider();
-                provider.setIssuerUri("any");
+                AuthProperties.Provider provider = AuthProperties.Provider.builder()
+                        .issuerUri("any")
+                        .build();
                 when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
 
                 assertEquals(true, idpJwtValidator.supports("any"));
@@ -73,15 +84,16 @@ public class IDPJwtValidatorTest {
                 String issuer = "https://sts.windows.net/tenant-id/";
 
                 String tenantId = "pb.amritsar";
-                AuthProperties.Provider provider = new AuthProperties.Provider();
-                provider.setId("azure");
-                provider.setIssuerUri(issuer);
-                provider.setJwkSetUri("http://jwks");
-                provider.setRoleClaimKey("roles");
-                provider.setTenantId(tenantId);
                 Map<String, String> roleMapping = new HashMap<>();
                 roleMapping.put("AZURE_ROLE_1", "DIGIT_ROLE_1");
-                ReflectionTestUtils.setField(provider, "roleMapping", roleMapping);
+                AuthProperties.Provider provider = AuthProperties.Provider.builder()
+                        .id("azure")
+                        .issuerUri(issuer)
+                        .jwkSetUri("http://jwks")
+                        .roleClaimKey("roles")
+                        .tenantId(tenantId)
+                        .roleMapping(roleMapping)
+                        .build();
 
                 when(authProperties.getProviders()).thenReturn(Collections.singletonList(provider));
                 when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
@@ -132,15 +144,15 @@ public class IDPJwtValidatorTest {
 
         @Test
         public void testExtractRoles_MultiRoleSupport() {
-                AuthProperties.Provider provider = new AuthProperties.Provider();
-                provider.setId("azure");
-                provider.setRoleClaimKey("roles");
-
                 Map<String, String> roleMapping = new HashMap<>();
                 roleMapping.put("AZURE_ADMIN", "SYSTEM_ADMINISTRATOR,SUPERUSER");
                 roleMapping.put("AZURE_USER", "CITIZEN");
-
-                ReflectionTestUtils.setField(provider, "roleMapping", roleMapping);
+                
+                AuthProperties.Provider provider = AuthProperties.Provider.builder()
+                        .id("azure")
+                        .roleClaimKey("roles")
+                        .roleMapping(roleMapping)
+                        .build();
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("tenantId", "pb.amritsar");
@@ -198,12 +210,13 @@ public class IDPJwtValidatorTest {
         public void testValidate_ExpiredToken_ThrowsExpiredError() {
                 String issuer = "https://sts.windows.net/tenant-id/";
                 String tenantId = "pb.amritsar";
-                AuthProperties.Provider provider = new AuthProperties.Provider();
-                provider.setId("azure");
-                provider.setIssuerUri(issuer);
-                provider.setJwkSetUri("http://jwks");
-                provider.setRoleClaimKey("roles");
-                provider.setTenantId(tenantId);
+                AuthProperties.Provider provider = AuthProperties.Provider.builder()
+                        .id("azure")
+                        .issuerUri(issuer)
+                        .jwkSetUri("http://jwks")
+                        .roleClaimKey("roles")
+                        .tenantId(tenantId)
+                        .build();
                 when(authProperties.getProviders()).thenReturn(Collections.singletonList(provider));
                 when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
 
@@ -234,12 +247,13 @@ public class IDPJwtValidatorTest {
         public void testValidate_AudienceValidationFails_ThrowsIdpJwtValidationException() {
             String issuer = "https://sts.windows.net/tenant-id/";
             String tenantId = "pb.amritsar";
-            AuthProperties.Provider provider = new AuthProperties.Provider();
-            provider.setId("azure");
-            provider.setIssuerUri(issuer);
-            provider.setJwkSetUri("http://jwks");
-            provider.setRoleClaimKey("roles");
-            provider.setTenantId(tenantId);
+            AuthProperties.Provider provider = AuthProperties.Provider.builder()
+                    .id("azure")
+                    .issuerUri(issuer)
+                    .jwkSetUri("http://jwks")
+                    .roleClaimKey("roles")
+                    .tenantId(tenantId)
+                    .build();
             when(authProperties.getProviders()).thenReturn(Collections.singletonList(provider));
             when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
 
@@ -269,14 +283,15 @@ public class IDPJwtValidatorTest {
 
         @Test
         public void testExtractRoles_UnmappedRole_FallsBackToDefaultRoleCodes() {
-                AuthProperties.Provider provider = new AuthProperties.Provider();
-                provider.setId("azure");
-                provider.setRoleClaimKey("roles");
-                provider.setDefaultRoleCodes("DEFAULT_ROLE");
-
                 Map<String, String> roleMapping = new HashMap<>();
                 roleMapping.put("AZURE_ROLE", "DIGIT_ROLE");
-                ReflectionTestUtils.setField(provider, "roleMapping", roleMapping);
+                
+                AuthProperties.Provider provider = AuthProperties.Provider.builder()
+                        .id("azure")
+                        .roleClaimKey("roles")
+                        .defaultRoleCodes("DEFAULT_ROLE")
+                        .roleMapping(roleMapping)
+                        .build();
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("tenantId", "pb.amritsar");
@@ -292,10 +307,11 @@ public class IDPJwtValidatorTest {
 
         @Test
         public void testExtractRoles_NoRoleClaim_FallsBackToDefaultRoleCodes() {
-                AuthProperties.Provider provider = new AuthProperties.Provider();
-                provider.setId("azure");
-                provider.setRoleClaimKey("roles");
-                provider.setDefaultRoleCodes("DEFAULT_ROLE");
+                AuthProperties.Provider provider = AuthProperties.Provider.builder()
+                        .id("azure")
+                        .roleClaimKey("roles")
+                        .defaultRoleCodes("DEFAULT_ROLE")
+                        .build();
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("tenantId", "pb.amritsar");
@@ -314,16 +330,18 @@ public class IDPJwtValidatorTest {
                 String issuer = "https://sts.windows.net/tenant-id/";
 
                 String tenantId = "pb.amritsar";
-                AuthProperties.Provider provider = new AuthProperties.Provider();
-                provider.setId("azure");
-                provider.setIssuerUri(issuer);
-                provider.setJwkSetUri("http://jwks");
-                provider.setRoleClaimKey("roles");
-                provider.setTenantId(tenantId);
-                provider.setUserType("EMPLOYEE");
                 Map<String, String> roleMapping = new HashMap<>();
                 roleMapping.put("AZURE_ROLE_1", "DIGIT_ROLE_1");
-                ReflectionTestUtils.setField(provider, "roleMapping", roleMapping);
+                
+                AuthProperties.Provider provider = AuthProperties.Provider.builder()
+                        .id("azure")
+                        .issuerUri(issuer)
+                        .jwkSetUri("http://jwks")
+                        .roleClaimKey("roles")
+                        .tenantId(tenantId)
+                        .userType("EMPLOYEE")
+                        .roleMapping(roleMapping)
+                        .build();
 
                 when(authProperties.getProviders()).thenReturn(Collections.singletonList(provider));
                 when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
@@ -357,14 +375,15 @@ public class IDPJwtValidatorTest {
 
         @Test
         public void testExtractRoles_RoleClaimNotList_FallsBackToDefaultRoleCodes() {
-                AuthProperties.Provider provider = new AuthProperties.Provider();
-                provider.setId("azure");
-                provider.setRoleClaimKey("roles");
-                provider.setDefaultRoleCodes("DEFAULT_ROLE");
-
                 Map<String, String> roleMapping = new HashMap<>();
                 roleMapping.put("AZURE_ROLE", "DIGIT_ROLE");
-                ReflectionTestUtils.setField(provider, "roleMapping", roleMapping);
+                
+                AuthProperties.Provider provider = AuthProperties.Provider.builder()
+                        .id("azure")
+                        .roleClaimKey("roles")
+                        .defaultRoleCodes("DEFAULT_ROLE")
+                        .roleMapping(roleMapping)
+                        .build();
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("tenantId", "pb.amritsar");
@@ -382,13 +401,14 @@ public class IDPJwtValidatorTest {
         public void testValidate_JwksUriMissing_ThrowsOidcProviderConfigExceptionWithCorrectErrorCode() {
                 String issuer = "https://sts.windows.net/tenant-id/";
                 String tenantId = "pb.amritsar";
-
-                AuthProperties.Provider provider = new AuthProperties.Provider();
-                provider.setId("azure");
-                provider.setIssuerUri(issuer);
-                provider.setJwkSetUri("");
-                provider.setRoleClaimKey("roles");
-                provider.setTenantId(tenantId);
+                
+                AuthProperties.Provider provider = AuthProperties.Provider.builder()
+                        .id("azure")
+                        .issuerUri(issuer)
+                        .jwkSetUri("")
+                        .roleClaimKey("roles")
+                        .tenantId(tenantId)
+                        .build();
                 when(authProperties.getProviders()).thenReturn(Collections.singletonList(provider));
                 when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
 
@@ -409,21 +429,23 @@ public class IDPJwtValidatorTest {
                 String issuer = "https://sts.windows.net/tenant-id/";
                 String tenantId = "pb.amritsar";
 
-                AuthProperties.Provider provider1 = new AuthProperties.Provider();
-                provider1.setId("azure1");
-                provider1.setIssuerUri(issuer);
-                provider1.setJwkSetUri("http://jwks1");
-                provider1.setRoleClaimKey("roles");
-                provider1.setTenantId(tenantId);
-                provider1.setAudiences(Collections.singletonList("aud1"));
+                AuthProperties.Provider provider1 = AuthProperties.Provider.builder()
+                        .id("azure1")
+                        .issuerUri(issuer)
+                        .jwkSetUri("http://jwks1")
+                        .roleClaimKey("roles")
+                        .tenantId(tenantId)
+                        .audiences(Collections.singletonList("aud1"))
+                        .build();
 
-                AuthProperties.Provider provider2 = new AuthProperties.Provider();
-                provider2.setId("azure2");
-                provider2.setIssuerUri(issuer);
-                provider2.setJwkSetUri("http://jwks2");
-                provider2.setRoleClaimKey("roles");
-                provider2.setTenantId(tenantId);
-                provider2.setAudiences(Collections.singletonList("aud2"));
+                AuthProperties.Provider provider2 = AuthProperties.Provider.builder()
+                        .id("azure2")
+                        .issuerUri(issuer)
+                        .jwkSetUri("http://jwks2")
+                        .roleClaimKey("roles")
+                        .tenantId(tenantId)
+                        .audiences(Collections.singletonList("aud2"))
+                        .build();
 
                 List<AuthProperties.Provider> providers = Arrays.asList(provider1, provider2);
                 when(authProperties.getProviders()).thenReturn(providers);
@@ -463,17 +485,19 @@ public class IDPJwtValidatorTest {
                 String issuer = "https://sts.windows.net/tenant-id/";
                 String tenantId = "pb.amritsar";
 
-                AuthProperties.Provider provider1 = new AuthProperties.Provider();
-                provider1.setId("azure1");
-                provider1.setIssuerUri(issuer);
-                provider1.setTenantId(tenantId);
-                provider1.setAudiences(Collections.singletonList("aud1"));
+                AuthProperties.Provider provider1 = AuthProperties.Provider.builder()
+                        .id("azure1")
+                        .issuerUri(issuer)
+                        .tenantId(tenantId)
+                        .audiences(Collections.singletonList("aud1"))
+                        .build();
 
-                AuthProperties.Provider provider2 = new AuthProperties.Provider();
-                provider2.setId("azure2");
-                provider2.setIssuerUri(issuer);
-                provider2.setTenantId(tenantId);
-                provider2.setAudiences(Collections.singletonList("aud2"));
+                AuthProperties.Provider provider2 = AuthProperties.Provider.builder()
+                        .id("azure2")
+                        .issuerUri(issuer)
+                        .tenantId(tenantId)
+                        .audiences(Collections.singletonList("aud2"))
+                        .build();
 
                 List<AuthProperties.Provider> providers = Arrays.asList(provider1, provider2);
                 when(authProperties.getProviders()).thenReturn(providers);
@@ -497,15 +521,17 @@ public class IDPJwtValidatorTest {
                 String issuerNoSlash = "https://sts.windows.net/tenant-id";
                 String tenantId = "pb.amritsar";
 
-                AuthProperties.Provider provider = new AuthProperties.Provider();
-                provider.setId("azure");
-                provider.setIssuerUri(issuerNoSlash);
-                provider.setJwkSetUri("http://jwks");
-                provider.setRoleClaimKey("roles");
-                provider.setTenantId(tenantId);
                 Map<String, String> roleMapping = new HashMap<>();
                 roleMapping.put("AZURE_ROLE_1", "DIGIT_ROLE_1");
-                ReflectionTestUtils.setField(provider, "roleMapping", roleMapping);
+                
+                AuthProperties.Provider provider = AuthProperties.Provider.builder()
+                        .id("azure")
+                        .issuerUri(issuerNoSlash)
+                        .jwkSetUri("http://jwks")
+                        .roleClaimKey("roles")
+                        .tenantId(tenantId)
+                        .roleMapping(roleMapping)
+                        .build();
 
                 when(authProperties.getProviders()).thenReturn(Collections.singletonList(provider));
                 when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
@@ -540,10 +566,11 @@ public class IDPJwtValidatorTest {
 
         @Test
         public void testExtractRoles_MultipleDefaultRoleCodes_CommaDelimited() {
-                AuthProperties.Provider provider = new AuthProperties.Provider();
-                provider.setId("azure");
-                provider.setRoleClaimKey("roles");
-                provider.setDefaultRoleCodes("ROLE_A, ROLE_B");
+                AuthProperties.Provider provider = AuthProperties.Provider.builder()
+                        .id("azure")
+                        .roleClaimKey("roles")
+                        .defaultRoleCodes("ROLE_A, ROLE_B")
+                        .build();
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("tenantId", "pb.amritsar");
@@ -555,5 +582,74 @@ public class IDPJwtValidatorTest {
                 assertEquals(2, roles.size());
                 assertTrue(roles.contains("ROLE_A"));
                 assertTrue(roles.contains("ROLE_B"));
+        }
+
+        @Test
+        public void testValidate_IssuerMissingInToken_ThrowsOidcProviderConfigException() {
+                AuthProperties.Oidc oidc = new AuthProperties.Oidc();
+                oidc.setEnabled(true);
+                when(authProperties.getOidc()).thenReturn(oidc);
+                when(oidcProviderSupplier.getProviders()).thenReturn(Collections.emptyList());
+
+                String header = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9";
+                String payload = Base64.getUrlEncoder().withoutPadding()
+                        .encodeToString("{\"sub\":\"user\"}".getBytes(StandardCharsets.UTF_8));
+                String token = header + "." + payload + ".sig";
+
+                try {
+                        idpJwtValidator.validate(token, "pb.amritsar");
+                        org.junit.Assert.fail("Expected OidcProviderConfigException");
+                } catch (OidcProviderConfigException e) {
+                        assertEquals(SsoErrorCodes.OIDC_ISSUER_MISSING_IN_TOKEN, e.getErrorCode());
+                }
+        }
+
+        @Test
+        public void testValidate_GenericDecodeException_ThrowsIdpJwtValidationException() {
+                String issuer = "https://sts.windows.net/tenant-id/";
+                String tenantId = "pb.amritsar";
+                AuthProperties.Provider provider = AuthProperties.Provider.builder()
+                        .id("azure")
+                        .issuerUri(issuer)
+                        .jwkSetUri("http://jwks")
+                        .roleClaimKey("roles")
+                        .tenantId(tenantId)
+                        .build();
+                when(authProperties.getProviders()).thenReturn(Collections.singletonList(provider));
+                when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
+
+                @SuppressWarnings("unchecked")
+                Map<String, JwtDecoder> decoders = (Map<String, JwtDecoder>) ReflectionTestUtils.getField(
+                                idpJwtValidator,
+                                "decoders");
+                decoders.put("azure", jwtDecoder);
+
+                String header = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9";
+                String payload = "eyJpc3MiOiJodHRwczovL3N0cy53aW5kb3dzLm5ldC90ZW5hbnQtaWQvIn0";
+                String token = header + "." + payload + ".signature";
+
+                when(jwtDecoder.decode(token)).thenThrow(new RuntimeException("decode failed"));
+
+                try {
+                        idpJwtValidator.validate(token, tenantId);
+                        org.junit.Assert.fail("Expected IdpJwtValidationException");
+                } catch (IdpJwtValidationException e) {
+                        assertEquals(SsoErrorCodes.JWT_INVALID, e.getErrorCode());
+                }
+        }
+
+        @Test
+        public void testSupports_IssuerAlias_MatchesProvider() {
+                AuthProperties.Oidc oidc = new AuthProperties.Oidc();
+                oidc.setEnabled(true);
+                when(authProperties.getOidc()).thenReturn(oidc);
+
+                AuthProperties.Provider provider = AuthProperties.Provider.builder()
+                        .issuerUri("https://primary-issuer")
+                        .issuerAliases(Collections.singletonList("https://alias-issuer"))
+                        .build();
+                when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
+
+                assertTrue(idpJwtValidator.supports("https://alias-issuer"));
         }
 }

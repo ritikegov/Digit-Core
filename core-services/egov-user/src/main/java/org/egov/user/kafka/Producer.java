@@ -14,11 +14,15 @@ import org.springframework.stereotype.Service;
 @Service("userKafkaProducer")
 public class Producer {
 
-    @Autowired
-    private CustomKafkaTemplate<String, Object> kafkaTemplate;
+    private final CustomKafkaTemplate<String, Object> kafkaTemplate;
+    private final MultiStateInstanceUtil centralInstanceUtil;
 
     @Autowired
-    private MultiStateInstanceUtil centralInstanceUtil;
+    public Producer(CustomKafkaTemplate<String, Object> kafkaTemplate, 
+                   MultiStateInstanceUtil centralInstanceUtil) {
+        this.kafkaTemplate = kafkaTemplate;
+        this.centralInstanceUtil = centralInstanceUtil;
+    }
 
     /**
      * Pushes a message to the given topic. If tenantId is non-null and non-empty and
@@ -35,6 +39,13 @@ public class Producer {
             resolvedTopic = centralInstanceUtil.getStateSpecificTopicName(tenantId, topic);
             log.debug("Kafka topic for tenantId {} resolved to {}", tenantId, resolvedTopic);
         }
-        kafkaTemplate.send(resolvedTopic, value);
+        
+        try {
+            kafkaTemplate.send(resolvedTopic, value);
+            log.info("Message sent successfully to topic: {}", resolvedTopic);
+        } catch (Exception e) {
+            log.error("Failed to send message to topic: " + resolvedTopic, e);
+            throw e;
+        }
     }
 }

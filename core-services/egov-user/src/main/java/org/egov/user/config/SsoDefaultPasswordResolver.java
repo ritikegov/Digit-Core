@@ -22,7 +22,6 @@ public class SsoDefaultPasswordResolver {
     private static final String DIGITS = "0123456789";
     private static final String SPECIAL = "@#$%";
     private static final int LENGTH = 15;
-    private static final int MIN_PER_BUCKET = 1;
 
     private final SecureRandom secureRandom = new SecureRandom();
 

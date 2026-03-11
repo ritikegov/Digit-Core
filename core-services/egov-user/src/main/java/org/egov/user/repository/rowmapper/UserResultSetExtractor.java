@@ -12,7 +12,10 @@ import org.springframework.stereotype.Service;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 import static java.util.Objects.isNull;
 import static org.egov.user.domain.model.enums.AddressType.CORRESPONDENCE;
@@ -63,7 +66,7 @@ public class UserResultSetExtractor implements ResultSetExtractor<List<User>> {
                         .lastSsoLoginAt(rs.getTimestamp("lastssologinat"))
                         .authProvider(rs.getString("authprovider"))
                         .tokenId(rs.getString("tokenid"))
-                        .mfaEnabled(rs.getBoolean("mfaenabled"))
+                        .mfaEnabled(rs.getObject("mfaenabled", Boolean.class))
                         .mfaDeviceName(rs.getString("mfadevicename"))
                         .mfaPhoneLast4(rs.getString("mfaphonelast4"))
                         .mfaRegisteredOn(rs.getTimestamp("mfaregisteredon"))

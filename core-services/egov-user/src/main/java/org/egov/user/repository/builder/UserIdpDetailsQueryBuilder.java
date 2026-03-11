@@ -32,13 +32,6 @@ public final class UserIdpDetailsQueryBuilder {
                     + "lastmodifieddate = EXCLUDED.lastmodifieddate, "
                     + "lastmodifiedby = EXCLUDED.lastmodifiedby";
 
-    /** Use id, uuid (nullable), tenantid. When uuid is null, matches by id and tenantid only. */
-    public static final String SELECT_IDP_DETAILS_BY_ID_UUID_TENANT =
-            "SELECT id, tenantid, uuid, idptokenexp, lastssologinat, tokenid, "
-                    + "mfaenabled, mfadevicename, mfaphonelast4, mfaregisteredon, mfadetails, "
-                    + "createddate, lastmodifieddate, createdby, lastmodifiedby "
-                    + "FROM " + SCHEMA_REPLACE_STRING + ".eg_user_idp_details "
-                    + "WHERE id = :id AND tenantid = :tenantid AND (:uuid IS NULL OR uuid = :uuid)";
 
     public static final String INSERT_IDP_AUDIT =
             "INSERT INTO " + SCHEMA_REPLACE_STRING + ".eg_user_idp_details_audit_table "

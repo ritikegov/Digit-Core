@@ -10,19 +10,23 @@ public class OidcProviderConfigException extends SsoException {
         super(errorCode, message, HttpStatus.UNAUTHORIZED);
     }
 
+    public OidcProviderConfigException(String errorCode, String message, HttpStatus httpStatus) {
+        super(errorCode, message, httpStatus);
+    }
+
     public static OidcProviderConfigException jwksMissing(String providerId) {
         return new OidcProviderConfigException(SsoErrorCodes.OIDC_JWKS_MISSING,
-                "jwk-set-uri is not configured for providerId=" + providerId);
+                "jwk-set-uri is not configured for providerId=" + providerId, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     public static OidcProviderConfigException issuerMissing(String providerId) {
         return new OidcProviderConfigException(SsoErrorCodes.OIDC_ISSUER_MISSING,
-                "issuer-uri is not configured for providerId=" + providerId);
+                "issuer-uri is not configured for providerId=" + providerId, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     public static OidcProviderConfigException audiencesMissing(String providerId) {
         return new OidcProviderConfigException(SsoErrorCodes.OIDC_AUDIENCES_MISSING,
-                "audiences are not configured for providerId=" + providerId + " - audience validation is mandatory");
+                "audiences are not configured for providerId=" + providerId + " - audience validation is mandatory", HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     public static OidcProviderConfigException issuerMissingInToken() {
@@ -32,12 +36,12 @@ public class OidcProviderConfigException extends SsoException {
 
     public static OidcProviderConfigException providerNotFound(String issuer) {
         return new OidcProviderConfigException(SsoErrorCodes.OIDC_PROVIDER_NOT_FOUND,
-                "No OIDC provider configured for issuer: " + issuer);
+                "No OIDC provider configured for issuer: " + issuer, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     public static OidcProviderConfigException providerAmbiguous(String issuer) {
         return new OidcProviderConfigException(SsoErrorCodes.OIDC_PROVIDER_AMBIGUOUS,
-                "Multiple OIDC providers match issuer: " + issuer + " — unable to disambiguate");
+                "Multiple OIDC providers match issuer: " + issuer + " — unable to disambiguate", HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     public static OidcProviderConfigException issuerMismatch(String tokenIssuer, String providerId) {

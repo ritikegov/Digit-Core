@@ -13,9 +13,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.web.client.RestTemplate;
 
 import static org.junit.Assert.assertFalse;
@@ -107,6 +105,95 @@ public class AzureIdpUserValidatorTest {
         when(provider.getGraphTenantId()).thenReturn("tenant");
         when(secretResolver.resolve(provider)).thenReturn("secret");
         when(graphAccessTokenProvider.getAccessToken(provider)).thenReturn(null);
+
+        validator.validate(user, provider);
+    }
+
+    @Test(expected = IdpUserAccessRevokedException.class)
+    public void validate_Throws_WhenHttpError() {
+        User user = new User();
+        user.setEmailId(USER_EMAIL);
+
+        when(provider.getGraphAppResourceId()).thenReturn(APP_RESOURCE_ID);
+        when(provider.getGraphClientId()).thenReturn("client");
+        when(provider.getGraphTenantId()).thenReturn("tenant");
+        when(secretResolver.resolve(provider)).thenReturn("secret");
+        when(graphAccessTokenProvider.getAccessToken(provider)).thenReturn("access-token");
+
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(new ResponseEntity<>("{\"error\":\"forbidden\"}", HttpStatus.FORBIDDEN));
+
+        validator.validate(user, provider);
+    }
+
+    @Test(expected = IdpUserAccessRevokedException.class)
+    public void validate_Throws_WhenMalformedJson() {
+        User user = new User();
+        user.setEmailId(USER_EMAIL);
+
+        when(provider.getGraphAppResourceId()).thenReturn(APP_RESOURCE_ID);
+        when(provider.getGraphClientId()).thenReturn("client");
+        when(provider.getGraphTenantId()).thenReturn("tenant");
+        when(secretResolver.resolve(provider)).thenReturn("secret");
+        when(graphAccessTokenProvider.getAccessToken(provider)).thenReturn("access-token");
+
+        String body = "{ invalid json";
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(new ResponseEntity<>(body, HttpStatus.OK));
+
+        validator.validate(user, provider);
+    }
+
+    @Test(expected = IdpUserAccessRevokedException.class)
+    public void validate_Throws_WhenValueArrayEmpty() {
+        User user = new User();
+        user.setEmailId(USER_EMAIL);
+
+        when(provider.getGraphAppResourceId()).thenReturn(APP_RESOURCE_ID);
+        when(provider.getGraphClientId()).thenReturn("client");
+        when(provider.getGraphTenantId()).thenReturn("tenant");
+        when(secretResolver.resolve(provider)).thenReturn("secret");
+        when(graphAccessTokenProvider.getAccessToken(provider)).thenReturn("access-token");
+
+        String body = "{ \"value\": [] }";
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(new ResponseEntity<>(body, HttpStatus.OK));
+
+        validator.validate(user, provider);
+    }
+
+    @Test(expected = IdpUserAccessRevokedException.class)
+    public void validate_Throws_WhenValueMissing() {
+        User user = new User();
+        user.setEmailId(USER_EMAIL);
+
+        when(provider.getGraphAppResourceId()).thenReturn(APP_RESOURCE_ID);
+        when(provider.getGraphClientId()).thenReturn("client");
+        when(provider.getGraphTenantId()).thenReturn("tenant");
+        when(secretResolver.resolve(provider)).thenReturn("secret");
+        when(graphAccessTokenProvider.getAccessToken(provider)).thenReturn("access-token");
+
+        String body = "{ \"other\": \"data\" }";
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(new ResponseEntity<>(body, HttpStatus.OK));
+
+        validator.validate(user, provider);
+    }
+
+    @Test(expected = IdpUserAccessRevokedException.class)
+    public void validate_Throws_WhenValueNotArray() {
+        User user = new User();
+        user.setEmailId(USER_EMAIL);
+
+        when(provider.getGraphAppResourceId()).thenReturn(APP_RESOURCE_ID);
+        when(provider.getGraphClientId()).thenReturn("client");
+        when(provider.getGraphTenantId()).thenReturn("tenant");
+        when(secretResolver.resolve(provider)).thenReturn("secret");
+        when(graphAccessTokenProvider.getAccessToken(provider)).thenReturn("access-token");
+
+        String body = "{ \"value\": \"not-an-array\" }";
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(new ResponseEntity<>(body, HttpStatus.OK));
 
         validator.validate(user, provider);
     }

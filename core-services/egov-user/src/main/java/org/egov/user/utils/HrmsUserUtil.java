@@ -20,15 +20,13 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Utility class for creating employees in HRMS and project staff mappings.
- * This utility searches for a project by name and boundary code, creates an
- * employee
- * in egov-hrms with boundary details from the project, and then creates a
- * project staff mapping.
+ * Utility class for creating HRMS users with employee details.
+ * This utility searches for boundary information, creates an employee
+ * in egov-hrms with boundary details, and returns the created user.
  */
 @Component
 @Slf4j
-public class ProjectEmployeeStaffUtil {
+public class HrmsUserUtil {
 
         /** Exception codes (used in CustomException). */
         private static final String CUSTOM_EXCEPTION_BOUNDARY_HIERARCHY = "BOUNDARY_HIERARCHY_SEARCH_FAILED";
@@ -68,7 +66,7 @@ public class ProjectEmployeeStaffUtil {
         private String boundaryRelationshipsSearchUrl;
 
         @Autowired
-        public ProjectEmployeeStaffUtil(RestTemplate restTemplate, Producer kafkaProducer) {
+        public HrmsUserUtil(RestTemplate restTemplate, Producer kafkaProducer) {
                 this.restTemplate = restTemplate;
                 this.kafkaProducer = kafkaProducer;
         }
@@ -119,7 +117,10 @@ public class ProjectEmployeeStaffUtil {
                         .queryParam(PARAM_HIERARCHY_TYPE, hierarchyType)
                         .build()
                         .toUriString();
-                BoundarySearchResponse response = fetchResult(new StringBuilder(url), requestInfo,
+                BoundarySearchRequest request = BoundarySearchRequest.builder()
+                        .requestInfo(requestInfo)
+                        .build();
+                BoundarySearchResponse response = fetchResult(new StringBuilder(url), request,
                         BoundarySearchResponse.class);
                 if (response == null) {
                         throw new CustomException(CUSTOM_EXCEPTION_BOUNDARY_RELATIONSHIPS, "Boundary relationships search returned null");
@@ -282,11 +283,14 @@ public class ProjectEmployeeStaffUtil {
                         // Make the API call
                         EmployeeResponse response = fetchResult(uri, employeeRequest, EmployeeResponse.class);
 
-                        // Validate response
+                        // Validate response - handle business validation separately
                         if (response == null || CollectionUtils.isEmpty(response.getEmployees())) {
-                                log.error("Failed to create employee in HRMS for user: {}", user.getName());
+                                log.error("Failed to create employee in HRMS for user: {} - null or empty response", user.getName());
+                                publishHrmsCreationErrorToDlq(user, tenantId, employeeType, designation,
+                                        department, jwt, HRMS_ERROR_EVENT_CODE,
+                                        "HRMS employee creation failed: null or empty response");
                                 throw new CustomException(CUSTOM_EXCEPTION_EMPLOYEE_CREATION_FAILED,
-                                                HRMS_ERROR_EVENT_MESSAGE);
+                                        HRMS_ERROR_EVENT_MESSAGE);
                         }
 
                         Employee createdEmployee = response.getEmployees().get(0);
@@ -303,7 +307,7 @@ public class ProjectEmployeeStaffUtil {
         }
 
         /**
-         * Complete workflow: Create employee in HRMS and return the created user.
+         * Creates an HRMS user with employee details and returns the created user.
          * This is a convenience method that orchestrates the flow. Employee creation
          * in HRMS is not rolled back if a subsequent step (e.g. UUID validation) fails;
          * no compensation (void/delete) is performed. Local DB is not used here, so
@@ -321,7 +325,7 @@ public class ProjectEmployeeStaffUtil {
          * @return The created user from the HRMS employee response
          * @throws CustomException if any step in the workflow fails
          */
-        public User createEmployeeAndProjectStaff(
+        public User createHrmsUser(
                         User user,
                         String employeeType, String designation,
                         String department, String employeeStatus,
@@ -341,7 +345,7 @@ public class ProjectEmployeeStaffUtil {
                                         "User service UUID is missing from HRMS employee response");
                 }
 
-                log.info("Successfully completed workflow for user: {}", user.getName());
+                log.info("Successfully completed HRMS user creation for user: {}", user.getName());
                 return employee.getUser();
         }
 
@@ -355,7 +359,7 @@ public class ProjectEmployeeStaffUtil {
                                                 .userName(user.getUserName())
                                                 .userUuid(user.getUuid())
                                                 .name(user.getName())
-                                                .emailId(user.getUserName())
+                                                .emailId(user.getEmailId())
                                                 .userType(user.getType())
                                                 .employeeType(employeeType)
                                                 .designation(designation)

@@ -40,21 +40,15 @@
 
 package org.egov.user.domain.model.hrms;
 
-import java.util.ArrayList;
-import java.util.List;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-import lombok.ToString;
+import lombok.*;
 import org.hibernate.validator.constraints.NotEmpty;
 import org.springframework.validation.annotation.Validated;
 
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
+import java.util.ArrayList;
+import java.util.List;
 
 @Validated
 @AllArgsConstructor
@@ -95,7 +89,7 @@ public class Employee {
     @Size(max = 25)
     private List<ServiceHistory> serviceHistory = new ArrayList<>();
 
-    private Boolean IsActive;
+    private Boolean isActive;
 
     @Valid
     @Size(max = 25)
