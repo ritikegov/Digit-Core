@@ -1,9 +1,10 @@
-FROM egovio/alpine-node-builder-10:yarn
+# syntax=docker/dockerfile:1.4
+FROM node:10 AS builder
 
 ARG WORK_DIR
 ENV npm_config_cache=/tmp
 WORKDIR /app
-COPY ${WORK_DIR:-core-services/pdf-service}/ .
+COPY ${WORK_DIR}/ .
 RUN npm install
 
 FROM node:10
