@@ -12,5 +12,9 @@ public class IdpUserAccessRevokedException extends SsoException {
     public IdpUserAccessRevokedException(String message) {
         super(SsoErrorCodes.IDP_USER_ACCESS_REVOKED, message, HttpStatus.UNAUTHORIZED);
     }
+
+    public IdpUserAccessRevokedException(String code, String message) {
+        super(code, message, HttpStatus.UNAUTHORIZED);
+    }
 }
 

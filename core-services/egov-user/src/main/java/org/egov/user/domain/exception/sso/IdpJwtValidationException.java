@@ -16,7 +16,7 @@ public class IdpJwtValidationException extends SsoException {
 
     public static IdpJwtValidationException parseFailed(Throwable cause) {
         return new IdpJwtValidationException(SsoErrorCodes.JWT_PARSE_FAILED,
-                "Failed to parse JWT token", cause);
+                SsoErrorCodes.MSG_JWT_PARSE_FAILED, cause);
     }
 
     public static IdpJwtValidationException invalid(String detail, Throwable cause) {
@@ -27,5 +27,15 @@ public class IdpJwtValidationException extends SsoException {
     public static IdpJwtValidationException expired(String detail, Throwable cause) {
         return new IdpJwtValidationException(SsoErrorCodes.JWT_EXPIRED,
                 "JWT token has expired: " + detail, cause);
+    }
+
+    public static IdpJwtValidationException invalid(Throwable cause) {
+        return new IdpJwtValidationException(SsoErrorCodes.JWT_INVALID,
+                SsoErrorCodes.MSG_JWT_INVALID, cause);
+    }
+
+    public static IdpJwtValidationException expired(Throwable cause) {
+        return new IdpJwtValidationException(SsoErrorCodes.JWT_EXPIRED,
+                SsoErrorCodes.MSG_JWT_EXPIRED, cause);
     }
 }

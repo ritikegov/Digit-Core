@@ -12,9 +12,17 @@ public final class SsoErrorCodes {
     public static final String JWT_EXPIRED = "sso.jwt.expired";
     public static final String JWT_PARSE_FAILED = "sso.jwt.parse_failed";
 
+    // Client-facing, non-sensitive message templates for JWT/OIDC validation
+    public static final String MSG_JWT_INVALID = "JWT validation failed";
+    public static final String MSG_JWT_EXPIRED = "JWT token has expired";
+    public static final String MSG_JWT_PARSE_FAILED = "Failed to parse JWT token";
+    public static final String MSG_INVALID_ISSUER = "Token issuer is not recognized";
+    public static final String MSG_INVALID_AUDIENCE = "Token audience is not valid";
+
     public static final String OIDC_JWKS_MISSING = "sso.oidc.jwks_missing";
     public static final String OIDC_ISSUER_MISSING = "sso.oidc.issuer_missing";
     public static final String OIDC_ISSUER_MISSING_IN_TOKEN = "sso.oidc.issuer_missing_in_token";
+    public static final String OIDC_AUDIENCES_MISSING = "sso.oidc.audiences_missing";
     public static final String OIDC_PROVIDER_NOT_FOUND = "sso.oidc.provider_not_found";
     public static final String OIDC_PROVIDER_AMBIGUOUS = "sso.oidc.provider_ambiguous";
     public static final String OIDC_ISSUER_MISMATCH = "sso.oidc.issuer_mismatch";
@@ -32,4 +40,12 @@ public final class SsoErrorCodes {
     public static final String MFA_ENRICHMENT_FAILED = "sso.mfa.enrichment_failed";
 
     public static final String ROLE_MAPPING_FAILED = "sso.role.mapping_failed";
+
+    public static final String GRAPH_INVALID_OID = "sso.graph.invalid_oid";
+
+    public static final String GRAPH_INVALID_EMAIL = "sso.graph.invalid_email";
+
+    public static final String IDP_PERSISTENCE_INVALID_INPUT = "sso.idp.persistence_invalid_input";
+    public static final String MSG_IDP_PERSISTENCE_INVALID_INPUT =
+            "IDP details persistence aborted: required field is null";
 }

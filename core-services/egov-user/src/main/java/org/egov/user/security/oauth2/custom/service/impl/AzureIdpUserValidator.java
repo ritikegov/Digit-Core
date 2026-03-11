@@ -81,6 +81,7 @@ public class AzureIdpUserValidator implements IdpUserValidator {
         if (!StringUtils.hasText(appRoleUrlTemplate)) {
             appRoleUrlTemplate = OidcConfigConstants.DEFAULT_GRAPH_APP_ROLE_ASSIGNMENTS_URL;
         }
+        GraphApiInputValidator.validateEmail(user.getEmailId());
         String url = String.format(appRoleUrlTemplate, user.getEmailId());
         HttpHeaders headers = new HttpHeaders();
         headers.set(SecurityConstants.HEADER_AUTHORIZATION, SecurityConstants.BEARER_PREFIX + accessToken);

@@ -46,6 +46,7 @@ public class User {
     @JsonProperty("userName")
     private String userName;
 
+    @ToString.Exclude
     @Size(max=64)
     @JsonProperty("password")
     private String password;

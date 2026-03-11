@@ -20,7 +20,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.user.domain.model.Role;
 import org.egov.user.domain.model.UserIdpDetails;
 import org.egov.user.domain.model.UserSearchCriteria;
-import org.egov.user.persistence.repository.UserIdpDetailsRepository;
+import org.egov.user.domain.service.SsoUserPersistenceService;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -87,7 +87,7 @@ public class JwtExchangeAuthenticationProviderTest {
         private SsoDefaultPasswordResolver ssoDefaultPasswordResolver;
 
         @Mock
-        private UserIdpDetailsRepository userIdpDetailsRepository;
+        private SsoUserPersistenceService ssoUserPersistenceService;
 
         @Mock
         private EncryptionDecryptionUtil encryptionDecryptionUtil;
@@ -103,9 +103,19 @@ public class JwtExchangeAuthenticationProviderTest {
                                 jwtValidationService, userService, multiStateInstanceUtil,
                                 projectEmployeeStaffUtil, oidcProviderSupplier, graphServices,
                                 accessTokenMfaExtractor, ssoDefaultPasswordResolver, new NoOpGraphService(),
-                                userIdpDetailsRepository, encryptionDecryptionUtil);
+                                ssoUserPersistenceService, encryptionDecryptionUtil);
                 when(encryptionDecryptionUtil.encryptObject(any(UserIdpDetails.class), anyString(), eq(UserIdpDetails.class)))
                                 .thenAnswer(invocation -> invocation.getArgumentAt(0, UserIdpDetails.class));
+                when(ssoUserPersistenceService.updateUserAndUpsertIdpDetails(any(User.class), any(UserIdpDetails.class), anyString(), any(RequestInfo.class)))
+                                .thenAnswer(invocation -> {
+                                    User u = invocation.getArgumentAt(0, User.class);
+                                    return (u != null && u.getType() != null) ? u : User.builder()
+                                            .uuid(u != null ? u.getUuid() : "new-uuid")
+                                            .type(UserType.EMPLOYEE)
+                                            .username(u != null ? u.getUsername() : "johndoe")
+                                            .active(true)
+                                            .build();
+                                });
                 when(authProperties.getProviders()).thenReturn(Collections.singletonList(provider));
                 when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
                 when(provider.getId()).thenReturn("oidc-azure");
@@ -149,7 +159,6 @@ public class JwtExchangeAuthenticationProviderTest {
 
                 when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
                 when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
-                when(userService.updateWithoutOtpValidation(any(), any())).thenReturn(user);
 
                 Authentication result = authenticationProvider.authenticate(authenticationToken);
 
@@ -159,7 +168,7 @@ public class JwtExchangeAuthenticationProviderTest {
                 assertEquals("uuid", secureUser.getUser().getUuid());
 
                 ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-                verify(userService).updateWithoutOtpValidation(userCaptor.capture(), any());
+                verify(ssoUserPersistenceService).updateUserAndUpsertIdpDetails(userCaptor.capture(), any(UserIdpDetails.class), eq(TENANT_PB), any(RequestInfo.class));
                 User updatedUser = userCaptor.getValue();
                 assertEquals("John Doe", updatedUser.getName());
                 assertEquals("john@example.com", updatedUser.getEmailId());
@@ -198,8 +207,8 @@ public class JwtExchangeAuthenticationProviderTest {
 
                 assertNotNull(result);
                 assertTrue(result.getPrincipal() instanceof SecureUser);
-                verify(userService, never()).updateWithoutOtpValidation(any(User.class), any());
-                verify(userIdpDetailsRepository).upsert(any(UserIdpDetails.class), eq(TENANT_PB));
+                verify(ssoUserPersistenceService, never()).updateUserAndUpsertIdpDetails(any(User.class), any(UserIdpDetails.class), anyString(), any(RequestInfo.class));
+                verify(ssoUserPersistenceService).upsertIdpDetailsOnly(any(UserIdpDetails.class), eq(TENANT_PB));
         }
 
         @Test
@@ -240,8 +249,6 @@ public class JwtExchangeAuthenticationProviderTest {
                 User createdUser = User.builder().uuid("new-uuid").username("johndoe").type(UserType.EMPLOYEE)
                                 .active(true)
                                 .password("password").roles(Collections.emptySet()).build();
-                when(userService.updateWithoutOtpValidation(any(), any())).thenReturn(createdUser);
-
                 Authentication result = authenticationProvider.authenticate(authenticationToken);
 
                 assertNotNull(result);
@@ -249,7 +256,7 @@ public class JwtExchangeAuthenticationProviderTest {
                                 any(org.egov.user.domain.model.hrms.User.class), eq("PERMANENT"),
                                 eq("1f3572c4-07ce-4d58-86d3-7b6e2458e812"), eq("NMCP"), eq("EMPLOYED"), eq(TENANT_PB),
                                 anyString(), anyString(), any(OidcValidatedJwt.class), any(RequestInfo.class));
-                verify(userService).updateWithoutOtpValidation(any(), any());
+                verify(ssoUserPersistenceService).updateUserAndUpsertIdpDetails(any(User.class), any(UserIdpDetails.class), eq(TENANT_PB), any(RequestInfo.class));
         }
 
         @Test
@@ -298,8 +305,6 @@ public class JwtExchangeAuthenticationProviderTest {
                 User createdUser = User.builder().uuid("new-uuid").username("johndoe").type(UserType.EMPLOYEE)
                                 .active(true)
                                 .password("password").roles(Collections.emptySet()).build();
-                when(userService.updateWithoutOtpValidation(any(), any())).thenReturn(createdUser);
-
                 Authentication result = authenticationProvider.authenticate(authenticationToken);
 
                 assertNotNull(result);
@@ -373,11 +378,6 @@ public class JwtExchangeAuthenticationProviderTest {
                                 anyString(), anyString(), anyString(), anyString(), any(OidcValidatedJwt.class), any(RequestInfo.class)))
                                 .thenReturn(hrmsUser);
 
-                User createdUser = User.builder().uuid("new-uuid").username("johndoe").type(UserType.EMPLOYEE)
-                                .active(true)
-                                .password("password").roles(Collections.emptySet()).build();
-                when(userService.updateWithoutOtpValidation(any(), any())).thenReturn(createdUser);
-
                 authenticationProvider.authenticate(authenticationToken);
 
                 verify(projectEmployeeStaffUtil).createEmployeeAndProjectStaff(
@@ -427,11 +427,6 @@ public class JwtExchangeAuthenticationProviderTest {
                                 anyString(), anyString(), anyString(), anyString(), any(OidcValidatedJwt.class), any(RequestInfo.class)))
                                 .thenReturn(hrmsUser);
 
-                User createdUser = User.builder().uuid("new-uuid").username("johndoe").type(UserType.EMPLOYEE)
-                                .active(true)
-                                .password("password").roles(Collections.emptySet()).build();
-                when(userService.updateWithoutOtpValidation(any(), any())).thenReturn(createdUser);
-
                 authenticationProvider.authenticate(authenticationToken);
 
                 verify(projectEmployeeStaffUtil).createEmployeeAndProjectStaff(
@@ -460,12 +455,10 @@ public class JwtExchangeAuthenticationProviderTest {
 
                 when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
                 when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
-                when(userService.updateWithoutOtpValidation(any(), any())).thenReturn(user);
-
                 authenticationProvider.authenticate(authenticationToken);
 
                 ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-                verify(userService).updateWithoutOtpValidation(userCaptor.capture(), any());
+                verify(ssoUserPersistenceService).updateUserAndUpsertIdpDetails(userCaptor.capture(), any(UserIdpDetails.class), eq(TENANT_PB), any(RequestInfo.class));
                 assertTrue(userCaptor.getValue().getMfaEnabled());
         }
 
@@ -489,12 +482,10 @@ public class JwtExchangeAuthenticationProviderTest {
 
                 when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
                 when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
-                when(userService.updateWithoutOtpValidation(any(), any())).thenReturn(user);
-
                 authenticationProvider.authenticate(authenticationToken);
 
                 ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-                verify(userService).updateWithoutOtpValidation(userCaptor.capture(), any());
+                verify(ssoUserPersistenceService).updateUserAndUpsertIdpDetails(userCaptor.capture(), any(UserIdpDetails.class), eq(TENANT_PB), any(RequestInfo.class));
                 assertTrue(userCaptor.getValue().getMfaEnabled());
         }
 
@@ -518,12 +509,10 @@ public class JwtExchangeAuthenticationProviderTest {
 
                 when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
                 when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
-                when(userService.updateWithoutOtpValidation(any(), any())).thenReturn(user);
-
                 authenticationProvider.authenticate(authenticationToken);
 
                 ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-                verify(userService).updateWithoutOtpValidation(userCaptor.capture(), any());
+                verify(ssoUserPersistenceService).updateUserAndUpsertIdpDetails(userCaptor.capture(), any(UserIdpDetails.class), eq(TENANT_PB), any(RequestInfo.class));
                 assertFalse(userCaptor.getValue().getMfaEnabled());
         }
 
@@ -547,12 +536,10 @@ public class JwtExchangeAuthenticationProviderTest {
 
                 when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
                 when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
-                when(userService.updateWithoutOtpValidation(any(), any())).thenReturn(user);
-
                 authenticationProvider.authenticate(authenticationToken);
 
                 ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-                verify(userService).updateWithoutOtpValidation(userCaptor.capture(), any());
+                verify(ssoUserPersistenceService).updateUserAndUpsertIdpDetails(userCaptor.capture(), any(UserIdpDetails.class), eq(TENANT_PB), any(RequestInfo.class));
                 assertTrue(userCaptor.getValue().getMfaEnabled());
         }
 
@@ -576,12 +563,10 @@ public class JwtExchangeAuthenticationProviderTest {
 
                 when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
                 when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
-                when(userService.updateWithoutOtpValidation(any(), any())).thenReturn(user);
-
                 authenticationProvider.authenticate(authenticationToken);
 
                 ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-                verify(userService).updateWithoutOtpValidation(userCaptor.capture(), any());
+                verify(ssoUserPersistenceService).updateUserAndUpsertIdpDetails(userCaptor.capture(), any(UserIdpDetails.class), eq(TENANT_PB), any(RequestInfo.class));
                 assertTrue(userCaptor.getValue().getMfaEnabled());
         }
 
@@ -605,13 +590,11 @@ public class JwtExchangeAuthenticationProviderTest {
 
                 when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
                 when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
-                when(userService.updateWithoutOtpValidation(any(), any())).thenReturn(user);
-
                 authenticationProvider.authenticate(authenticationToken);
 
                 // Should default to false because parsing fails
                 ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-                verify(userService).updateWithoutOtpValidation(userCaptor.capture(), any());
+                verify(ssoUserPersistenceService).updateUserAndUpsertIdpDetails(userCaptor.capture(), any(UserIdpDetails.class), eq(TENANT_PB), any(RequestInfo.class));
                 assertFalse(userCaptor.getValue().getMfaEnabled());
         }
 
@@ -637,7 +620,6 @@ public class JwtExchangeAuthenticationProviderTest {
                                 .roles(Collections.emptySet()).build();
                 when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
                 when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
-                when(userService.updateWithoutOtpValidation(any(), any())).thenReturn(user);
                 authenticationProvider.authenticate(authenticationToken);
         }
 
@@ -666,7 +648,6 @@ public class JwtExchangeAuthenticationProviderTest {
                                 .tenantId(TENANT_PB).roles(Collections.emptySet()).build();
                 when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
                 when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
-                when(userService.updateWithoutOtpValidation(any(), any())).thenReturn(user);
                 when(userService.isAccountUnlockAble(user)).thenReturn(false);
                 authenticationProvider.authenticate(authenticationToken);
         }
@@ -702,19 +683,20 @@ public class JwtExchangeAuthenticationProviderTest {
                 when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
                 when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(lockedUser);
                 when(userService.isAccountUnlockAble(lockedUser)).thenReturn(true);
-                when(userService.updateWithoutOtpValidation(any(), any())).thenReturn(unlockedUser);
+                when(userService.updateWithoutOtpValidation(any(User.class), any(RequestInfo.class))).thenReturn(unlockedUser);
 
                 Authentication result = authenticationProvider.authenticate(authenticationToken);
 
                 assertNotNull(result);
                 assertTrue(result instanceof UsernamePasswordAuthenticationToken);
 
+                verify(ssoUserPersistenceService).upsertIdpDetailsOnly(any(UserIdpDetails.class), eq(TENANT_PB));
                 ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-                verify(userService).updateWithoutOtpValidation(userCaptor.capture(), any());
+                verify(userService).updateWithoutOtpValidation(userCaptor.capture(), any(RequestInfo.class));
                 User updated = userCaptor.getValue();
                 assertFalse(updated.getAccountLocked());
                 org.junit.Assert.assertNull(updated.getPassword());
-                verify(userService).resetFailedLoginAttempts(updated);
+                verify(userService).resetFailedLoginAttempts(unlockedUser);
         }
 
         @Test
@@ -755,12 +737,10 @@ public class JwtExchangeAuthenticationProviderTest {
                 User createdUser = User.builder().uuid("new-uuid").username("johndoe").type(UserType.EMPLOYEE)
                                 .active(true)
                                 .password("password").roles(Collections.emptySet()).build();
-                when(userService.updateWithoutOtpValidation(any(), any())).thenReturn(createdUser);
-
                 Authentication result = authenticationProvider.authenticate(authenticationToken);
 
                 assertNotNull(result);
-                verify(userIdpDetailsRepository).upsert(any(UserIdpDetails.class), eq(TENANT_PB));
+                verify(ssoUserPersistenceService).updateUserAndUpsertIdpDetails(any(User.class), any(UserIdpDetails.class), eq(TENANT_PB), any(RequestInfo.class));
         }
 
         @Test
@@ -788,7 +768,7 @@ public class JwtExchangeAuthenticationProviderTest {
 
                 when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
                 when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
-                when(userService.updateWithoutOtpValidation(any(), any())).thenReturn(user.toBuilder().roles(roles).build());
+                when(ssoUserPersistenceService.updateUserAndUpsertIdpDetails(any(User.class), any(UserIdpDetails.class), anyString(), any(RequestInfo.class))).thenAnswer(inv -> inv.getArgumentAt(0, User.class).toBuilder().roles(roles).build());
 
                 authenticationProvider.authenticate(authenticationToken);
 
@@ -830,7 +810,6 @@ public class JwtExchangeAuthenticationProviderTest {
                                 .roles(Collections.emptySet()).build();
                 when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
                 when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
-                when(userService.updateWithoutOtpValidation(any(), any())).thenReturn(user);
                 try {
                         authenticationProvider.authenticate(authenticationToken);
                         org.junit.Assert.fail("Expected SsoUserMappingException");
@@ -894,7 +873,6 @@ public class JwtExchangeAuthenticationProviderTest {
                                 .roles(Collections.emptySet()).build();
                 when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
                 when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
-                when(userService.updateWithoutOtpValidation(any(), any())).thenReturn(user);
                 try {
                         authenticationProvider.authenticate(authenticationToken);
                         org.junit.Assert.fail("Expected SsoUserMappingException");
@@ -938,7 +916,7 @@ public class JwtExchangeAuthenticationProviderTest {
                                 anyString(), anyString(), anyString(), anyString(), any(OidcValidatedJwt.class), any(RequestInfo.class)))
                                 .thenReturn(hrmsUser);
 
-                when(userService.updateWithoutOtpValidation(any(), any()))
+                when(ssoUserPersistenceService.updateUserAndUpsertIdpDetails(any(User.class), any(UserIdpDetails.class), anyString(), any(RequestInfo.class)))
                         .thenThrow(new org.egov.user.domain.exception.DuplicateUserNameException(
                                 new UserSearchCriteria()
                         ));

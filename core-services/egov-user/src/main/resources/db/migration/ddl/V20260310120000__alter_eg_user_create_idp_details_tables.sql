@@ -33,7 +33,7 @@ ALTER TABLE eg_user_audit_table
 CREATE TABLE eg_user_idp_details (
     id                bigint                    NOT NULL,
     tenantid          character varying(256)    NOT NULL,
-    uuid              character(300),
+    uuid              character varying(300),
 
     idptokenexp       timestamp,
     lastssologinat    timestamp,
@@ -67,7 +67,7 @@ CREATE TABLE eg_user_idp_details_audit_table (
     id                uuid      NOT NULL DEFAULT gen_random_uuid(),
     userid            bigint    NOT NULL,
     tenantid          character varying(256) NOT NULL,
-    uuid              character(300),
+    uuid              character varying(300),
 
     idptokenexp       timestamp,
     lastssologinat    timestamp,

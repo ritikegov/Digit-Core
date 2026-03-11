@@ -41,6 +41,9 @@ public final class JwtConstants {
     /** Error message when IDP token has neither jti nor uti claim. */
     public static final String ERROR_MISSING_TOKEN_ID = "IDP token must contain jti or uti claim";
 
+    /** Log: access token verification failed (reason follows). */
+    public static final String LOG_ACCESS_TOKEN_VERIFY_FAILED = "Access token verification failed for provider {}: {}";
+
     /** Encryption policy model name for UserIdpDetails (MDMS SecurityPolicy). Used when encrypting before persist to eg_user_idp_details. */
     public static final String ENCRYPTION_MODEL_USER_IDP_DETAILS = "UserIdpDetails";
 

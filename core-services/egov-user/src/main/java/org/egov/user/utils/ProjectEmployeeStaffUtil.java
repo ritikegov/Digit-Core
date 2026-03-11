@@ -1,13 +1,11 @@
 package org.egov.user.utils;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.tracer.model.CustomException;
-import org.egov.user.kafka.Producer;
 import org.egov.user.domain.model.boundary.*;
 import org.egov.user.domain.model.hrms.*;
+import org.egov.user.kafka.Producer;
 import org.egov.user.web.contract.auth.OidcValidatedJwt;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;

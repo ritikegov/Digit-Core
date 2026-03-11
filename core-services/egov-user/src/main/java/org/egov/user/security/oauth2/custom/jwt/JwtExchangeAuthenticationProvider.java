@@ -10,14 +10,15 @@ import org.egov.user.domain.exception.UserNotFoundException;
 import org.egov.user.domain.exception.sso.OidcProviderConfigException;
 import org.egov.user.domain.exception.sso.SsoMissingParamException;
 import org.egov.user.domain.exception.sso.SsoUserMappingException;
+import org.egov.user.domain.exception.sso.TokenReplayException;
 import org.egov.user.domain.model.Role;
 import org.egov.user.domain.model.SecureUser;
 import org.egov.user.domain.model.User;
 import org.egov.user.domain.model.UserIdpDetails;
 import org.egov.user.domain.model.enums.UserType;
+import org.egov.user.domain.service.SsoUserPersistenceService;
 import org.egov.user.domain.service.UserService;
 import org.egov.user.domain.service.utils.EncryptionDecryptionUtil;
-import org.egov.user.persistence.repository.UserIdpDetailsRepository;
 import org.egov.user.security.oauth2.custom.service.EmployeeCreationProfile;
 import org.egov.user.security.oauth2.custom.service.IdpGraphService;
 import org.egov.user.security.oauth2.custom.service.impl.NoOpGraphService;
@@ -57,7 +58,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
     private final AccessTokenMfaExtractor accessTokenMfaExtractor;
     private final SsoDefaultPasswordResolver ssoDefaultPasswordResolver;
     private final NoOpGraphService noOpGraphService;
-    private final UserIdpDetailsRepository userIdpDetailsRepository;
+    private final SsoUserPersistenceService ssoUserPersistenceService;
     private final EncryptionDecryptionUtil encryptionDecryptionUtil;
 
     public JwtExchangeAuthenticationProvider(
@@ -69,7 +70,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
             AccessTokenMfaExtractor accessTokenMfaExtractor,
             SsoDefaultPasswordResolver ssoDefaultPasswordResolver,
             NoOpGraphService noOpGraphService,
-            UserIdpDetailsRepository userIdpDetailsRepository,
+            SsoUserPersistenceService ssoUserPersistenceService,
             EncryptionDecryptionUtil encryptionDecryptionUtil) {
         this.jwtValidationService = jwtValidationService;
         this.userService = userService;
@@ -81,7 +82,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
                 JwtConstants.MFA_EXTRACTOR_REQUIRED_MESSAGE);
         this.ssoDefaultPasswordResolver = ssoDefaultPasswordResolver;
         this.noOpGraphService = noOpGraphService;
-        this.userIdpDetailsRepository = userIdpDetailsRepository;
+        this.ssoUserPersistenceService = ssoUserPersistenceService;
         this.encryptionDecryptionUtil = encryptionDecryptionUtil;
     }
 
@@ -154,6 +155,10 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
         OidcValidatedJwt jwt = jwtValidationService.validate(input.token, input.tenantId);
 
         validateRequiredParams(jwt, input.tenantId);
+        
+        // ADD TOKEN REPLAY PROTECTION HERE
+        validateTokenReplay(jwt, input.tenantId);
+        
         ProviderAndMfa providerAndMfa = resolveProviderAndMfa(jwt, input.tenantId, input.authToken);
 
         UserAndRequestInfo userAndRequestInfo = findOrCreateUser(jwt, providerAndMfa.provider,
@@ -208,6 +213,27 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
     }
 
     /**
+     * Validates that the JWT token has not been used before (replay protection).
+     * 
+     * @param jwt the validated JWT containing tokenId
+     * @param tenantId the tenant ID
+     * @throws TokenReplayException if the tokenId has been used before
+     */
+    private void validateTokenReplay(OidcValidatedJwt jwt, String tenantId) {
+        String tokenId = jwt.getTokenId();
+        if (tokenId == null || tokenId.isEmpty()) {
+            throw new OAuth2AuthenticationException(
+                    new OAuth2Error(JwtConstants.OAUTH2_ERROR_INVALID_TOKEN, 
+                        JwtConstants.ERROR_MISSING_TOKEN_ID, null));
+        }
+        
+        // Check if token has been used before via service layer
+        if (ssoUserPersistenceService.isTokenReplay(tokenId, tenantId)) {
+            throw new TokenReplayException(tokenId);
+        }
+    }
+
+    /**
      * Resolves provider by JWT provider id and tenant, asserts issuer match, extracts MFA from auth token.
      */
     private ProviderAndMfa resolveProviderAndMfa(OidcValidatedJwt jwt, String tenantId, String authToken) {
@@ -242,18 +268,19 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
         resolveGraphService(provider).enrichUserWithMfaDetails(userForUpdate, provider, jwt.getOid());
         requestInfo.getUserInfo().setId(userForUpdate.getId());
 
-        User originalUser = user;
-        if (rolesChanged(user.getRoles(), userForUpdate.getRoles())) {
-            user = userService.updateWithoutOtpValidation(userForUpdate, requestInfo);
-        } else {
-            User decrypted = encryptionDecryptionUtil.decryptObject(user, "UserSelf", User.class, requestInfo);
-            user = decrypted != null ? decrypted : originalUser;
-        }
-
         UserIdpDetails idpDetails = buildIdpDetails(userForUpdate, jwt);
         UserIdpDetails encryptedIdpDetails = encryptionDecryptionUtil.encryptObject(
                 idpDetails, JwtConstants.ENCRYPTION_MODEL_USER_IDP_DETAILS, UserIdpDetails.class);
-        userIdpDetailsRepository.upsert(encryptedIdpDetails, tenantId);
+
+        User originalUser = user;
+        if (rolesChanged(user.getRoles(), userForUpdate.getRoles())) {
+            user = ssoUserPersistenceService.updateUserAndUpsertIdpDetails(
+                    userForUpdate, encryptedIdpDetails, tenantId, requestInfo);
+        } else {
+            ssoUserPersistenceService.upsertIdpDetailsOnly(encryptedIdpDetails, tenantId);
+            User decrypted = encryptionDecryptionUtil.decryptObject(user, "UserSelf", User.class, requestInfo);
+            user = decrypted != null ? decrypted : originalUser;
+        }
 
         return new UserAndRequestInfo(user, requestInfo);
     }
@@ -309,11 +336,11 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
         requestInfo.getUserInfo().setUuid(createdUser.getUuid());
 
         try {
-            User user = userService.updateWithoutOtpValidation(createdUser, requestInfo);
             UserIdpDetails idpDetails = buildIdpDetails(createdUser, jwt);
             UserIdpDetails encryptedIdpDetails = encryptionDecryptionUtil.encryptObject(
                     idpDetails, JwtConstants.ENCRYPTION_MODEL_USER_IDP_DETAILS, UserIdpDetails.class);
-            userIdpDetailsRepository.upsert(encryptedIdpDetails, tenantId);
+            User user = ssoUserPersistenceService.updateUserAndUpsertIdpDetails(
+                    createdUser, encryptedIdpDetails, tenantId, requestInfo);
             return new UserAndRequestInfo(user, requestInfo);
         } catch (DuplicateUserNameException dupE) {
             log.error("Fatal: duplicate user conflict for oid: {}", jwt.getOid(), dupE);

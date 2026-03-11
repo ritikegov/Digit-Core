@@ -84,13 +84,13 @@ public class IDPJwtValidator implements JwtValidator {
                             && err.getDescription().toLowerCase().contains("expired"));
             if (isExpiry) {
                 log.warn("JWT token has expired for issuer: {}", issuer);
-                throw IdpJwtValidationException.expired(e.getMessage(), e);
+                throw IdpJwtValidationException.expired(e);
             }
             log.error("JWT signature or claim validation failed for issuer: {}", issuer, e);
-            throw IdpJwtValidationException.invalid(e.getMessage(), e);
+            throw IdpJwtValidationException.invalid(e);
         } catch (Exception e) {
             log.error("Error decoding JWT token", e);
-            throw IdpJwtValidationException.invalid(e.getMessage(), e);
+            throw IdpJwtValidationException.invalid(e);
         }
 
         Map<String, Object> claims;
@@ -258,10 +258,11 @@ public class IDPJwtValidator implements JwtValidator {
     }
 
     /**
-     * Creates JWT validator with timestamp, issuer, and optionally audience validation.
+     * Creates JWT validator with timestamp, issuer, and mandatory audience validation.
      *
      * @param provider the OIDC provider configuration
      * @return configured OAuth2TokenValidator
+     * @throws OidcProviderConfigException if no audiences are configured in the provider
      */
     private OAuth2TokenValidator<Jwt> createJwtValidator(AuthProperties.Provider provider) {
         OAuth2TokenValidator<Jwt> timestampValidator = JwtValidators.createDefault();
@@ -271,9 +272,11 @@ public class IDPJwtValidator implements JwtValidator {
         validators.add(timestampValidator);
         validators.add(issuerValidator);
         
-        if (provider.getAudiences() != null && !provider.getAudiences().isEmpty()) {
-            validators.add(new AudienceValidator(provider.getAudiences()));
+        // Audience validation is now mandatory - provider must have audiences configured
+        if (provider.getAudiences() == null || provider.getAudiences().isEmpty()) {
+            throw OidcProviderConfigException.audiencesMissing(provider.getId());
         }
+        validators.add(new AudienceValidator(provider.getAudiences()));
         
         return new org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator<>(validators);
     }
@@ -472,7 +475,8 @@ public class IDPJwtValidator implements JwtValidator {
                 return OAuth2TokenValidatorResult.success();
             }
             
-            return createFailureResult("Invalid issuer (iss). Expected one of " + allowedIssuersNormalized + " but was " + iss);
+            log.debug("JWT issuer mismatch: received '{}', allowed {}", iss, allowedIssuersNormalized);
+            return createFailureResult(SsoErrorCodes.MSG_INVALID_ISSUER);
         }
 
         private OAuth2TokenValidatorResult createFailureResult(String message) {
@@ -487,7 +491,7 @@ public class IDPJwtValidator implements JwtValidator {
         /**
          * Creates an audience validator.
          *
-         * @param allowedAudiences list of allowed audience values
+         * @param allowedAudiences list of allowed audience values (must be non-empty)
          */
         private AudienceValidator(List<String> allowedAudiences) {
             this.allowedAudiences = allowedAudiences == null ? Collections.emptySet()
@@ -515,7 +519,8 @@ public class IDPJwtValidator implements JwtValidator {
                 return OAuth2TokenValidatorResult.success();
             }
             
-            return createFailureResult("Invalid audience (aud). Expected one of " + allowedAudiences + " but was " + aud);
+            log.debug("JWT audience mismatch: received {}, allowed {}", aud, allowedAudiences);
+            return createFailureResult(SsoErrorCodes.MSG_INVALID_AUDIENCE);
         }
 
         private OAuth2TokenValidatorResult createFailureResult(String message) {

@@ -20,6 +20,11 @@ public class OidcProviderConfigException extends SsoException {
                 "issuer-uri is not configured for providerId=" + providerId);
     }
 
+    public static OidcProviderConfigException audiencesMissing(String providerId) {
+        return new OidcProviderConfigException(SsoErrorCodes.OIDC_AUDIENCES_MISSING,
+                "audiences are not configured for providerId=" + providerId + " - audience validation is mandatory");
+    }
+
     public static OidcProviderConfigException issuerMissingInToken() {
         return new OidcProviderConfigException(SsoErrorCodes.OIDC_ISSUER_MISSING_IN_TOKEN,
                 "Missing issuer (iss) claim in JWT token");

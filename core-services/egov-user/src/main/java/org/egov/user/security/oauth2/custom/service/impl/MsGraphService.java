@@ -104,6 +104,7 @@ public class MsGraphService implements IdpGraphService {
             return Optional.empty();
         }
         try {
+            GraphApiInputValidator.validateOid(userOid);
             String accessToken = graphAccessTokenProvider.getAccessToken(provider);
             if (accessToken == null) {
                 log.debug("Graph token acquisition failed; skipping employee creation profile");
@@ -170,6 +171,7 @@ public class MsGraphService implements IdpGraphService {
      */
     private void fetchAndApplyAuthenticationMethods(User user, AuthProperties.Provider provider,
                                                     String userOid, String accessToken) throws IOException {
+        GraphApiInputValidator.validateOid(userOid);
         String methodsUrl = String.format(provider.getGraphMethodsUrl(), userOid);
         HttpHeaders headers = new HttpHeaders();
         headers.set(SecurityConstants.HEADER_AUTHORIZATION, SecurityConstants.BEARER_PREFIX + accessToken);

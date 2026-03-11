@@ -20,7 +20,7 @@ public final class UserIdpDetailsQueryBuilder {
                     + ":mfaenabled, :mfadevicename, :mfaphonelast4, :mfaregisteredon, :mfadetails, "
                     + ":createddate, :lastmodifieddate, :createdby, :lastmodifiedby) "
                     + "ON CONFLICT (id, tenantid) DO UPDATE SET "
-                    + "uuid = EXCLUDED.uuid, "
+                    + "uuid = COALESCE(EXCLUDED.uuid, eg_user_idp_details.uuid), "
                     + "idptokenexp = EXCLUDED.idptokenexp, "
                     + "lastssologinat = EXCLUDED.lastssologinat, "
                     + "tokenid = EXCLUDED.tokenid, "
@@ -48,4 +48,9 @@ public final class UserIdpDetailsQueryBuilder {
                     + "VALUES (:id, :userid, :tenantid, :uuid, :idptokenexp, :lastssologinat, :tokenid, "
                     + ":mfaenabled, :mfadevicename, :mfaphonelast4, :mfaregisteredon, :mfadetails, "
                     + ":createddate, :lastmodifieddate, :createdby, :lastmodifiedby)";
+
+    /** Query to check if a tokenId has already been used (token replay protection). */
+    public static final String CHECK_TOKEN_REPLAY =
+            "SELECT COUNT(*) FROM " + SCHEMA_REPLACE_STRING + ".eg_user_idp_details "
+            + "WHERE tokenid = :tokenid AND tenantid = :tenantid";
 }

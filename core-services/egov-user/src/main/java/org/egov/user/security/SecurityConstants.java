@@ -1,5 +1,7 @@
 package org.egov.user.security;
 
+import java.util.regex.Pattern;
+
 /**
  * Constants for security: request param keys, detail map keys, map keys used in put/get, headers.
  * Does not include log or exception message strings.
@@ -47,4 +49,11 @@ public final class SecurityConstants {
     public static final String GRAPH_TOKEN_ENCRYPTION_NOOP_CODE = "GRAPH_TOKEN_ENCRYPTION_NOOP";
     public static final String GRAPH_TOKEN_ENCRYPTION_NOOP_MESSAGE =
             "Graph token encryption did not change value. Ensure MDMS DataSecurity SecurityPolicy for model 'GraphToken' is configured (see MDMS_GRAPH_TOKEN_ENCRYPTION_POLICY.md).";
+
+    /** Validation patterns for Graph URL path parameters derived from JWT claims. */
+    public static final Pattern GRAPH_OID_PATTERN =
+            Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
+
+    public static final Pattern GRAPH_EMAIL_PATTERN =
+            Pattern.compile("^[^@\\s/\\\\?#]+@[^@\\s/\\\\?#.]+\\.[^@\\s/\\\\?#]{2,}$");
 }

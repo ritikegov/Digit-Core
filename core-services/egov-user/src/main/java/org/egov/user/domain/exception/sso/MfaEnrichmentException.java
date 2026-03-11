@@ -14,6 +14,10 @@ public class MfaEnrichmentException extends SsoException {
         super(SsoErrorCodes.MFA_ENRICHMENT_FAILED, message, HttpStatus.UNAUTHORIZED);
     }
 
+    public MfaEnrichmentException(String code, String message) {
+        super(code, message, HttpStatus.UNAUTHORIZED);
+    }
+
     public static MfaEnrichmentException graphCallFailed(String userOid, Throwable cause) {
         return new MfaEnrichmentException(
                 "Failed to fetch MFA details from Microsoft Graph for user oid: " + userOid, cause);

@@ -21,7 +21,7 @@ public class SsoExceptionErrorHandler implements ErrorAdapter<SsoException> {
         Error error = Error.builder()
                 .code(ex.getHttpStatus().value())
                 .message(ex.getMessage())
-                .description(ex.getCause() != null ? ex.getCause().getMessage() : null)
+                .description(null)
                 .fields(getErrorFields(ex))
                 .build();
         return new ErrorResponse(null, error);

@@ -5,6 +5,7 @@ import org.egov.user.repository.builder.UserIdpDetailsQueryBuilder;
 import org.egov.user.utils.DatabaseSchemaUtils;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
 import java.util.HashMap;
@@ -32,10 +33,8 @@ public class UserIdpDetailsRepository {
      * @param details  the IDP details to persist (id and tenantId required)
      * @param tenantId tenant for schema replacement
      */
+    @Transactional
     public void upsert(UserIdpDetails details, String tenantId) {
-        if (details == null || details.getId() == null || tenantId == null) {
-            return;
-        }
         Date now = new Date();
         Date createdDate = details.getCreatedDate() != null ? details.getCreatedDate() : now;
 
@@ -81,6 +80,25 @@ public class UserIdpDetailsRepository {
         String auditQuery = databaseSchemaUtils.replaceSchemaPlaceholder(
                 UserIdpDetailsQueryBuilder.INSERT_IDP_AUDIT, tenantId);
         namedParameterJdbcTemplate.update(auditQuery, auditParams);
+    }
+
+    /**
+     * Checks if a tokenId has already been used (token replay protection).
+     * 
+     * @param tokenId the JWT token ID (jti/uti) to check
+     * @param tenantId the tenant ID
+     * @return true if the tokenId has been used before, false otherwise
+     */
+    public boolean isTokenReplay(String tokenId, String tenantId) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tokenid", tokenId);
+        params.put("tenantid", tenantId);
+
+        String query = databaseSchemaUtils.replaceSchemaPlaceholder(
+                UserIdpDetailsQueryBuilder.CHECK_TOKEN_REPLAY, tenantId);
+        
+        Integer count = namedParameterJdbcTemplate.queryForObject(query, params, Integer.class);
+        return count != null && count > 0;
     }
 
 }

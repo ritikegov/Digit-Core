@@ -32,16 +32,15 @@ public class  GraphClientSecretResolver {
                 + normalizeForEnv(provider.getTenantId())
                 + "_"
                 + normalizeForEnv(provider.getId());
-        log.info("Looking for Graph client secret in environment variable: {}", envKey);
-        log.info("Provider details - tenantId: {}, id: {}", provider.getTenantId(), provider.getId());
+        log.debug("Resolving Graph client secret for provider: {}", provider.getId());
         String fromEnv = System.getenv(envKey);
         if (StringUtils.hasText(fromEnv)) {
             log.debug("Graph client secret resolved from env var: key={}", envKey);
             return fromEnv;
         }
 
-        log.error("Graph client secret not found in environment variable: {}", envKey);
-        throw new IllegalStateException("Graph client secret not found in environment variable: " + envKey);
+        log.warn("Graph client secret not configured for provider: {}", provider.getId());
+        throw new IllegalStateException("Graph client secret not configured for provider: " + provider.getId());
     }
 
     private static String normalizeForEnv(String value) {
