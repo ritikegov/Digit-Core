@@ -9,14 +9,12 @@ import com.nimbusds.jwt.SignedJWT;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.user.config.AuthProperties;
 import org.egov.user.config.OidcConfigConstants;
-import org.egov.user.domain.exception.InvalidAccessTokenException;
-import org.egov.user.security.oauth2.custom.accesstoken.AccessTokenValidator;
 import org.egov.user.security.oauth2.custom.accesstoken.AccessTokenValidationResult;
+import org.egov.user.security.oauth2.custom.accesstoken.AccessTokenValidator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
-import java.security.interfaces.RSAPublicKey;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,9 +30,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class MicrosoftAccessTokenValidator implements AccessTokenValidator {
     
     private final RestTemplate restTemplate;
-    
-    // Cache TTL for JWKS - 1 hour
-    private static final long JWKS_CACHE_TTL_MS = TimeUnit.HOURS.toMillis(1);
+    private final long jwksCacheTtlMs;
     
     /**
      * Atomic cache entry holding both JWKS set and timestamp to prevent race conditions
@@ -52,8 +48,17 @@ public class MicrosoftAccessTokenValidator implements AccessTokenValidator {
     private static final AtomicReference<CacheEntry> cache = new AtomicReference<>(null);
     
     @Autowired
-    public MicrosoftAccessTokenValidator(RestTemplate restTemplate) {
+    public MicrosoftAccessTokenValidator(RestTemplate restTemplate, AuthProperties authProperties) {
         this.restTemplate = restTemplate;
+        Long configuredTtl = null;
+        if (authProperties != null && authProperties.getOidc() != null) {
+            configuredTtl = authProperties.getOidc().getJwksCacheTtlMs();
+        }
+        if (configuredTtl == null || configuredTtl <= 0L) {
+            this.jwksCacheTtlMs = OidcConfigConstants.DEFAULT_JWKS_CACHE_TTL_MS;
+        } else {
+            this.jwksCacheTtlMs = configuredTtl;
+        }
     }
     
     @Override
@@ -179,7 +184,7 @@ public class MicrosoftAccessTokenValidator implements AccessTokenValidator {
         CacheEntry entry = cache.get();
         
         // Check if cache is valid and contains the URI
-        if (entry != null && (now - entry.timestamp) < JWKS_CACHE_TTL_MS) {
+        if (entry != null && (now - entry.timestamp) < jwksCacheTtlMs) {
             JWKSet cached = entry.jwkSetCache.get(jwksUri);
             if (cached != null) {
                 log.debug("Using cached JWKS for URI: {}", jwksUri);
@@ -202,7 +207,7 @@ public class MicrosoftAccessTokenValidator implements AccessTokenValidator {
             
             // Update cache atomically
             CacheEntry newEntry;
-            if (entry != null && (now - entry.timestamp) < JWKS_CACHE_TTL_MS) {
+            if (entry != null && (now - entry.timestamp) < jwksCacheTtlMs) {
                 // Update existing cache entry
                 ConcurrentHashMap<String, JWKSet> updatedCache = new ConcurrentHashMap<>(entry.jwkSetCache);
                 updatedCache.put(jwksUri, jwkSet);

@@ -53,6 +53,19 @@ public class AuthProperties {
          * When "mdms", provider config is fetched from MDMS and works for any OIDC IdP (Azure, Google, etc.).
          */
         private String providersSource = OidcConfigConstants.PROVIDERS_SOURCE_STATIC;
+
+        /**
+         * Global TTL in milliseconds for all JWKS and JWT decoder caches.
+         *
+         * <p>If set to a positive value, all JWKS/JWT decoder cache implementations
+         * must use this value as their cache TTL unless they have a more specific
+         * override. When this property is {@code null} or less than or equal to zero,
+         * implementations must fall back to
+         * {@link org.egov.user.config.OidcConfigConstants#DEFAULT_JWKS_CACHE_TTL_MS}.</p>
+         *
+         * <p>Property: {@code auth.oidc.jwks-cache-ttl-ms}</p>
+         */
+        private Long jwksCacheTtlMs;
     }
 
     /**

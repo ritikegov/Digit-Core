@@ -18,6 +18,7 @@ public final class SsoErrorCodes {
     public static final String MSG_JWT_PARSE_FAILED = "Failed to parse JWT token";
     public static final String MSG_INVALID_ISSUER = "Token issuer is not recognized";
     public static final String MSG_INVALID_AUDIENCE = "Token audience is not valid";
+    public static final String JWT_SIGNATURE_ERROR_SUBSTRING = "signature";
 
     public static final String OIDC_JWKS_MISSING = "sso.oidc.jwks_missing";
     public static final String OIDC_ISSUER_MISSING = "sso.oidc.issuer_missing";
@@ -48,4 +49,13 @@ public final class SsoErrorCodes {
     public static final String IDP_PERSISTENCE_INVALID_INPUT = "sso.idp.persistence_invalid_input";
     public static final String MSG_IDP_PERSISTENCE_INVALID_INPUT =
             "IDP details persistence aborted: required field is null";
+
+    // Operational / log message templates
+    public static final String MSG_DECODER_CACHE_CLEARED = "OIDC JWT decoder cache cleared";
+    public static final String MSG_DECODER_CACHE_PROVIDER_CLEARED =
+            "OIDC JWT decoder cache entry cleared for provider: {}";
+    public static final String MSG_DECODER_REFRESH_ON_SIGNATURE_FAILURE =
+            "Refreshing JWT decoder after signature failure for provider: {}";
+    public static final String MSG_DECODER_REFRESH_FAILED_AFTER_RETRY =
+            "JWT validation still failing after decoder refresh for issuer: {}";
 }

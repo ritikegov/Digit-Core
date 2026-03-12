@@ -3,6 +3,7 @@ package org.egov.user.security.oauth2.custom.jwt;
 import com.nimbusds.jwt.JWTParser;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.user.config.AuthProperties;
+import org.egov.user.config.OidcConfigConstants;
 import org.egov.user.config.OidcProviderSupplier;
 import org.egov.user.domain.exception.sso.IdpJwtValidationException;
 import org.egov.user.domain.exception.sso.OidcProviderConfigException;
@@ -25,11 +26,27 @@ public class IDPJwtValidator implements JwtValidator {
     private final OidcProviderSupplier oidcProviderSupplier;
 
     // cache by providerId
-    private final Map<String, JwtDecoder> decoders = new ConcurrentHashMap<>();
+    private final Map<String, DecoderEntry> decoders = new ConcurrentHashMap<>();
+
+    /**
+     * TTL in milliseconds for decoder cache entries.
+     * Derived from {@code auth.oidc.jwks-cache-ttl-ms} with fallback to
+     * {@link OidcConfigConstants#DEFAULT_JWKS_CACHE_TTL_MS}.
+     */
+    private final long decoderCacheTtlMs;
 
     public IDPJwtValidator(AuthProperties authProperties, OidcProviderSupplier oidcProviderSupplier) {
         this.authProperties = authProperties;
         this.oidcProviderSupplier = oidcProviderSupplier;
+        Long configuredTtl = null;
+        if (authProperties.getOidc() != null) {
+            configuredTtl = authProperties.getOidc().getJwksCacheTtlMs();
+        }
+        if (configuredTtl == null || configuredTtl <= 0L) {
+            this.decoderCacheTtlMs = OidcConfigConstants.DEFAULT_JWKS_CACHE_TTL_MS;
+        } else {
+            this.decoderCacheTtlMs = configuredTtl;
+        }
     }
 
     /**
@@ -86,8 +103,33 @@ public class IDPJwtValidator implements JwtValidator {
                 log.warn("JWT token has expired for issuer: {}", issuer);
                 throw IdpJwtValidationException.expired(e);
             }
-            log.error("JWT signature or claim validation failed for issuer: {}", issuer, e);
-            throw IdpJwtValidationException.invalid(e);
+
+            boolean isSignatureFailure = e.getErrors().stream()
+                    .anyMatch(err -> {
+                        String desc = err.getDescription();
+                        return desc != null
+                                && desc.toLowerCase().contains(SsoErrorCodes.JWT_SIGNATURE_ERROR_SUBSTRING);
+                    });
+
+            if (!isSignatureFailure) {
+                log.error("JWT signature or claim validation failed for issuer: {}", issuer, e);
+                throw IdpJwtValidationException.invalid(e);
+            }
+
+            // Likely signature failure: refresh decoder once and retry
+            String providerId = provider.getId();
+            log.info(SsoErrorCodes.MSG_DECODER_REFRESH_ON_SIGNATURE_FAILURE, providerId);
+            clearDecoderForProvider(providerId);
+            JwtDecoder freshDecoder = getDecoder(provider);
+            try {
+                jwt = freshDecoder.decode(token);
+            } catch (JwtValidationException retryEx) {
+                log.error(SsoErrorCodes.MSG_DECODER_REFRESH_FAILED_AFTER_RETRY, issuer, retryEx);
+                throw IdpJwtValidationException.invalid(retryEx);
+            } catch (Exception retryEx) {
+                log.error("Error decoding JWT token after decoder refresh", retryEx);
+                throw IdpJwtValidationException.invalid(retryEx);
+            }
         } catch (Exception e) {
             log.error("Error decoding JWT token", e);
             throw IdpJwtValidationException.invalid(e);
@@ -112,6 +154,30 @@ public class IDPJwtValidator implements JwtValidator {
         }
 
         return new OidcValidatedJwt(roles, claims, expirationTime, issueTime, token, provider.getId());
+    }
+
+    /**
+     * Clears the entire JWT decoder cache for all providers.
+     * Intended for operational use (e.g. config changes, testing).
+     */
+    public void clearDecoderCache() {
+        decoders.clear();
+        log.info(SsoErrorCodes.MSG_DECODER_CACHE_CLEARED);
+    }
+
+    /**
+     * Clears the JWT decoder cache entry for a specific provider ID.
+     *
+     * @param providerId the provider ID whose decoder cache entry should be removed
+     */
+    public void clearDecoderForProvider(String providerId) {
+        if (providerId == null) {
+            return;
+        }
+        DecoderEntry removed = decoders.remove(providerId);
+        if (removed != null) {
+            log.info(SsoErrorCodes.MSG_DECODER_CACHE_PROVIDER_CLEARED, providerId);
+        }
     }
 
     /**
@@ -234,12 +300,21 @@ public class IDPJwtValidator implements JwtValidator {
      * @throws OidcProviderConfigException if JWKS URI or issuer URI is missing
      */
     private JwtDecoder getDecoder(AuthProperties.Provider provider) {
-        return decoders.computeIfAbsent(provider.getId(), id -> {
-            validateProviderConfiguration(provider);
-            NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(provider.getJwkSetUri().trim()).build();
-            decoder.setJwtValidator(createJwtValidator(provider));
-            return decoder;
-        });
+        String providerId = provider.getId();
+        long now = System.currentTimeMillis();
+
+        DecoderEntry existing = decoders.get(providerId);
+        if (existing != null && !existing.isExpired(now, decoderCacheTtlMs)) {
+            return existing.getDecoder();
+        }
+
+        validateProviderConfiguration(provider);
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(provider.getJwkSetUri().trim()).build();
+        decoder.setJwtValidator(createJwtValidator(provider));
+
+        DecoderEntry newEntry = new DecoderEntry(decoder, now);
+        decoders.put(providerId, newEntry);
+        return newEntry.getDecoder();
     }
 
     /**
@@ -448,6 +523,33 @@ public class IDPJwtValidator implements JwtValidator {
         return providerAudiences.stream()
                 .filter(Objects::nonNull)
                 .anyMatch(tokenSet::contains);
+    }
+
+    private static final class DecoderEntry {
+        private final JwtDecoder decoder;
+        private final long createdAtMs;
+
+        private DecoderEntry(JwtDecoder decoder, long createdAtMs) {
+            this.decoder = decoder;
+            this.createdAtMs = createdAtMs;
+        }
+
+        private boolean isExpired(long nowMs, long ttlMs) {
+            if (ttlMs == 0L) {
+                // TTL of 0 means cache is disabled - always expired
+                return true;
+            }
+            if (ttlMs < 0L) {
+                // Negative TTL means cache never expires
+                return false;
+            }
+            // Positive TTL - check if time elapsed exceeds TTL
+            return (nowMs - createdAtMs) >= ttlMs;
+        }
+
+        private JwtDecoder getDecoder() {
+            return decoder;
+        }
     }
 
     private static class MultiIssuerValidator implements OAuth2TokenValidator<Jwt> {

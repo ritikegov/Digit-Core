@@ -22,7 +22,7 @@ import java.time.Instant;
 import java.util.*;
 
 import static org.junit.Assert.*;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @RunWith(MockitoJUnitRunner.class)
 public class IDPJwtValidatorTest {
@@ -44,6 +44,22 @@ public class IDPJwtValidatorTest {
         @Before
         public void setup() {
                 idpJwtValidator = new IDPJwtValidator(authProperties, oidcProviderSupplier);
+        }
+
+        @SuppressWarnings("unchecked")
+        private Map<String, Object> getDecoderEntries() {
+                return (Map<String, Object>) ReflectionTestUtils.getField(idpJwtValidator, "decoders");
+        }
+
+        private Object createDecoderEntry(JwtDecoder decoder, long createdAtMs) {
+                try {
+                        Class<?> entryClass = Class.forName("org.egov.user.security.oauth2.custom.jwt.IDPJwtValidator$DecoderEntry");
+                        java.lang.reflect.Constructor<?> ctor = entryClass.getDeclaredConstructor(JwtDecoder.class, long.class);
+                        ctor.setAccessible(true);
+                        return ctor.newInstance(decoder, createdAtMs);
+                } catch (Exception e) {
+                        throw new RuntimeException("Failed to create DecoderEntry for test", e);
+                }
         }
 
         @Test
@@ -99,11 +115,8 @@ public class IDPJwtValidatorTest {
                 when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
 
                 // Inject mocked decoder into the decoders map
-                @SuppressWarnings("unchecked")
-                Map<String, JwtDecoder> decoders = (Map<String, JwtDecoder>) ReflectionTestUtils.getField(
-                                idpJwtValidator,
-                                "decoders");
-                decoders.put("azure", jwtDecoder);
+                Map<String, Object> decoders = getDecoderEntries();
+                decoders.put("azure", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", issuer);
@@ -220,11 +233,8 @@ public class IDPJwtValidatorTest {
                 when(authProperties.getProviders()).thenReturn(Collections.singletonList(provider));
                 when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
 
-                @SuppressWarnings("unchecked")
-                Map<String, JwtDecoder> decoders = (Map<String, JwtDecoder>) ReflectionTestUtils.getField(
-                                idpJwtValidator,
-                                "decoders");
-                decoders.put("azure", jwtDecoder);
+                Map<String, Object> decoders = getDecoderEntries();
+                decoders.put("azure", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
 
                 OAuth2Error error = new OAuth2Error("invalid_token", "Token expired", null);
                 JwtValidationException expired = new JwtValidationException("expired", Collections.singletonList(error));
@@ -257,11 +267,8 @@ public class IDPJwtValidatorTest {
             when(authProperties.getProviders()).thenReturn(Collections.singletonList(provider));
             when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
 
-            @SuppressWarnings("unchecked")
-            Map<String, JwtDecoder> decoders = (Map<String, JwtDecoder>) ReflectionTestUtils.getField(
-                            idpJwtValidator,
-                            "decoders");
-            decoders.put("azure", jwtDecoder);
+            Map<String, Object> decoders = getDecoderEntries();
+            decoders.put("azure", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
 
             OAuth2Error error = new OAuth2Error("invalid_token", "audience invalid", null);
             JwtValidationException invalidAud = new JwtValidationException("invalid audience", Collections.singletonList(error));
@@ -346,11 +353,8 @@ public class IDPJwtValidatorTest {
                 when(authProperties.getProviders()).thenReturn(Collections.singletonList(provider));
                 when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
 
-                @SuppressWarnings("unchecked")
-                Map<String, JwtDecoder> decoders = (Map<String, JwtDecoder>) ReflectionTestUtils.getField(
-                                idpJwtValidator,
-                                "decoders");
-                decoders.put("azure", jwtDecoder);
+                Map<String, Object> decoders = getDecoderEntries();
+                decoders.put("azure", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", issuer);
@@ -451,10 +455,8 @@ public class IDPJwtValidatorTest {
                 when(authProperties.getProviders()).thenReturn(providers);
                 when(oidcProviderSupplier.getProviders()).thenReturn(providers);
 
-                @SuppressWarnings("unchecked")
-                Map<String, JwtDecoder> decoders = (Map<String, JwtDecoder>) ReflectionTestUtils.getField(
-                                idpJwtValidator, "decoders");
-                decoders.put("azure1", jwtDecoder);
+                Map<String, Object> decoders = getDecoderEntries();
+                decoders.put("azure1", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", issuer);
@@ -536,10 +538,8 @@ public class IDPJwtValidatorTest {
                 when(authProperties.getProviders()).thenReturn(Collections.singletonList(provider));
                 when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
 
-                @SuppressWarnings("unchecked")
-                Map<String, JwtDecoder> decoders = (Map<String, JwtDecoder>) ReflectionTestUtils.getField(
-                                idpJwtValidator, "decoders");
-                decoders.put("azure", jwtDecoder);
+                Map<String, Object> decoders = getDecoderEntries();
+                decoders.put("azure", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", issuerWithSlash);
@@ -618,11 +618,8 @@ public class IDPJwtValidatorTest {
                 when(authProperties.getProviders()).thenReturn(Collections.singletonList(provider));
                 when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
 
-                @SuppressWarnings("unchecked")
-                Map<String, JwtDecoder> decoders = (Map<String, JwtDecoder>) ReflectionTestUtils.getField(
-                                idpJwtValidator,
-                                "decoders");
-                decoders.put("azure", jwtDecoder);
+                Map<String, Object> decoders = getDecoderEntries();
+                decoders.put("azure", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
 
                 String header = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9";
                 String payload = "eyJpc3MiOiJodHRwczovL3N0cy53aW5kb3dzLm5ldC90ZW5hbnQtaWQvIn0";
@@ -651,5 +648,247 @@ public class IDPJwtValidatorTest {
                 when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
 
                 assertTrue(idpJwtValidator.supports("https://alias-issuer"));
+        }
+
+        @Test
+        public void testDecoderCache_ReusesWithinTtlAndRecreatesAfterExpiry() throws Exception {
+                String issuer = "https://sts.windows.net/tenant-id/";
+                String tenantId = "pb.amritsar";
+
+                AuthProperties.Provider provider = AuthProperties.Provider.builder()
+                        .id("azure")
+                        .issuerUri(issuer)
+                        .jwkSetUri("http://jwks")
+                        .roleClaimKey("roles")
+                        .tenantId(tenantId)
+                        .audiences(Collections.singletonList("aud1"))
+                        .build();
+
+                // Configure TTL long enough to ensure reuse
+                ReflectionTestUtils.setField(idpJwtValidator, "decoderCacheTtlMs", 60_000L);
+
+                JwtDecoder first = (JwtDecoder) ReflectionTestUtils.invokeMethod(idpJwtValidator, "getDecoder", provider);
+                JwtDecoder second = (JwtDecoder) ReflectionTestUtils.invokeMethod(idpJwtValidator, "getDecoder", provider);
+                assertSame(first, second);
+
+                // Now force a very small TTL and wait so entry expires
+                ReflectionTestUtils.setField(idpJwtValidator, "decoderCacheTtlMs", 1L);
+                Thread.sleep(5L);
+                JwtDecoder third = (JwtDecoder) ReflectionTestUtils.invokeMethod(idpJwtValidator, "getDecoder", provider);
+
+                assertNotSame(first, third);
+        }
+
+        @Test
+        public void testClearDecoderCacheAndClearDecoderForProvider() {
+                Map<String, Object> decoders = getDecoderEntries();
+                decoders.clear();
+
+                // Seed map with two providers
+                decoders.put("azure1", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+                decoders.put("azure2", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+                assertEquals(2, decoders.size());
+
+                // Clear single provider
+                idpJwtValidator.clearDecoderForProvider("azure1");
+                assertFalse(decoders.containsKey("azure1"));
+                assertTrue(decoders.containsKey("azure2"));
+
+                // Clear all
+                idpJwtValidator.clearDecoderCache();
+                assertTrue(decoders.isEmpty());
+        }
+
+        @Test
+        public void testValidate_SignatureFailure_TriggersRefreshAndRetry() {
+                String issuer = "https://sts.windows.net/tenant-id/";
+                String tenantId = "pb.amritsar";
+
+                AuthProperties.Provider provider = AuthProperties.Provider.builder()
+                        .id("azure")
+                        .issuerUri(issuer)
+                        .jwkSetUri("http://jwks")
+                        .roleClaimKey("roles")
+                        .tenantId(tenantId)
+                        .audiences(Collections.singletonList("aud1"))
+                        .build();
+
+                when(authProperties.getProviders()).thenReturn(Collections.singletonList(provider));
+                when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
+
+                IDPJwtValidator spyValidator = spy(new IDPJwtValidator(authProperties, oidcProviderSupplier));
+
+                // Seed decoder cache with mocked decoder
+                Map<String, Object> decoders = (Map<String, Object>) ReflectionTestUtils.getField(spyValidator, "decoders");
+                decoders.put("azure", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+
+                Map<String, Object> claims = new HashMap<>();
+                claims.put("iss", issuer);
+                claims.put("sub", "user-guid");
+                claims.put("roles", Collections.singletonList("AZURE_ROLE_1"));
+                claims.put("tenantId", tenantId);
+                claims.put("userType", "EMPLOYEE");
+
+                Jwt jwt = new Jwt("token", Instant.now(), Instant.now().plusSeconds(3600),
+                        Collections.singletonMap("alg", "RS256"), claims);
+
+                String header = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9";
+                String payload = "eyJpc3MiOiJodHRwczovL3N0cy53aW5kb3dzLm5ldC90ZW5hbnQtaWQvIn0";
+                String realLookingToken = header + "." + payload + ".signature";
+
+                OAuth2Error signatureError = new OAuth2Error("invalid_token",
+                        "Signature verification failed", null);
+                JwtValidationException signatureEx =
+                        new JwtValidationException("signature failure", Collections.singletonList(signatureError));
+
+                // First call throws signature-like error, second call succeeds
+                when(jwtDecoder.decode(realLookingToken))
+                        .thenThrow(signatureEx)
+                        .thenReturn(jwt);
+
+                // Do not actually remove from cache so that spy still uses mocked decoder
+                doNothing().when(spyValidator).clearDecoderForProvider("azure");
+
+                OidcValidatedJwt result = spyValidator.validate(realLookingToken, tenantId);
+
+                assertNotNull(result);
+                assertEquals("azure", result.getProviderId());
+                verify(spyValidator, times(1)).clearDecoderForProvider("azure");
+                verify(jwtDecoder, times(2)).decode(realLookingToken);
+        }
+
+        @Test
+        public void testDecoderCacheTtl_DefaultValue() {
+                IDPJwtValidator validator = new IDPJwtValidator(authProperties, oidcProviderSupplier);
+                Long ttl = (Long) ReflectionTestUtils.getField(validator, "decoderCacheTtlMs");
+                assertEquals(Long.valueOf(3_600_000L), ttl); // 1 hour default
+        }
+
+        @Test
+        public void testDecoderCacheTtl_ConfiguredValue() {
+                AuthProperties.Oidc oidc = new AuthProperties.Oidc();
+                oidc.setJwksCacheTtlMs(30_000L); // 30 seconds
+                when(authProperties.getOidc()).thenReturn(oidc);
+
+                IDPJwtValidator validator = new IDPJwtValidator(authProperties, oidcProviderSupplier);
+                Long ttl = (Long) ReflectionTestUtils.getField(validator, "decoderCacheTtlMs");
+                assertEquals(Long.valueOf(30_000L), ttl);
+        }
+
+        @Test
+        public void testDecoderCacheTtl_ZeroConfigured_UsesDefault() {
+                AuthProperties.Oidc oidc = new AuthProperties.Oidc();
+                oidc.setJwksCacheTtlMs(0L); // Zero should fallback to default
+                when(authProperties.getOidc()).thenReturn(oidc);
+
+                IDPJwtValidator validator = new IDPJwtValidator(authProperties, oidcProviderSupplier);
+                Long ttl = (Long) ReflectionTestUtils.getField(validator, "decoderCacheTtlMs");
+                assertEquals(Long.valueOf(3_600_000L), ttl); // Should use default
+        }
+
+        @Test
+        public void testDecoderCacheTtl_NullConfigured_UsesDefault() {
+                AuthProperties.Oidc oidc = new AuthProperties.Oidc();
+                oidc.setJwksCacheTtlMs(null); // Null should fallback to default
+                when(authProperties.getOidc()).thenReturn(oidc);
+
+                IDPJwtValidator validator = new IDPJwtValidator(authProperties, oidcProviderSupplier);
+                Long ttl = (Long) ReflectionTestUtils.getField(validator, "decoderCacheTtlMs");
+                assertEquals(Long.valueOf(3_600_000L), ttl); // Should use default
+        }
+
+        @Test
+        public void testDecoderCacheTtl_NullOidc_UsesDefault() {
+                when(authProperties.getOidc()).thenReturn(null);
+
+                IDPJwtValidator validator = new IDPJwtValidator(authProperties, oidcProviderSupplier);
+                Long ttl = (Long) ReflectionTestUtils.getField(validator, "decoderCacheTtlMs");
+                assertEquals(Long.valueOf(3_600_000L), ttl); // Should use default
+        }
+
+        @Test
+        public void testClearDecoderForProvider_NullProviderId_NoException() {
+                Map<String, Object> decoders = getDecoderEntries();
+                decoders.put("test", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+
+                // Should not throw exception
+                idpJwtValidator.clearDecoderForProvider(null);
+                
+                // Cache should remain unchanged
+                assertEquals(1, decoders.size());
+                assertTrue(decoders.containsKey("test"));
+        }
+
+        @Test
+        public void testClearDecoderForProvider_NonExistentProviderId_NoException() {
+                Map<String, Object> decoders = getDecoderEntries();
+                decoders.put("existing", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+
+                // Should not throw exception for non-existent provider
+                idpJwtValidator.clearDecoderForProvider("non-existent");
+                
+                // Cache should remain unchanged
+                assertEquals(1, decoders.size());
+                assertTrue(decoders.containsKey("existing"));
+        }
+
+        @Test
+        public void testClearDecoderCache_EmptyCache_NoException() {
+                Map<String, Object> decoders = getDecoderEntries();
+                decoders.clear();
+
+                // Should not throw exception
+                idpJwtValidator.clearDecoderCache();
+                
+                // Cache should remain empty
+                assertTrue(decoders.isEmpty());
+        }
+
+        @Test
+        public void testDecoderCache_ZeroTtl_AlwaysExpires() throws Exception {
+                String issuer = "https://sts.windows.net/tenant-id/";
+                String tenantId = "pb.amritsar";
+
+                AuthProperties.Provider provider = AuthProperties.Provider.builder()
+                        .id("azure")
+                        .issuerUri(issuer)
+                        .jwkSetUri("http://jwks")
+                        .roleClaimKey("roles")
+                        .tenantId(tenantId)
+                        .audiences(Collections.singletonList("aud1"))
+                        .build();
+
+                // Set TTL to 0 (should always be considered expired)
+                ReflectionTestUtils.setField(idpJwtValidator, "decoderCacheTtlMs", 0L);
+
+                JwtDecoder first = (JwtDecoder) ReflectionTestUtils.invokeMethod(idpJwtValidator, "getDecoder", provider);
+                JwtDecoder second = (JwtDecoder) ReflectionTestUtils.invokeMethod(idpJwtValidator, "getDecoder", provider);
+
+                // Should always create new decoder since TTL is 0
+                assertNotSame(first, second);
+        }
+
+        @Test
+        public void testDecoderCache_NegativeTtl_NeverExpires() throws Exception {
+                String issuer = "https://sts.windows.net/tenant-id/";
+                String tenantId = "pb.amritsar";
+
+                AuthProperties.Provider provider = AuthProperties.Provider.builder()
+                        .id("azure")
+                        .issuerUri(issuer)
+                        .jwkSetUri("http://jwks")
+                        .roleClaimKey("roles")
+                        .tenantId(tenantId)
+                        .audiences(Collections.singletonList("aud1"))
+                        .build();
+
+                // Set TTL to negative (should never expire)
+                ReflectionTestUtils.setField(idpJwtValidator, "decoderCacheTtlMs", -1L);
+
+                JwtDecoder first = (JwtDecoder) ReflectionTestUtils.invokeMethod(idpJwtValidator, "getDecoder", provider);
+                JwtDecoder second = (JwtDecoder) ReflectionTestUtils.invokeMethod(idpJwtValidator, "getDecoder", provider);
+
+                // Should reuse decoder since negative TTL means no expiration
+                assertSame(first, second);
         }
 }

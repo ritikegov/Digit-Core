@@ -28,7 +28,10 @@ public class MicrosoftAccessTokenValidatorTest {
 
     @Mock
     private RestTemplate restTemplate;
-
+    @Mock
+    private AuthProperties authProperties;
+    @Mock
+    private AuthProperties.Oidc oidcProperties;
     private MicrosoftAccessTokenValidator validator;
     private AuthProperties.Provider provider;
     private RSAKey testRSAKey;
@@ -36,7 +39,9 @@ public class MicrosoftAccessTokenValidatorTest {
     @Before
     public void setup() throws Exception {
         MockitoAnnotations.initMocks(this);
-        validator = new MicrosoftAccessTokenValidator(restTemplate);
+        when(authProperties.getOidc()).thenReturn(oidcProperties);
+        when(oidcProperties.getJwksCacheTtlMs()).thenReturn(null);
+        validator = new MicrosoftAccessTokenValidator(restTemplate, authProperties);
         
         // Generate test RSA key
         testRSAKey = new RSAKeyGenerator(2048).keyID("test-key-id").generate();
@@ -120,6 +125,27 @@ public class MicrosoftAccessTokenValidatorTest {
         // Second validation should use cached key
         boolean result2 = validator.validateSignature(signedJWT, provider);
         assertTrue("Second validation should use cached key and succeed", result2);
+    }
+
+    @Test
+    public void validateSignature_RespectsShortTtl() throws Exception {
+        // Use a very short TTL so that a second call forces refresh
+        MicrosoftAccessTokenValidator.clearJwkCache();
+        when(oidcProperties.getJwksCacheTtlMs()).thenReturn(1L);
+        validator = new MicrosoftAccessTokenValidator(restTemplate, authProperties);
+
+        SignedJWT signedJWT = createSignedJWT(testRSAKey);
+
+        // First call populates cache
+        boolean first = validator.validateSignature(signedJWT, provider);
+        assertTrue(first);
+
+        // After sleeping past TTL, a new RestTemplate call should be made
+        Thread.sleep(5L);
+        validator.validateSignature(signedJWT, provider);
+
+        // Verify at least two invocations (initial + post-expiry)
+        verify(restTemplate, atLeast(2)).getForObject(anyString(), eq(String.class));
     }
 
     @Test

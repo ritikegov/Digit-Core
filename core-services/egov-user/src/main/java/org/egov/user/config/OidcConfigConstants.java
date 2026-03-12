@@ -76,4 +76,14 @@ public final class OidcConfigConstants {
 
     /** Graph client secret: env var prefix (e.g. GRAPH_CLIENT_SECRET_OIDC_AZURE_TG). */
     public static final String GRAPH_CLIENT_SECRET_ENV_PREFIX = "GRAPH_CLIENT_SECRET_";
+
+    /**
+     * Default TTL in milliseconds for all JWKS and JWT decoder caches.
+     * Implementations should use this value when no explicit TTL is configured
+     * via {@code auth.oidc.jwks-cache-ttl-ms} or when the configured value is
+     * {@code null} or not positive.
+     *
+     * Current default: 1 hour.
+     */
+    public static final long DEFAULT_JWKS_CACHE_TTL_MS = 3_600_000L;
 }
