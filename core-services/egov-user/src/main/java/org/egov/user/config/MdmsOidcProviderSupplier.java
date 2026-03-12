@@ -355,6 +355,9 @@ public class MdmsOidcProviderSupplier implements OidcProviderSupplier {
         if (n.has(OidcConfigConstants.KEY_IDP_USER_VALIDATOR_TYPE)) {
             builder.idpUserValidatorType(textOrNull(n.get(OidcConfigConstants.KEY_IDP_USER_VALIDATOR_TYPE)));
         }
+        if (n.has(OidcConfigConstants.KEY_PROVIDER_TYPE)) {
+            builder.providerType(textOrNull(n.get(OidcConfigConstants.KEY_PROVIDER_TYPE)));
+        }
         if (n.has(OidcConfigConstants.KEY_DESIGNATION_CLAIM_KEY)) {
             builder.designationClaimKey(textOrNull(n.get(OidcConfigConstants.KEY_DESIGNATION_CLAIM_KEY)));
         }

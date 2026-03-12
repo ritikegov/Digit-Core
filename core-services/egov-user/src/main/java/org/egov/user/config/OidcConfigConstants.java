@@ -41,6 +41,7 @@ public final class OidcConfigConstants {
     public static final String KEY_DESIGNATION_CLAIM_KEY = "designationClaimKey";
     public static final String KEY_DEFAULT_DESIGNATION_CODE = "defaultDesignationCode";
     public static final String KEY_DEFAULT_BOUNDARY_HIERARCHY_TYPE = "defaultBoundaryHierarchyType";
+    public static final String KEY_PROVIDER_TYPE = "providerType";
 
     /** Default values used in code. */
     public static final String DEFAULT_ROLE_CLAIM_KEY = "roles";
@@ -56,6 +57,8 @@ public final class OidcConfigConstants {
 
     public static final String IDP_USER_VALIDATOR_TYPE_NONE = "none";
     public static final String IDP_USER_VALIDATOR_TYPE_AZURE = "azure";
+
+    public static final String PROVIDER_TYPE_MICROSOFT = "microsoft";
 
     /** Value of User.authProvider for locally-managed (non-SSO) accounts. */
     public static final String AUTH_PROVIDER_LOCAL = "LOCAL";

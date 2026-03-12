@@ -61,7 +61,7 @@ public class SsoUserPersistenceService {
      * tokenId + tenantId constraint is converted to a {@link TokenReplayException}.
      * 
      * @param user the user domain object to update (must contain valid user data)
-     * @param encryptedIdpDetails the encrypted IDP details to persist (tokenId, expiration, MFA data)
+     * @param idpDetails the IDP details to persist (tokenId, expiration, MFA data)
      * @param tenantId the tenant identifier for schema routing and data isolation
      * @param requestInfo the request context containing user information for audit trails
      * @return the updated user domain object with latest state
@@ -70,16 +70,16 @@ public class SsoUserPersistenceService {
      * @throws DataIntegrityViolationException if other database constraints are violated
      */
     @Transactional
-    public User updateUserAndUpsertIdpDetails(User user, UserIdpDetails encryptedIdpDetails,
+    public User updateUserAndUpsertIdpDetails(User user, UserIdpDetails idpDetails,
                                               String tenantId, RequestInfo requestInfo) {
-        validateIdpPersistenceInput(encryptedIdpDetails, tenantId);
+        validateIdpPersistenceInput(idpDetails, tenantId);
         try {
             User updatedUser = userService.updateWithoutOtpValidation(user, requestInfo);
-            userIdpDetailsRepository.upsert(encryptedIdpDetails, tenantId);
+            userIdpDetailsRepository.upsert(idpDetails, tenantId);
             return updatedUser;
         } catch (DataIntegrityViolationException e) {
             if (e.getMessage() != null && e.getMessage().contains("eg_user_idp_details_tokenid_tenantid_key")) {
-                throw new TokenReplayException(encryptedIdpDetails.getTokenId());
+                throw new TokenReplayException(idpDetails.getTokenId());
             }
             throw e;
         }
@@ -95,20 +95,20 @@ public class SsoUserPersistenceService {
      * <p>The method validates input parameters and handles constraint violations by converting
      * them to {@link TokenReplayException} for consistent error handling in SSO flows.
      * 
-     * @param encryptedIdpDetails the encrypted IDP details to persist (tokenId, expiration, MFA data)
+     * @param idpDetails the IDP details to persist (tokenId, expiration, MFA data)
      * @param tenantId the tenant identifier for schema routing and data isolation
      * @throws TokenReplayException if the tokenId has already been used (database constraint violation)
      * @throws IdpPersistenceException if required input parameters are null or invalid
      * @throws DataIntegrityViolationException if other database constraints are violated
      */
     @Transactional
-    public void upsertIdpDetailsOnly(UserIdpDetails encryptedIdpDetails, String tenantId) {
-        validateIdpPersistenceInput(encryptedIdpDetails, tenantId);
+    public void upsertIdpDetailsOnly(UserIdpDetails idpDetails, String tenantId) {
+        validateIdpPersistenceInput(idpDetails, tenantId);
         try {
-            userIdpDetailsRepository.upsert(encryptedIdpDetails, tenantId);
+            userIdpDetailsRepository.upsert(idpDetails, tenantId);
         } catch (DataIntegrityViolationException e) {
             if (e.getMessage() != null && e.getMessage().contains("eg_user_idp_details_tokenid_tenantid_key")) {
-                throw new TokenReplayException(encryptedIdpDetails.getTokenId());
+                throw new TokenReplayException(idpDetails.getTokenId());
             }
             throw e;
         }

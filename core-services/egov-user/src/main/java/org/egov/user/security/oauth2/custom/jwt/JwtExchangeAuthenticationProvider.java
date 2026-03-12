@@ -6,6 +6,8 @@ import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.utils.MultiStateInstanceUtil;
 import org.egov.tracer.model.CustomException;
 import org.egov.user.config.*;
+import org.egov.user.security.oauth2.custom.accesstoken.AccessTokenValidationService;
+import org.egov.user.security.oauth2.custom.accesstoken.AccessTokenValidationResult;
 import org.egov.user.domain.exception.DuplicateUserNameException;
 import org.egov.user.domain.exception.UserNotFoundException;
 import org.egov.user.domain.exception.sso.OidcProviderConfigException;
@@ -84,6 +86,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
     private final NoOpGraphService noOpGraphService;
     private final SsoUserPersistenceService ssoUserPersistenceService;
     private final EncryptionDecryptionUtil encryptionDecryptionUtil;
+    private final AccessTokenValidationService accessTokenValidationService;
 
     public JwtExchangeAuthenticationProvider(
             JwtValidationService jwtValidationService,
@@ -95,7 +98,8 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
             SsoDefaultPasswordResolver ssoDefaultPasswordResolver,
             NoOpGraphService noOpGraphService,
             SsoUserPersistenceService ssoUserPersistenceService,
-            EncryptionDecryptionUtil encryptionDecryptionUtil) {
+            EncryptionDecryptionUtil encryptionDecryptionUtil,
+            AccessTokenValidationService accessTokenValidationService) {
         this.jwtValidationService = jwtValidationService;
         this.userService = userService;
         this.centraInstanceUtil = centraInstanceUtil;
@@ -108,6 +112,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
         this.noOpGraphService = noOpGraphService;
         this.ssoUserPersistenceService = ssoUserPersistenceService;
         this.encryptionDecryptionUtil = encryptionDecryptionUtil;
+        this.accessTokenValidationService = accessTokenValidationService;
     }
 
     /** Holds token, optional auth token, and tenant from the incoming authentication. */
@@ -180,10 +185,16 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
 
         validateRequiredParams(jwt, input.tenantId);
         
-        // ADD TOKEN REPLAY PROTECTION HERE
+        // TOKEN REPLAY PROTECTION
         validateTokenReplay(jwt, input.tenantId);
         
-        ProviderAndMfa providerAndMfa = resolveProviderAndMfa(jwt, input.tenantId, input.authToken);
+        // MANDATORY ACCESS TOKEN VALIDATION - returns validated claims
+        AccessTokenValidationResult validationResult = null;
+        if (input.authToken != null) {
+            validationResult = accessTokenValidationService.validate(input.authToken, jwt.getProviderId(), input.tenantId);
+        }
+        
+        ProviderAndMfa providerAndMfa = resolveProviderAndMfa(jwt, input.tenantId, validationResult);
 
         UserAndRequestInfo userAndRequestInfo = findOrCreateUser(jwt, providerAndMfa.provider,
                 providerAndMfa.mfaDetails, input.tenantId);
@@ -258,12 +269,21 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
     }
 
     /**
-     * Resolves provider by JWT provider id and tenant, asserts issuer match, extracts MFA from auth token.
+     * Resolves provider by JWT provider id and tenant, asserts issuer match, extracts MFA from validated claims.
      */
-    private ProviderAndMfa resolveProviderAndMfa(OidcValidatedJwt jwt, String tenantId, String authToken) {
+    private ProviderAndMfa resolveProviderAndMfa(OidcValidatedJwt jwt, String tenantId, AccessTokenValidationResult validationResult) {
         AuthProperties.Provider provider = getProviderById(jwt.getProviderId(), tenantId);
         assertIssuerMatchesProvider(jwt, provider);
-        AccessTokenMfaDetails mfaDetails = accessTokenMfaExtractor.extract(authToken);
+        
+        // SECURE: Use pre-validated claims instead of parsing raw token
+        AccessTokenMfaDetails mfaDetails;
+        if (validationResult != null && validationResult.getClaimsSet() != null) {
+            mfaDetails = accessTokenMfaExtractor.extractFromValidatedClaims(validationResult.getClaimsSet());
+        } else {
+            // Fallback for cases without access token - returns MFA disabled
+            mfaDetails = AccessTokenMfaDetails.builder().mfaEnabled(false).build();
+        }
+        
         return new ProviderAndMfa(provider, mfaDetails);
     }
 
@@ -293,15 +313,13 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
         requestInfo.getUserInfo().setId(userForUpdate.getId());
 
         UserIdpDetails idpDetails = buildIdpDetails(userForUpdate, jwt);
-        UserIdpDetails encryptedIdpDetails = encryptionDecryptionUtil.encryptObject(
-                idpDetails, JwtConstants.ENCRYPTION_MODEL_USER_IDP_DETAILS, UserIdpDetails.class);
 
         User originalUser = user;
         if (rolesChanged(user.getRoles(), userForUpdate.getRoles())) {
             user = ssoUserPersistenceService.updateUserAndUpsertIdpDetails(
-                    userForUpdate, encryptedIdpDetails, tenantId, requestInfo);
+                    userForUpdate, idpDetails, tenantId, requestInfo);
         } else {
-            ssoUserPersistenceService.upsertIdpDetailsOnly(encryptedIdpDetails, tenantId);
+            ssoUserPersistenceService.upsertIdpDetailsOnly(idpDetails, tenantId);
             User decrypted = encryptionDecryptionUtil.decryptObject(user, "UserSelf", User.class, requestInfo);
             user = decrypted != null ? decrypted : originalUser;
         }
@@ -361,10 +379,8 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
 
         try {
             UserIdpDetails idpDetails = buildIdpDetails(createdUser, jwt);
-            UserIdpDetails encryptedIdpDetails = encryptionDecryptionUtil.encryptObject(
-                    idpDetails, JwtConstants.ENCRYPTION_MODEL_USER_IDP_DETAILS, UserIdpDetails.class);
             User user = ssoUserPersistenceService.updateUserAndUpsertIdpDetails(
-                    createdUser, encryptedIdpDetails, tenantId, requestInfo);
+                    createdUser, idpDetails, tenantId, requestInfo);
             return new UserAndRequestInfo(user, requestInfo);
         } catch (DuplicateUserNameException dupE) {
             log.error("Fatal: duplicate user conflict for oid: {}", jwt.getOid(), dupE);

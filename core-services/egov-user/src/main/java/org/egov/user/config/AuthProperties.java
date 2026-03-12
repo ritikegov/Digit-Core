@@ -136,6 +136,11 @@ public class AuthProperties {
          * Property: auth.providers[i].idp-user-validator-type
          */
         private final String idpUserValidatorType;
+        /**
+         * Provider type for access token validation: determines which validator to use.
+         * Property: auth.providers[i].providerType
+         */
+        private final String providerType;
 
         static final ObjectMapper ROLE_MAPPING_MAPPER = new ObjectMapper();
 
@@ -169,6 +174,7 @@ public class AuthProperties {
             this.graphServiceType = OidcConfigConstants.GRAPH_SERVICE_TYPE_AZURE;
             this.graphAppResourceId = null;
             this.idpUserValidatorType = OidcConfigConstants.IDP_USER_VALIDATOR_TYPE_NONE;
+            this.providerType = OidcConfigConstants.PROVIDER_TYPE_MICROSOFT;
         }
 
         // Full constructor for creating immutable instances
@@ -179,7 +185,7 @@ public class AuthProperties {
                        Long defaultDob, String defaultEmployeeStatus, String rolePrefix, String decryptionPurpose,
                        String graphClientId, String graphTenantId, String graphMethodsUrl, String graphUsersUrl,
                        String graphTokenUrl, String graphScope, String graphAppRoleAssignmentUrl,
-                       String graphServiceType, String graphAppResourceId, String idpUserValidatorType) {
+                       String graphServiceType, String graphAppResourceId, String idpUserValidatorType, String providerType) {
             this.id = id;
             this.issuerUri = issuerUri;
             this.issuerAliases = issuerAliases != null ? Collections.unmodifiableList(new ArrayList<>(issuerAliases)) : Collections.emptyList();
@@ -208,6 +214,7 @@ public class AuthProperties {
             this.graphServiceType = graphServiceType != null ? graphServiceType : OidcConfigConstants.GRAPH_SERVICE_TYPE_AZURE;
             this.graphAppResourceId = graphAppResourceId;
             this.idpUserValidatorType = idpUserValidatorType != null ? idpUserValidatorType : OidcConfigConstants.IDP_USER_VALIDATOR_TYPE_NONE;
+            this.providerType = providerType != null ? providerType : OidcConfigConstants.PROVIDER_TYPE_MICROSOFT;
         }
 
         // Builder pattern for easier construction
@@ -244,6 +251,7 @@ public class AuthProperties {
             private String graphServiceType = OidcConfigConstants.GRAPH_SERVICE_TYPE_AZURE;
             private String graphAppResourceId;
             private String idpUserValidatorType = OidcConfigConstants.IDP_USER_VALIDATOR_TYPE_NONE;
+            private String providerType = OidcConfigConstants.PROVIDER_TYPE_MICROSOFT;
 
             public Builder id(String id) { this.id = id; return this; }
             public Builder issuerUri(String issuerUri) { this.issuerUri = issuerUri; return this; }
@@ -273,6 +281,7 @@ public class AuthProperties {
             public Builder graphServiceType(String graphServiceType) { this.graphServiceType = graphServiceType; return this; }
             public Builder graphAppResourceId(String graphAppResourceId) { this.graphAppResourceId = graphAppResourceId; return this; }
             public Builder idpUserValidatorType(String idpUserValidatorType) { this.idpUserValidatorType = idpUserValidatorType; return this; }
+            public Builder providerType(String providerType) { this.providerType = providerType; return this; }
 
             public Provider build() {
                 return new Provider(id, issuerUri, issuerAliases, jwkSetUri, audiences, tenantId,
@@ -281,7 +290,7 @@ public class AuthProperties {
                         defaultDob, defaultEmployeeStatus, rolePrefix, decryptionPurpose,
                         graphClientId, graphTenantId, graphMethodsUrl, graphUsersUrl,
                         graphTokenUrl, graphScope, graphAppRoleAssignmentUrl,
-                        graphServiceType, graphAppResourceId, idpUserValidatorType);
+                        graphServiceType, graphAppResourceId, idpUserValidatorType, providerType);
             }
         }
 

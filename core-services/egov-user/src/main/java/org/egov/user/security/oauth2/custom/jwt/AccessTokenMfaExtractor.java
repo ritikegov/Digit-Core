@@ -1,9 +1,6 @@
 package org.egov.user.security.oauth2.custom.jwt;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jwt.JWTClaimsSet;
-import com.nimbusds.jwt.JWTParser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -12,8 +9,6 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.Iterator;
 
-import static org.springframework.util.StringUtils.hasText;
-
 /**
  * Extracts MFA-related details from the IdP access_token (JWT or JSON).
  * Microsoft Entra ID puts MFA info in the access_token's "amr" (Authentication
@@ -21,7 +16,6 @@ import static org.springframework.util.StringUtils.hasText;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class AccessTokenMfaExtractor {
 
     private static final String CLAIM_AMR = "amr";
@@ -34,43 +28,38 @@ public class AccessTokenMfaExtractor {
     /** JSON key for MFA enabled flag (e.g. in non-JWT token payload). */
     private static final String KEY_MFA_ENABLE = "mfaenable";
 
-    private final ObjectMapper objectMapper;
-
+    public AccessTokenMfaExtractor() {
+        // Default constructor for Spring
+    }
     /**
-     * Parse access_token (JWT or JSON) and extract MFA details. Safe to call
-     * with null/empty; returns all-null details in that case.
+     * Extracts MFA details from pre-validated JWT claims set.
+     * This is the SECURE method that uses claims from already-validated tokens.
+     * 
+     * @param claimsSet the validated JWT claims set
+     * @return AccessTokenMfaDetails with extracted MFA information
      */
-    public AccessTokenMfaDetails extract(String accessToken) {
-        if (!hasText(accessToken)) {
+    public AccessTokenMfaDetails extractFromValidatedClaims(JWTClaimsSet claimsSet) {
+        if (claimsSet == null) {
             return AccessTokenMfaDetails.builder().mfaEnabled(false).build();
         }
-        try {
-            return extractFromJwt(accessToken);
-        } catch (Exception e) {
-            try {
-                return extractFromJson(accessToken);
-            } catch (Exception e2) {
-                log.debug("Access token is neither valid JWT nor JSON for MFA extraction: {}", e2.getMessage());
-                return AccessTokenMfaDetails.builder().mfaEnabled(false).build();
+        
+        boolean mfaEnabled = isMfaFromAmr(claimsSet.getClaim(CLAIM_AMR));
+        
+        // Also check for mfaenable claim (from JSON tokens)
+        if (!mfaEnabled) {
+            Object mfaEnableClaim = claimsSet.getClaim(KEY_MFA_ENABLE);
+            if (mfaEnableClaim instanceof Boolean) {
+                mfaEnabled = (Boolean) mfaEnableClaim;
+            } else if (mfaEnableClaim != null) {
+                mfaEnabled = Boolean.parseBoolean(mfaEnableClaim.toString());
             }
         }
-    }
-
-    /**
-     * Extracts MFA details from a JWT-formatted access token.
-     * Parses the JWT and extracts MFA-related claims (amr, mfa_phone_last4, etc.).
-     *
-     * @param accessToken the JWT access token string
-     * @return AccessTokenMfaDetails with extracted MFA information
-     * @throws Exception if the token cannot be parsed as JWT
-     */
-    private AccessTokenMfaDetails extractFromJwt(String accessToken) throws Exception {
-        JWTClaimsSet claims = JWTParser.parse(accessToken).getJWTClaimsSet();
-        boolean mfaEnabled = isMfaFromAmr(claims.getClaim(CLAIM_AMR));
-        String mfaPhoneLast4 = getStringClaim(claims, CLAIM_MFA_PHONE_LAST4);
-        String mfaDeviceName = getStringClaim(claims, CLAIM_MFA_DEVICE);
-        String mfaDetails = getStringClaim(claims, CLAIM_MFA_DETAILS);
-        Date mfaRegisteredOn = getDateClaim(claims, CLAIM_MFA_REGISTERED_ON);
+        
+        String mfaPhoneLast4 = getStringClaim(claimsSet, CLAIM_MFA_PHONE_LAST4);
+        String mfaDeviceName = getStringClaim(claimsSet, CLAIM_MFA_DEVICE);
+        String mfaDetails = getStringClaim(claimsSet, CLAIM_MFA_DETAILS);
+        Date mfaRegisteredOn = getDateClaim(claimsSet, CLAIM_MFA_REGISTERED_ON);
+        
         return AccessTokenMfaDetails.builder()
                 .mfaEnabled(mfaEnabled)
                 .mfaPhoneLast4(mfaPhoneLast4)
@@ -79,6 +68,7 @@ public class AccessTokenMfaExtractor {
                 .mfaRegisteredOn(mfaRegisteredOn)
                 .build();
     }
+
 
     /**
      * Determines if MFA was used based on the "amr" (Authentication Methods Reference) claim.
@@ -99,6 +89,13 @@ public class AccessTokenMfaExtractor {
             Iterator<?> it = ((Iterable<?>) amrClaim).iterator();
             while (it.hasNext()) {
                 if (isMfaValue(it.next())) return true;
+            }
+            return false;
+        }
+        if (amrClaim.getClass().isArray()) {
+            Object[] array = (Object[]) amrClaim;
+            for (Object item : array) {
+                if (isMfaValue(item)) return true;
             }
             return false;
         }
@@ -154,43 +151,4 @@ public class AccessTokenMfaExtractor {
         }
     }
 
-    /**
-     * Extracts MFA details from a JSON-formatted access token.
-     * Parses the JSON and extracts MFA-related fields.
-     *
-     * @param accessToken the JSON access token string
-     * @return AccessTokenMfaDetails with extracted MFA information
-     * @throws Exception if the token cannot be parsed as JSON
-     */
-    private AccessTokenMfaDetails extractFromJson(String accessToken) throws Exception {
-        JsonNode root = objectMapper.readTree(accessToken);
-        boolean mfaEnabled = false;
-        if (root.has(KEY_MFA_ENABLE)) {
-            mfaEnabled = root.get(KEY_MFA_ENABLE).asBoolean();
-        } else if (root.has(CLAIM_AMR)) {
-            JsonNode amr = root.get(CLAIM_AMR);
-            if (amr.isArray()) {
-                for (JsonNode n : amr) {
-                    if (isMfaValue(n.asText())) {
-                        mfaEnabled = true;
-                        break;
-                    }
-                }
-            } else {
-                mfaEnabled = isMfaValue(amr.asText());
-            }
-        }
-        String mfaPhoneLast4 = root.has(CLAIM_MFA_PHONE_LAST4) ? root.get(CLAIM_MFA_PHONE_LAST4).asText(null) : null;
-        String mfaDeviceName = root.has(CLAIM_MFA_DEVICE) ? root.get(CLAIM_MFA_DEVICE).asText(null) : null;
-        String mfaDetails = root.has(CLAIM_MFA_DETAILS) ? root.get(CLAIM_MFA_DETAILS).asText(null) : null;
-        Long ts = root.has(CLAIM_MFA_REGISTERED_ON) ? root.get(CLAIM_MFA_REGISTERED_ON).asLong(0) : null;
-        Date mfaRegisteredOn = ts != null && ts > 0 ? new Date(ts) : null;
-        return AccessTokenMfaDetails.builder()
-                .mfaEnabled(mfaEnabled)
-                .mfaPhoneLast4(mfaPhoneLast4)
-                .mfaDeviceName(mfaDeviceName)
-                .mfaDetails(mfaDetails)
-                .mfaRegisteredOn(mfaRegisteredOn)
-                .build();
-    }
 }

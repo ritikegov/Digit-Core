@@ -15,6 +15,9 @@ import org.egov.user.security.oauth2.custom.service.EmployeeCreationProfile;
 import org.egov.user.security.oauth2.custom.service.IdpGraphService;
 import org.egov.user.security.oauth2.custom.service.impl.MsGraphService;
 import org.egov.user.security.oauth2.custom.service.impl.NoOpGraphService;
+import org.egov.user.security.oauth2.custom.accesstoken.AccessTokenValidationService;
+import org.egov.user.security.oauth2.custom.accesstoken.AccessTokenValidationResult;
+import com.nimbusds.jwt.JWTClaimsSet;
 import org.egov.user.utils.HrmsUserUtil;
 import org.egov.user.web.contract.auth.OidcValidatedJwt;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -37,6 +40,7 @@ import org.egov.user.domain.exception.sso.SsoUserMappingException;
 import org.egov.user.domain.exception.sso.TokenReplayException;
 import org.egov.tracer.model.CustomException;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -53,6 +57,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -95,7 +100,10 @@ public class JwtExchangeAuthenticationProviderTest {
         @Mock
         private EncryptionDecryptionUtil encryptionDecryptionUtil;
 
-        private AccessTokenMfaExtractor accessTokenMfaExtractor = new AccessTokenMfaExtractor(new ObjectMapper());
+        @Mock
+        private AccessTokenValidationService accessTokenValidationService;
+
+        private AccessTokenMfaExtractor accessTokenMfaExtractor = new AccessTokenMfaExtractor();
 
         private JwtExchangeAuthenticationProvider authenticationProvider;
 
@@ -106,7 +114,7 @@ public class JwtExchangeAuthenticationProviderTest {
                                 jwtValidationService, userService, multiStateInstanceUtil,
                                 hrmsUserUtil, oidcProviderSupplier, graphServices,
                                 accessTokenMfaExtractor, ssoDefaultPasswordResolver, new NoOpGraphService(),
-                                ssoUserPersistenceService, encryptionDecryptionUtil);
+                                ssoUserPersistenceService, encryptionDecryptionUtil, accessTokenValidationService);
                 when(encryptionDecryptionUtil.encryptObject(any(UserIdpDetails.class), anyString(), eq(UserIdpDetails.class)))
                                 .thenAnswer(invocation -> invocation.getArgumentAt(0, UserIdpDetails.class));
                 when(ssoUserPersistenceService.updateUserAndUpsertIdpDetails(any(User.class), any(UserIdpDetails.class), anyString(), any(RequestInfo.class)))
@@ -138,6 +146,15 @@ public class JwtExchangeAuthenticationProviderTest {
                 claimsWithJti.putIfAbsent("jti", "test-jti-" + System.nanoTime());
                 return new OidcValidatedJwt(
                                 Collections.singleton("ROLE"), claimsWithJti, new Date(), new Date(), token, "oidc-azure");
+        }
+
+        private void mockAccessTokenValidationWithMfa(String authToken, String... amrValues) throws Exception {
+                JWTClaimsSet accessTokenClaims = new JWTClaimsSet.Builder()
+                        .claim("amr", amrValues.length > 0 ? amrValues : null)
+                        .claim("mfaenable", authToken.contains("mfaenable"))
+                        .build();
+                AccessTokenValidationResult validationResult = AccessTokenValidationResult.success(accessTokenClaims);
+                when(accessTokenValidationService.validate(eq(authToken), eq("oidc-azure"), eq(TENANT_PB))).thenReturn(validationResult);
         }
 
         @Test
@@ -440,7 +457,7 @@ public class JwtExchangeAuthenticationProviderTest {
         }
 
         @Test
-        public void testAuthenticate_MfaEnable_AuthTokenJwt() {
+        public void testAuthenticate_MfaEnable_AuthTokenJwt() throws Exception {
                 String token = "jwt-assertion";
                 String authToken = "eyJhbGciOiJub25lIn0.eyJhbXIiOlsicHdkIiwibWZhIl19.";
                 JwtExchangeAuthenticationToken authenticationToken =
@@ -458,6 +475,7 @@ public class JwtExchangeAuthenticationProviderTest {
                                 .roles(Collections.emptySet()).build();
 
                 when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
+                mockAccessTokenValidationWithMfa(authToken, "pwd", "mfa");
                 when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
                 authenticationProvider.authenticate(authenticationToken);
 
@@ -467,7 +485,7 @@ public class JwtExchangeAuthenticationProviderTest {
         }
 
         @Test
-        public void testAuthenticate_MfaEnable_AuthTokenJwt_Ngcmfa() {
+        public void testAuthenticate_MfaEnable_AuthTokenJwt_Ngcmfa() throws Exception {
                 String token = "jwt-assertion";
                 String authToken = "eyJhbGciOiJub25lIn0.eyJhbXIiOlsicHdkIiwibmdjbWZhIl19.";
                 JwtExchangeAuthenticationToken authenticationToken =
@@ -485,6 +503,7 @@ public class JwtExchangeAuthenticationProviderTest {
                                 .roles(Collections.emptySet()).build();
 
                 when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
+                mockAccessTokenValidationWithMfa(authToken, "pwd", "ngcmfa");
                 when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
                 authenticationProvider.authenticate(authenticationToken);
 
@@ -521,7 +540,7 @@ public class JwtExchangeAuthenticationProviderTest {
         }
 
         @Test
-        public void testAuthenticate_MfaEnable_AuthTokenJson_Amr() {
+        public void testAuthenticate_MfaEnable_AuthTokenJson_Amr() throws Exception {
                 String token = "jwt-assertion";
                 String authToken = "{\"amr\": [\"pwd\", \"mfa\"]}";
                 JwtExchangeAuthenticationToken authenticationToken =
@@ -539,6 +558,7 @@ public class JwtExchangeAuthenticationProviderTest {
                                 .roles(Collections.emptySet()).build();
 
                 when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
+                mockAccessTokenValidationWithMfa(authToken, "pwd", "mfa");
                 when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
                 authenticationProvider.authenticate(authenticationToken);
 
@@ -548,7 +568,7 @@ public class JwtExchangeAuthenticationProviderTest {
         }
 
         @Test
-        public void testAuthenticate_MfaEnable_AuthTokenJson_MfaEnable() {
+        public void testAuthenticate_MfaEnable_AuthTokenJson_MfaEnable() throws Exception {
                 String token = "jwt-assertion";
                 String authToken = "{\"mfaenable\": true}";
                 JwtExchangeAuthenticationToken authenticationToken =
@@ -566,6 +586,7 @@ public class JwtExchangeAuthenticationProviderTest {
                                 .roles(Collections.emptySet()).build();
 
                 when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
+                mockAccessTokenValidationWithMfa(authToken);
                 when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
                 authenticationProvider.authenticate(authenticationToken);
 
@@ -748,7 +769,7 @@ public class JwtExchangeAuthenticationProviderTest {
         }
 
         @Test
-        public void testAuthenticate_EncryptionCalledForIdpDetails() {
+        public void testAuthenticate_ExistingUserUpdatedSuccessfully() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
                                 new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
@@ -774,10 +795,10 @@ public class JwtExchangeAuthenticationProviderTest {
                 when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
                 when(ssoUserPersistenceService.updateUserAndUpsertIdpDetails(any(User.class), any(UserIdpDetails.class), anyString(), any(RequestInfo.class))).thenAnswer(inv -> inv.getArgumentAt(0, User.class).toBuilder().roles(roles).build());
 
-                authenticationProvider.authenticate(authenticationToken);
+                Authentication result = authenticationProvider.authenticate(authenticationToken);
 
-                verify(encryptionDecryptionUtil).encryptObject(any(UserIdpDetails.class),
-                                anyString(), eq(UserIdpDetails.class));
+                assertNotNull(result);
+                verify(ssoUserPersistenceService).updateUserAndUpsertIdpDetails(any(User.class), any(UserIdpDetails.class), eq(TENANT_PB), any(RequestInfo.class));
         }
 
         @Test
@@ -1052,5 +1073,513 @@ public class JwtExchangeAuthenticationProviderTest {
                 when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
 
                 authenticationProvider.authenticate(authenticationToken);
+        }
+
+        @Test
+        public void testAuthenticate_NewUserCreation_CompleteFlow() {
+                String token = "jwt-token";
+                JwtExchangeAuthenticationToken authenticationToken =
+                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+
+                Map<String, Object> claims = new HashMap<>();
+                claims.put("iss", "issuer");
+                claims.put("sub", "subject");
+                claims.put("tenantId", TENANT_PB);
+                claims.put("userType", "EMPLOYEE");
+                claims.put("name", "John Doe");
+                claims.put("preferred_username", "johndoe");
+                claims.put("email", "john@example.com");
+
+                OidcValidatedJwt jwt = oidcJwt(claims, token);
+
+                when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
+                when(userService.getUniqueUser(anyString(), anyString(), anyString(), any()))
+                                .thenThrow(new org.egov.user.domain.exception.UserNotFoundException(
+                                                new UserSearchCriteria()));
+
+                org.egov.user.domain.model.hrms.User hrmsUser = org.egov.user.domain.model.hrms.User.builder()
+                                .userServiceUuid("new-uuid")
+                                .userName("johndoe")
+                                .name("John Doe")
+                                .roles(Collections.emptyList())
+                                .tenantId(TENANT_PB)
+                                .build();
+
+                when(hrmsUserUtil.createHrmsUser(
+                                any(org.egov.user.domain.model.hrms.User.class), anyString(), anyString(), anyString(),
+                                anyString(), anyString(), anyString(), anyString(), any(OidcValidatedJwt.class), any(RequestInfo.class)))
+                                .thenReturn(hrmsUser);
+
+                Authentication result = authenticationProvider.authenticate(authenticationToken);
+
+                assertNotNull(result);
+                assertTrue(result instanceof UsernamePasswordAuthenticationToken);
+                verify(hrmsUserUtil).createHrmsUser(
+                                any(org.egov.user.domain.model.hrms.User.class), anyString(), anyString(), anyString(),
+                                anyString(), anyString(), anyString(), anyString(), any(OidcValidatedJwt.class), any(RequestInfo.class));
+                verify(ssoUserPersistenceService).updateUserAndUpsertIdpDetails(any(User.class), any(UserIdpDetails.class), eq(TENANT_PB), any(RequestInfo.class));
+        }
+
+        @Test
+        public void testAuthenticate_MfaDetailsExtraction_WithNullClaims() {
+                String token = "jwt-assertion";
+                String authToken = "valid-auth-token";
+                JwtExchangeAuthenticationToken authenticationToken =
+                                new JwtExchangeAuthenticationToken(token, authToken, TENANT_PB);
+
+                Map<String, Object> claims = new HashMap<>();
+                claims.put("iss", "issuer");
+                claims.put("sub", "subject");
+                claims.put("tenantId", TENANT_PB);
+                claims.put("userType", "EMPLOYEE");
+
+                OidcValidatedJwt jwt = oidcJwt(claims, token);
+
+                User user = User.builder().uuid("uuid").type(UserType.EMPLOYEE).active(true)
+                                .roles(Collections.emptySet()).build();
+
+                when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
+                AccessTokenValidationResult validationResult = AccessTokenValidationResult.success(null);
+                when(accessTokenValidationService.validate(eq(authToken), eq("oidc-azure"), eq(TENANT_PB))).thenReturn(validationResult);
+                when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
+
+                Authentication result = authenticationProvider.authenticate(authenticationToken);
+
+                assertNotNull(result);
+                ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+                verify(ssoUserPersistenceService).updateUserAndUpsertIdpDetails(userCaptor.capture(), any(UserIdpDetails.class), eq(TENANT_PB), any(RequestInfo.class));
+                assertFalse(userCaptor.getValue().getMfaEnabled());
+        }
+
+        @Test(expected = OAuth2AuthenticationException.class)
+        public void testAuthenticate_MissingTokenId_ThrowsException() {
+                String token = "jwt-token";
+                JwtExchangeAuthenticationToken authenticationToken =
+                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+
+                Map<String, Object> claims = new HashMap<>();
+                claims.put("iss", "issuer");
+                claims.put("sub", "subject");
+                claims.put("tenantId", TENANT_PB);
+                claims.put("userType", "EMPLOYEE");
+                // No jti or uti claim
+
+                OidcValidatedJwt jwt = new OidcValidatedJwt(
+                                Collections.singleton("ROLE"), claims, new Date(), new Date(), token, "oidc-azure");
+
+                when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
+                when(userService.getUniqueUser(anyString(), anyString(), anyString(), any()))
+                                .thenThrow(new org.egov.user.domain.exception.UserNotFoundException(
+                                                new UserSearchCriteria()));
+
+                authenticationProvider.authenticate(authenticationToken);
+        }
+
+        @Test
+        public void testAuthenticate_MultipleProviders_CorrectSelection() {
+                String token = "jwt-token";
+                JwtExchangeAuthenticationToken authenticationToken =
+                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+
+                Map<String, Object> claims = new HashMap<>();
+                claims.put("iss", "issuer");
+                claims.put("sub", "subject");
+                claims.put("tenantId", TENANT_PB);
+                claims.put("userType", "EMPLOYEE");
+
+                OidcValidatedJwt jwt = oidcJwt(claims, token);
+
+                User user = User.builder().uuid("uuid").type(UserType.EMPLOYEE).active(true)
+                                .roles(Collections.emptySet()).tenantId(TENANT_PB).build();
+
+                // Create multiple providers
+                AuthProperties.Provider provider2 = mock(AuthProperties.Provider.class);
+                List<AuthProperties.Provider> providers = Arrays.asList(provider, provider2);
+                
+                when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
+                when(oidcProviderSupplier.getProviders()).thenReturn(providers);
+                when(provider.getId()).thenReturn("oidc-azure");
+                when(provider.getTenantId()).thenReturn(TENANT_PB);
+                when(provider2.getId()).thenReturn("oidc-microsoft");
+                when(provider2.getTenantId()).thenReturn("other-tenant");
+                when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
+
+                Authentication result = authenticationProvider.authenticate(authenticationToken);
+
+                assertNotNull(result);
+                // Verify that the correct provider was selected by checking the authentication result
+                assertTrue(result instanceof UsernamePasswordAuthenticationToken);
+                UsernamePasswordAuthenticationToken authToken = (UsernamePasswordAuthenticationToken) result;
+                assertEquals("ROLE_EMPLOYEE", authToken.getAuthorities().iterator().next().getAuthority());
+        }
+
+        @Test
+        public void testAuthenticate_GraphServiceEnrichment_Called() {
+                String token = "jwt-token";
+                JwtExchangeAuthenticationToken authenticationToken =
+                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+
+                Map<String, Object> claims = new HashMap<>();
+                claims.put("iss", "issuer");
+                claims.put("sub", "subject");
+                claims.put("oid", "test-oid-123");
+                claims.put("tenantId", TENANT_PB);
+                claims.put("userType", "EMPLOYEE");
+
+                OidcValidatedJwt jwt = oidcJwt(claims, token);
+
+                User user = User.builder().uuid("uuid").type(UserType.EMPLOYEE).active(true)
+                                .roles(Collections.emptySet()).tenantId(TENANT_PB).build();
+
+                when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
+                when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
+
+                Authentication result = authenticationProvider.authenticate(authenticationToken);
+
+                assertNotNull(result);
+                verify(msGraphService).enrichUserWithMfaDetails(any(User.class), any(AuthProperties.Provider.class), eq("test-oid-123"));
+        }
+
+        @Test
+        public void testAuthenticate_NoOpGraphService_Fallback() {
+                String token = "jwt-token";
+                JwtExchangeAuthenticationToken authenticationToken =
+                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+
+                Map<String, Object> claims = new HashMap<>();
+                claims.put("iss", "issuer");
+                claims.put("sub", "subject");
+                claims.put("oid", "test-oid-123");
+                claims.put("tenantId", TENANT_PB);
+                claims.put("userType", "EMPLOYEE");
+
+                OidcValidatedJwt jwt = oidcJwt(claims, token);
+
+                User user = User.builder().uuid("uuid").type(UserType.EMPLOYEE).active(true)
+                                .roles(Collections.emptySet()).tenantId(TENANT_PB).build();
+
+                when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
+                when(msGraphService.supports(any())).thenReturn(false);
+                when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
+
+                Authentication result = authenticationProvider.authenticate(authenticationToken);
+
+                assertNotNull(result);
+                verify(msGraphService, never()).enrichUserWithMfaDetails(any(User.class), any(AuthProperties.Provider.class), anyString());
+        }
+
+        @Test
+        public void testAuthenticate_RequestInfo_CorrectUserMapping() {
+                String token = "jwt-token";
+                JwtExchangeAuthenticationToken authenticationToken =
+                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+
+                Map<String, Object> claims = new HashMap<>();
+                claims.put("iss", "issuer");
+                claims.put("sub", "subject");
+                claims.put("tenantId", TENANT_PB);
+                claims.put("userType", "EMPLOYEE");
+
+                OidcValidatedJwt jwt = oidcJwt(claims, token);
+
+                User user = User.builder().uuid("uuid").type(UserType.EMPLOYEE).active(true)
+                                .roles(Collections.emptySet()).tenantId(TENANT_PB).build();
+
+                when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
+                when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
+
+                Authentication result = authenticationProvider.authenticate(authenticationToken);
+
+                assertNotNull(result);
+                ArgumentCaptor<RequestInfo> requestInfoCaptor = ArgumentCaptor.forClass(RequestInfo.class);
+                verify(ssoUserPersistenceService).updateUserAndUpsertIdpDetails(any(User.class), any(UserIdpDetails.class), eq(TENANT_PB), requestInfoCaptor.capture());
+                RequestInfo capturedRequestInfo = requestInfoCaptor.getValue();
+                assertEquals("uuid", capturedRequestInfo.getUserInfo().getUuid());
+        }
+
+        @Test
+        public void testAuthenticate_RoleMapping_PreservesTenantId() {
+                String token = "jwt-token";
+                JwtExchangeAuthenticationToken authenticationToken =
+                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+
+                Map<String, Object> claims = new HashMap<>();
+                claims.put("iss", "issuer");
+                claims.put("sub", "subject");
+                claims.put("tenantId", TENANT_PB);
+                claims.put("userType", "EMPLOYEE");
+
+                OidcValidatedJwt jwt = oidcJwt(claims, token);
+
+                User user = User.builder().uuid("uuid").type(UserType.EMPLOYEE).active(true)
+                                .roles(Collections.emptySet()).tenantId(TENANT_PB).build();
+
+                when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
+                when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
+
+                Authentication result = authenticationProvider.authenticate(authenticationToken);
+
+                assertNotNull(result);
+                ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+                verify(ssoUserPersistenceService).updateUserAndUpsertIdpDetails(userCaptor.capture(), any(UserIdpDetails.class), eq(TENANT_PB), any(RequestInfo.class));
+                User updatedUser = userCaptor.getValue();
+                Role role = updatedUser.getRoles().iterator().next();
+                assertEquals(TENANT_PB, role.getTenantId());
+        }
+
+        @Test
+        public void testAuthenticate_DesignationResolution_PriorityOrder() {
+                String token = "jwt-token";
+                JwtExchangeAuthenticationToken authenticationToken =
+                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+
+                Map<String, Object> claims = new HashMap<>();
+                claims.put("iss", "issuer");
+                claims.put("sub", "subject");
+                claims.put("tenantId", TENANT_PB);
+                claims.put("userType", "EMPLOYEE");
+                claims.put("jobTitle", "FieldOfficer");
+
+                OidcValidatedJwt jwt = oidcJwt(claims, token);
+
+                when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
+                when(userService.getUniqueUser(anyString(), anyString(), anyString(), any()))
+                                .thenThrow(new org.egov.user.domain.exception.UserNotFoundException(
+                                                new UserSearchCriteria()));
+
+                org.egov.user.domain.model.hrms.User hrmsUser = org.egov.user.domain.model.hrms.User.builder()
+                                .userServiceUuid("new-uuid")
+                                .userName("johndoe")
+                                .name("John Doe")
+                                .roles(Collections.emptyList())
+                                .tenantId(TENANT_PB)
+                                .build();
+
+                when(hrmsUserUtil.createHrmsUser(
+                                any(org.egov.user.domain.model.hrms.User.class), anyString(), anyString(), anyString(),
+                                anyString(), anyString(), anyString(), anyString(), any(OidcValidatedJwt.class), any(RequestInfo.class)))
+                                .thenReturn(hrmsUser);
+
+                authenticationProvider.authenticate(authenticationToken);
+
+                verify(hrmsUserUtil).createHrmsUser(
+                                any(org.egov.user.domain.model.hrms.User.class), anyString(),
+                                anyString(), anyString(), anyString(), eq(TENANT_PB),
+                                anyString(), anyString(), any(OidcValidatedJwt.class), any(RequestInfo.class));
+        }
+
+        @Test
+        public void testAuthenticate_IssuerNormalization_TrailingSlashes() {
+                String token = "jwt-token";
+                JwtExchangeAuthenticationToken authenticationToken =
+                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+
+                Map<String, Object> claims = new HashMap<>();
+                claims.put("iss", "issuer/");
+                claims.put("sub", "subject");
+                claims.put("tenantId", TENANT_PB);
+                claims.put("userType", "EMPLOYEE");
+
+                OidcValidatedJwt jwt = oidcJwt(claims, token);
+
+                User user = User.builder().uuid("uuid").type(UserType.EMPLOYEE).active(true)
+                                .roles(Collections.emptySet()).tenantId(TENANT_PB).build();
+
+                when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
+                when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
+
+                Authentication result = authenticationProvider.authenticate(authenticationToken);
+
+                assertNotNull(result);
+        }
+
+        @Test
+        public void testAuthenticate_IssuerNormalization_Whitespace() {
+                String token = "jwt-token";
+                JwtExchangeAuthenticationToken authenticationToken =
+                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+
+                Map<String, Object> claims = new HashMap<>();
+                claims.put("iss", "  issuer  ");
+                claims.put("sub", "subject");
+                claims.put("tenantId", TENANT_PB);
+                claims.put("userType", "EMPLOYEE");
+
+                OidcValidatedJwt jwt = oidcJwt(claims, token);
+
+                User user = User.builder().uuid("uuid").type(UserType.EMPLOYEE).active(true)
+                                .roles(Collections.emptySet()).tenantId(TENANT_PB).build();
+
+                when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
+                when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
+
+                Authentication result = authenticationProvider.authenticate(authenticationToken);
+
+                assertNotNull(result);
+        }
+
+        @Test
+        public void testAuthenticate_CentralInstance_MdcSet() {
+                String token = "jwt-token";
+                JwtExchangeAuthenticationToken authenticationToken =
+                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+
+                Map<String, Object> claims = new HashMap<>();
+                claims.put("iss", "issuer");
+                claims.put("sub", "subject");
+                claims.put("tenantId", TENANT_PB);
+                claims.put("userType", "EMPLOYEE");
+
+                OidcValidatedJwt jwt = oidcJwt(claims, token);
+
+                User user = User.builder().uuid("uuid").type(UserType.EMPLOYEE).active(true)
+                                .roles(Collections.emptySet()).tenantId(TENANT_PB).build();
+
+                when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
+                when(multiStateInstanceUtil.getIsEnvironmentCentralInstance()).thenReturn(true);
+                when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
+
+                Authentication result = authenticationProvider.authenticate(authenticationToken);
+
+                assertNotNull(result);
+        }
+
+        @Test
+        public void testAuthenticate_NonCentralInstance_MdcNotSet() {
+                String token = "jwt-token";
+                JwtExchangeAuthenticationToken authenticationToken =
+                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+
+                Map<String, Object> claims = new HashMap<>();
+                claims.put("iss", "issuer");
+                claims.put("sub", "subject");
+                claims.put("tenantId", TENANT_PB);
+                claims.put("userType", "EMPLOYEE");
+
+                OidcValidatedJwt jwt = oidcJwt(claims, token);
+
+                User user = User.builder().uuid("uuid").type(UserType.EMPLOYEE).active(true)
+                                .roles(Collections.emptySet()).tenantId(TENANT_PB).build();
+
+                when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
+                when(multiStateInstanceUtil.getIsEnvironmentCentralInstance()).thenReturn(false);
+                when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
+
+                Authentication result = authenticationProvider.authenticate(authenticationToken);
+
+                assertNotNull(result);
+        }
+
+        @Test
+        public void testAuthenticate_EmptyRoles_HandledCorrectly() {
+                String token = "jwt-token";
+                JwtExchangeAuthenticationToken authenticationToken =
+                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+
+                Map<String, Object> claims = new HashMap<>();
+                claims.put("iss", "issuer");
+                claims.put("sub", "subject");
+                claims.put("tenantId", TENANT_PB);
+                claims.put("userType", "EMPLOYEE");
+
+                OidcValidatedJwt jwt = oidcJwt(claims, token);
+
+                User user = User.builder().uuid("uuid").type(UserType.EMPLOYEE).active(true)
+                                .roles(Collections.emptySet()).tenantId(TENANT_PB).build();
+
+                when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
+                when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
+
+                Authentication result = authenticationProvider.authenticate(authenticationToken);
+
+                assertNotNull(result);
+                assertTrue(result instanceof UsernamePasswordAuthenticationToken);
+        }
+
+        @Test
+        public void testAuthenticate_NullRoles_HandledCorrectly() {
+                String token = "jwt-token";
+                JwtExchangeAuthenticationToken authenticationToken =
+                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+
+                Map<String, Object> claims = new HashMap<>();
+                claims.put("iss", "issuer");
+                claims.put("sub", "subject");
+                claims.put("tenantId", TENANT_PB);
+                claims.put("userType", "EMPLOYEE");
+
+                OidcValidatedJwt jwt = oidcJwt(claims, token);
+
+                User user = User.builder().uuid("uuid").type(UserType.EMPLOYEE).active(true)
+                                .roles(Collections.emptySet()).tenantId(TENANT_PB).build();
+
+                when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
+                when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
+
+                Authentication result = authenticationProvider.authenticate(authenticationToken);
+
+                assertNotNull(result);
+                assertTrue(result instanceof UsernamePasswordAuthenticationToken);
+        }
+
+        @Test
+        public void testAuthenticate_MaxLengthTokenId_HandledCorrectly() {
+                String token = "jwt-token";
+                JwtExchangeAuthenticationToken authenticationToken =
+                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+
+                Map<String, Object> claims = new HashMap<>();
+                claims.put("iss", "issuer");
+                claims.put("sub", "subject");
+                claims.put("tenantId", TENANT_PB);
+                claims.put("userType", "EMPLOYEE");
+                // Create a very long token ID (255 characters)
+                StringBuilder longTokenId = new StringBuilder();
+                for (int i = 0; i < 255; i++) {
+                        longTokenId.append("a");
+                }
+                claims.put("jti", longTokenId.toString());
+
+                OidcValidatedJwt jwt = new OidcValidatedJwt(
+                                Collections.singleton("ROLE"), claims, new Date(), new Date(), token, "oidc-azure");
+
+                User user = User.builder().uuid("uuid").type(UserType.EMPLOYEE).active(true)
+                                .roles(Collections.emptySet()).tenantId(TENANT_PB).build();
+
+                when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
+                when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
+
+                Authentication result = authenticationProvider.authenticate(authenticationToken);
+
+                assertNotNull(result);
+                assertTrue(result instanceof UsernamePasswordAuthenticationToken);
+        }
+
+        @Test
+        public void testAuthenticate_SpecialCharactersInClaims_HandledCorrectly() {
+                String token = "jwt-token";
+                JwtExchangeAuthenticationToken authenticationToken =
+                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+
+                Map<String, Object> claims = new HashMap<>();
+                claims.put("iss", "issuer");
+                claims.put("sub", "subject");
+                claims.put("tenantId", TENANT_PB);
+                claims.put("userType", "EMPLOYEE");
+                claims.put("name", "John <script>alert('xss')</script> Doe");
+                claims.put("preferred_username", "john@example.com");
+
+                OidcValidatedJwt jwt = oidcJwt(claims, token);
+
+                User user = User.builder().uuid("uuid").type(UserType.EMPLOYEE).active(true)
+                                .roles(Collections.emptySet()).tenantId(TENANT_PB).build();
+
+                when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
+                when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
+
+                Authentication result = authenticationProvider.authenticate(authenticationToken);
+
+                assertNotNull(result);
+                assertTrue(result instanceof UsernamePasswordAuthenticationToken);
         }
 }
