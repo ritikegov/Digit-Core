@@ -341,7 +341,9 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
                 .orElse(OidcConfigConstants.DEFAULT_EMPLOYEE_TYPE);
         String designation = resolveDesignation(provider, jwt, profileOpt);
         String department = profileOpt.map(EmployeeCreationProfile::getDepartment).filter(StringUtils::hasText)
-                .orElse(OidcConfigConstants.DEFAULT_DEPARTMENT_CODE);
+                .orElse(provider != null && StringUtils.hasText(provider.getDefaultDepartmentCode())
+                ? provider.getDefaultDepartmentCode()
+                : OidcConfigConstants.DEFAULT_DEPARTMENT_CODE);
 
         org.egov.user.domain.model.hrms.User hrmsUser;
         try {

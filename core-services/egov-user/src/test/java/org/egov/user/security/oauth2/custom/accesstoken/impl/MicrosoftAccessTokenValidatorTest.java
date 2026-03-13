@@ -60,6 +60,7 @@ public class MicrosoftAccessTokenValidatorTest {
                 Collections.emptyMap(),                         // roleMapping
                 Collections.emptyMap(),                         // designationMapping
                 null,                                           // defaultDesignationCode
+                null,                                           // defaultDepartmentCode
                 null,                                           // designationClaimKey
                 null,                                           // defaultBoundaryHierarchyType
                 null,                                           // defaultDob (Long)

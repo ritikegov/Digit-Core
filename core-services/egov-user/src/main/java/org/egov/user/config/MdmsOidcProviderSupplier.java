@@ -364,6 +364,9 @@ public class MdmsOidcProviderSupplier implements OidcProviderSupplier {
         if (n.has(OidcConfigConstants.KEY_DEFAULT_DESIGNATION_CODE)) {
             builder.defaultDesignationCode(textOrNull(n.get(OidcConfigConstants.KEY_DEFAULT_DESIGNATION_CODE)));
         }
+        if (n.has(OidcConfigConstants.KEY_DEFAULT_DEPARTMENT_CODE)) {
+            builder.defaultDepartmentCode(textOrNull(n.get(OidcConfigConstants.KEY_DEFAULT_DEPARTMENT_CODE)));
+        }
         if (n.has(OidcConfigConstants.KEY_DEFAULT_BOUNDARY_HIERARCHY_TYPE)) {
             builder.defaultBoundaryHierarchyType(textOrNull(n.get(OidcConfigConstants.KEY_DEFAULT_BOUNDARY_HIERARCHY_TYPE)));
         }

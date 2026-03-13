@@ -40,6 +40,7 @@ public final class OidcConfigConstants {
     public static final String KEY_DESIGNATION_MAPPING = "designationMapping";
     public static final String KEY_DESIGNATION_CLAIM_KEY = "designationClaimKey";
     public static final String KEY_DEFAULT_DESIGNATION_CODE = "defaultDesignationCode";
+    public static final String KEY_DEFAULT_DEPARTMENT_CODE = "defaultDepartmentCode";
     public static final String KEY_DEFAULT_BOUNDARY_HIERARCHY_TYPE = "defaultBoundaryHierarchyType";
     public static final String KEY_PROVIDER_TYPE = "providerType";
 

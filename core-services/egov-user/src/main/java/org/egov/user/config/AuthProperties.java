@@ -120,6 +120,7 @@ public class AuthProperties {
         private final Map<String, String> roleMapping;
         private final Map<String, String> designationMapping;
         private final String defaultDesignationCode;
+        private final String defaultDepartmentCode;
         private final String designationClaimKey;
         private final String defaultBoundaryHierarchyType;
         private final Long defaultDob;
@@ -171,6 +172,7 @@ public class AuthProperties {
             this.roleMapping = Collections.emptyMap();
             this.designationMapping = Collections.emptyMap();
             this.defaultDesignationCode = null;
+            this.defaultDepartmentCode = null;
             this.designationClaimKey = null;
             this.defaultBoundaryHierarchyType = null;
             this.defaultDob = null;
@@ -194,7 +196,7 @@ public class AuthProperties {
         public Provider(String id, String issuerUri, List<String> issuerAliases, String jwkSetUri,
                        List<String> audiences, String tenantId, String userType, String defaultRoleCodes,
                        String roleClaimKey, Map<String, String> roleMapping, Map<String, String> designationMapping,
-                       String defaultDesignationCode, String designationClaimKey, String defaultBoundaryHierarchyType,
+                       String defaultDesignationCode, String defaultDepartmentCode, String designationClaimKey, String defaultBoundaryHierarchyType,
                        Long defaultDob, String defaultEmployeeStatus, String rolePrefix, String decryptionPurpose,
                        String graphClientId, String graphTenantId, String graphMethodsUrl, String graphUsersUrl,
                        String graphTokenUrl, String graphScope, String graphAppRoleAssignmentUrl,
@@ -211,6 +213,7 @@ public class AuthProperties {
             this.roleMapping = roleMapping != null ? Collections.unmodifiableMap(new HashMap<>(roleMapping)) : Collections.emptyMap();
             this.designationMapping = designationMapping != null ? Collections.unmodifiableMap(new HashMap<>(designationMapping)) : Collections.emptyMap();
             this.defaultDesignationCode = defaultDesignationCode;
+            this.defaultDepartmentCode = defaultDepartmentCode;
             this.designationClaimKey = designationClaimKey;
             this.defaultBoundaryHierarchyType = defaultBoundaryHierarchyType;
             this.defaultDob = defaultDob;
@@ -248,6 +251,7 @@ public class AuthProperties {
             private Map<String, String> roleMapping = new HashMap<>();
             private Map<String, String> designationMapping = new HashMap<>();
             private String defaultDesignationCode;
+            private String defaultDepartmentCode;
             private String designationClaimKey;
             private String defaultBoundaryHierarchyType;
             private Long defaultDob;
@@ -278,6 +282,7 @@ public class AuthProperties {
             public Builder roleMapping(Map<String, String> roleMapping) { this.roleMapping = roleMapping; return this; }
             public Builder designationMapping(Map<String, String> designationMapping) { this.designationMapping = designationMapping; return this; }
             public Builder defaultDesignationCode(String defaultDesignationCode) { this.defaultDesignationCode = defaultDesignationCode; return this; }
+            public Builder defaultDepartmentCode(String defaultDepartmentCode) { this.defaultDepartmentCode = defaultDepartmentCode; return this; }
             public Builder designationClaimKey(String designationClaimKey) { this.designationClaimKey = designationClaimKey; return this; }
             public Builder defaultBoundaryHierarchyType(String defaultBoundaryHierarchyType) { this.defaultBoundaryHierarchyType = defaultBoundaryHierarchyType; return this; }
             public Builder defaultDob(Long defaultDob) { this.defaultDob = defaultDob; return this; }
@@ -299,33 +304,12 @@ public class AuthProperties {
             public Provider build() {
                 return new Provider(id, issuerUri, issuerAliases, jwkSetUri, audiences, tenantId,
                         userType, defaultRoleCodes, roleClaimKey, roleMapping, designationMapping,
-                        defaultDesignationCode, designationClaimKey, defaultBoundaryHierarchyType,
+                        defaultDesignationCode, defaultDepartmentCode, designationClaimKey, defaultBoundaryHierarchyType,
                         defaultDob, defaultEmployeeStatus, rolePrefix, decryptionPurpose,
                         graphClientId, graphTenantId, graphMethodsUrl, graphUsersUrl,
                         graphTokenUrl, graphScope, graphAppRoleAssignmentUrl,
                         graphServiceType, graphAppResourceId, idpUserValidatorType, providerType);
             }
-        }
-
-        // Legacy setters for Spring Boot configuration binding (deprecated)
-        @Deprecated
-        public void setRoleMapping(String roleMappingString) throws IOException {
-            throw new UnsupportedOperationException("Provider is immutable. Use builder pattern instead.");
-        }
-
-        @Deprecated
-        public void setRoleMapping(Map<String, String> roleMapping) {
-            throw new UnsupportedOperationException("Provider is immutable. Use builder pattern instead.");
-        }
-
-        @Deprecated
-        public void setDesignationMapping(String designationMappingString) throws IOException {
-            throw new UnsupportedOperationException("Provider is immutable. Use builder pattern instead.");
-        }
-
-        @Deprecated
-        public void setDesignationMapping(Map<String, String> designationMapping) {
-            throw new UnsupportedOperationException("Provider is immutable. Use builder pattern instead.");
         }
     }
 }
