@@ -1,18 +1,26 @@
 package org.egov.user.web.contract.auth;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.egov.user.security.oauth2.custom.jwt.JwtConstants;
 
 import java.util.Date;
 import java.util.Map;
 import java.util.Set;
 import lombok.Getter;
+import lombok.ToString;
+import lombok.ToString.Exclude;
 
 @Getter
+@ToString
 public class OidcValidatedJwt {
     private final Set<String> roles;
     private final Map<String, Object> claims;
     private final Date expirationTime;
     private final Date issuanceTime;
+    @JsonIgnore
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    @Exclude
     private final String rawToken;
     private final String providerId;
 
@@ -68,10 +76,7 @@ public class OidcValidatedJwt {
         return oid != null ? oid.toString() : getSubject();
     }
 
-    public String getRawToken() {
-        return rawToken;
-    }
-
+    
     /**
      * Token unique identifier for session tracking. Uses jti if present, else uti.
      * Returns null if neither claim is present (caller must validate and throw).
