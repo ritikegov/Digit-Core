@@ -40,6 +40,9 @@ public class OtpEmailRepository {
 
 	@Autowired
 	private MultiStateInstanceUtil centralInstanceUtil;
+	
+	@Value("${egov.localization.default.locale:en_IN}")
+    private String defaultLocale;
 
     @Autowired
     public OtpEmailRepository(CustomKafkaTemplate<String, EmailRequest> kafkaTemplate,
@@ -74,7 +77,7 @@ public class OtpEmailRepository {
 			locale = otpRequest.getRequestInfo().getMsgId().split("|")[1];
 		}
 		else {
-			locale = "en_IN";
+			locale = defaultLocale;
 		}
 		return locale;
 	}
