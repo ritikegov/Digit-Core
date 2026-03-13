@@ -5,6 +5,7 @@ import static org.apache.commons.lang3.StringUtils.isEmpty;
 import static org.egov.user.config.UserServiceConstants.USER_CLIENT_ID;
 import static org.springframework.util.CollectionUtils.isEmpty;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -102,6 +103,9 @@ public class UserService {
 
     @Value("${default.otp}")
     private String defaultOtp;
+
+    @Value("${egov.user.countrycode.default:+91}")
+    private String defaultCountryCode;
 
     @Autowired
     private RestTemplate restTemplate;
@@ -691,6 +695,15 @@ public class UserService {
 
         loginAuditRepository.saveLoginAudit(loginAudit);
 
+    }
+
+    /**
+     * Get default country code
+     *
+     * @return default country code
+     */
+    public String getDefaultCountryCode() {
+        return defaultCountryCode;
     }
 
 
