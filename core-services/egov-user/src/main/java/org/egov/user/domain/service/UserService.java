@@ -5,6 +5,7 @@ import static org.apache.commons.lang3.StringUtils.isEmpty;
 import static org.egov.user.config.UserServiceConstants.USER_CLIENT_ID;
 import static org.springframework.util.CollectionUtils.isEmpty;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -28,6 +29,7 @@ import org.egov.user.domain.exception.PasswordMismatchException;
 import org.egov.user.domain.exception.UserNameNotValidException;
 import org.egov.user.domain.exception.UserNotFoundException;
 import org.egov.user.domain.exception.UserProfileUpdateDeniedException;
+import org.egov.user.domain.model.CountryCode;
 import org.egov.user.domain.model.LoggedInUserUpdatePasswordRequest;
 import org.egov.user.domain.model.NonLoggedInUserUpdatePasswordRequest;
 import org.egov.user.domain.model.User;
@@ -98,6 +100,9 @@ public class UserService {
 
     @Value("${egov.user.pwd.pattern.max.length}")
     private Integer pwdMaxLength;
+
+    @Value("${egov.user.countrycode.default:+91}")
+    private String defaultCountryCode;
 
     @Autowired
     private RestTemplate restTemplate;
@@ -662,6 +667,15 @@ public class UserService {
         if (!CollectionUtils.isEmpty(errorMap.keySet())) {
             throw new CustomException(errorMap);
         }
+    }
+
+    /**
+     * Get default country code
+     *
+     * @return default country code
+     */
+    public String getDefaultCountryCode() {
+        return defaultCountryCode;
     }
 
 
