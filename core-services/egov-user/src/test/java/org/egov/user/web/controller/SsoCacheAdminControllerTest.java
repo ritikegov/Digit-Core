@@ -1,13 +1,18 @@
 package org.egov.user.web.controller;
 
+import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.response.ResponseInfo;
 import org.egov.user.security.oauth2.custom.jwt.IDPJwtValidator;
+import org.egov.user.web.contract.SsoCacheClearRequest;
+import org.egov.user.web.contract.SsoJwksCacheClearRequest;
+import org.egov.user.web.contract.factory.ResponseInfoFactory;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -23,6 +28,9 @@ public class SsoCacheAdminControllerTest {
 
     @Mock
     private IDPJwtValidator idpJwtValidator;
+    
+    @Mock
+    private ResponseInfoFactory responseInfoFactory;
 
     @InjectMocks
     private SsoCacheAdminController ssoCacheAdminController;
@@ -32,15 +40,23 @@ public class SsoCacheAdminControllerTest {
     @Before
     public void setup() {
         mockMvc = MockMvcBuilders.standaloneSetup(ssoCacheAdminController).build();
+        when(responseInfoFactory.createResponseInfoFromRequestInfo(any(RequestInfo.class), eq(true)))
+                .thenReturn(new ResponseInfo("apiId", "ver", System.currentTimeMillis(), "resMsgId", "msgId", "successful"));
     }
 
     @Test
     public void testClearDecodersForTenantAndProvider_WithProviderId_Success() throws Exception {
         String tenantId = "pb.amritsar";
         String providerId = "azure";
+        RequestInfo requestInfo = new RequestInfo();
+        
+        SsoCacheClearRequest request = new SsoCacheClearRequest();
+        request.setRequestInfo(requestInfo);
+        request.setTenantId(tenantId);
+        request.setProviderId(providerId);
         
         // Verify the method call
-        ssoCacheAdminController.clearDecodersForTenantAndProvider(tenantId, providerId);
+        ssoCacheAdminController.clearDecodersForTenantAndProvider(request);
         
         verify(idpJwtValidator, times(1)).clearDecoderCacheFor(tenantId, providerId);
     }
@@ -48,9 +64,15 @@ public class SsoCacheAdminControllerTest {
     @Test
     public void testClearDecodersForTenantAndProvider_WithoutProviderId_Success() throws Exception {
         String tenantId = "pb.amritsar";
+        RequestInfo requestInfo = new RequestInfo();
+        
+        SsoCacheClearRequest request = new SsoCacheClearRequest();
+        request.setRequestInfo(requestInfo);
+        request.setTenantId(tenantId);
+        request.setProviderId(null);
         
         // Verify the method call with null providerId
-        ssoCacheAdminController.clearDecodersForTenantAndProvider(tenantId, null);
+        ssoCacheAdminController.clearDecodersForTenantAndProvider(request);
         
         verify(idpJwtValidator, times(1)).clearDecoderCacheFor(tenantId, null);
     }
@@ -59,33 +81,51 @@ public class SsoCacheAdminControllerTest {
     public void testClearDecodersForTenantAndProvider_WithProviderId_ReturnsCorrectResponse() {
         String tenantId = "pb.amritsar";
         String providerId = "azure";
+        RequestInfo requestInfo = new RequestInfo();
+        
+        SsoCacheClearRequest request = new SsoCacheClearRequest();
+        request.setRequestInfo(requestInfo);
+        request.setTenantId(tenantId);
+        request.setProviderId(providerId);
         
         // Call the method and verify response
-        ResponseInfo response = ssoCacheAdminController.clearDecodersForTenantAndProvider(tenantId, providerId);
+        ResponseInfo response = ssoCacheAdminController.clearDecodersForTenantAndProvider(request);
         
         assertNotNull(response);
-        assertEquals("SSO decoder cache cleared successfully for tenant: " + tenantId + ", provider: " + providerId, response.getStatus());
+        assertEquals("successful", response.getStatus());
     }
 
     @Test
     public void testClearDecodersForTenantAndProvider_WithoutProviderId_ReturnsCorrectResponse() {
         String tenantId = "pb.amritsar";
+        RequestInfo requestInfo = new RequestInfo();
+        
+        SsoCacheClearRequest request = new SsoCacheClearRequest();
+        request.setRequestInfo(requestInfo);
+        request.setTenantId(tenantId);
+        request.setProviderId(null);
         
         // Call the method and verify response
-        ResponseInfo response = ssoCacheAdminController.clearDecodersForTenantAndProvider(tenantId, null);
+        ResponseInfo response = ssoCacheAdminController.clearDecodersForTenantAndProvider(request);
         
         assertNotNull(response);
-        assertEquals("SSO decoder cache cleared successfully for tenant: " + tenantId, response.getStatus());
+        assertEquals("successful", response.getStatus());
     }
 
     @Test
     public void testClearDecodersForTenantAndProvider_Endpoint_WithoutProviderId_Success() throws Exception {
         String tenantId = "pb.amritsar";
+        RequestInfo requestInfo = new RequestInfo();
+        
+        SsoCacheClearRequest request = new SsoCacheClearRequest();
+        request.setRequestInfo(requestInfo);
+        request.setTenantId(tenantId);
         
         mockMvc.perform(post("/sso/decoders/_clear")
-                .param("tenantId", tenantId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"RequestInfo\":{},\"tenantId\":\"" + tenantId + "\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("SSO decoder cache cleared successfully for tenant: " + tenantId));
+                .andExpect(jsonPath("$.status").value("successful"));
         
         verify(idpJwtValidator, times(1)).clearDecoderCacheFor(tenantId, null);
     }
@@ -96,23 +136,27 @@ public class SsoCacheAdminControllerTest {
         String jwksUri = "https://login.microsoftonline.com/common/discovery/v2.0/keys";
         
         mockMvc.perform(post("/sso/jwks/_clear")
-                .param("tenantId", tenantId)
-                .param("jwksUri", jwksUri))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"RequestInfo\":{},\"tenantId\":\"" + tenantId + "\",\"jwksUri\":\"" + jwksUri + "\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").exists()); // Just check that status exists, content depends on cache state
+                .andExpect(jsonPath("$.status").value("successful")); // Just check that status exists, content depends on cache state
     }
 
     @Test
     public void testClearJwks_ReturnsCorrectResponse() {
         String tenantId = "pb.amritsar";
         String jwksUri = "https://login.microsoftonline.com/common/discovery/v2.0/keys";
+        RequestInfo requestInfo = new RequestInfo();
+        
+        SsoJwksCacheClearRequest request = new SsoJwksCacheClearRequest();
+        request.setRequestInfo(requestInfo);
+        request.setTenantId(tenantId);
+        request.setJwksUri(jwksUri);
         
         // Call the method and verify response
-        ResponseInfo response = ssoCacheAdminController.clearJwks(tenantId, jwksUri);
+        ResponseInfo response = ssoCacheAdminController.clearJwks(request);
         
         assertNotNull(response);
-        assertTrue(response.getStatus().contains("SSO JWKS cache")); // Check that it contains relevant text
-        assertTrue(response.getStatus().contains(tenantId));
-        assertTrue(response.getStatus().contains(jwksUri));
+        assertEquals("successful", response.getStatus());
     }
 }
