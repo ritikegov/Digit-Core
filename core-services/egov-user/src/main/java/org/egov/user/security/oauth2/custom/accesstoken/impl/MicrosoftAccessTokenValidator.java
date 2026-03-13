@@ -47,6 +47,14 @@ public class MicrosoftAccessTokenValidator implements AccessTokenValidator {
     
     private static final AtomicReference<CacheEntry> cache = new AtomicReference<>(null);
     
+    /**
+     * Creates a cache key for tenant+URI combination
+     */
+    private static String cacheKey(String tenantId, String jwksUri) {
+        String normalizedTenant = (tenantId != null && !tenantId.isEmpty()) ? tenantId : "default";
+        return normalizedTenant + ":" + jwksUri;
+    }
+    
     @Autowired
     public MicrosoftAccessTokenValidator(RestTemplate restTemplate, AuthProperties authProperties) {
         this.restTemplate = restTemplate;
@@ -133,7 +141,7 @@ public class MicrosoftAccessTokenValidator implements AccessTokenValidator {
             }
             
             // Get JWKS set with caching
-            JWKSet jwkSet = getJwkSet(jwksUri);
+            JWKSet jwkSet = getJwkSet(provider.getTenantId(), jwksUri);
             
             // Get the key ID from the JWT header
             String keyId = signedJWT.getHeader().getKeyID();
@@ -179,15 +187,16 @@ public class MicrosoftAccessTokenValidator implements AccessTokenValidator {
      * Gets JWKS set with caching. Fetches from remote if cache is expired or not present.
      * Uses atomic operations to prevent race conditions.
      */
-    private JWKSet getJwkSet(String jwksUri) {
+    private JWKSet getJwkSet(String tenantId, String jwksUri) {
+        String cacheKey = cacheKey(tenantId, jwksUri);
         long now = System.currentTimeMillis();
         CacheEntry entry = cache.get();
         
         // Check if cache is valid and contains the URI
         if (entry != null && (now - entry.timestamp) < jwksCacheTtlMs) {
-            JWKSet cached = entry.jwkSetCache.get(jwksUri);
+            JWKSet cached = entry.jwkSetCache.get(cacheKey);
             if (cached != null) {
-                log.debug("Using cached JWKS for URI: {}", jwksUri);
+                log.debug("Using cached JWKS for tenant: {}, URI: {}", tenantId, jwksUri);
                 return cached;
             }
         }
@@ -210,27 +219,27 @@ public class MicrosoftAccessTokenValidator implements AccessTokenValidator {
             if (entry != null && (now - entry.timestamp) < jwksCacheTtlMs) {
                 // Update existing cache entry
                 ConcurrentHashMap<String, JWKSet> updatedCache = new ConcurrentHashMap<>(entry.jwkSetCache);
-                updatedCache.put(jwksUri, jwkSet);
+                updatedCache.put(cacheKey, jwkSet);
                 newEntry = new CacheEntry(updatedCache, entry.timestamp);
             } else {
                 // Create new cache entry
                 ConcurrentHashMap<String, JWKSet> newCache = new ConcurrentHashMap<>();
-                newCache.put(jwksUri, jwkSet);
+                newCache.put(cacheKey, jwkSet);
                 newEntry = new CacheEntry(newCache, now);
             }
             
             cache.set(newEntry);
-            log.debug("JWKS fetched and cached successfully for URI: {}", jwksUri);
+            log.debug("JWKS fetched and cached successfully for tenant: {}, URI: {}", tenantId, jwksUri);
             return jwkSet;
             
         } catch (Exception e) {
-            log.error("Failed to fetch JWKS from URI: {}", jwksUri, e);
+            log.error("Failed to fetch JWKS from tenant: {}, URI: {}", tenantId, jwksUri, e);
             
             // Return cached version if available, even if expired
             if (entry != null) {
-                JWKSet cached = entry.jwkSetCache.get(jwksUri);
+                JWKSet cached = entry.jwkSetCache.get(cacheKey);
                 if (cached != null) {
-                    log.warn("Using expired cached JWKS due to fetch failure for URI: {}", jwksUri);
+                    log.warn("Using expired cached JWKS due to fetch failure for tenant: {}, URI: {}", tenantId, jwksUri);
                     return cached;
                 }
             }
@@ -241,10 +250,28 @@ public class MicrosoftAccessTokenValidator implements AccessTokenValidator {
     }
     
     /**
-     * Clears JWKS cache - useful for testing or forced refresh.
+     * Clears JWKS cache for a specific tenant and JWKS URI.
+     * 
+     * @param tenantId the tenant ID (for logging purposes)
+     * @param jwksUri the JWKS URI to clear
+     * @return true if cache entry was removed, false if not found
      */
-    public static void clearJwkCache() {
-        cache.set(null);
-        log.info("JWKS cache cleared");
+    public static boolean clearJwkCacheFor(String tenantId, String jwksUri) {
+        if (jwksUri == null) {
+            log.info("JWKS URI is null, cannot clear cache for tenant: {}", tenantId);
+            return false;
+        }
+        
+        String cacheKey = cacheKey(tenantId, jwksUri);
+        CacheEntry entry = cache.get();
+        if (entry != null) {
+            JWKSet removed = entry.jwkSetCache.remove(cacheKey);
+            if (removed != null) {
+                log.info("JWKS cache cleared for tenant: {}, jwksUri: {}", tenantId, jwksUri);
+                return true;
+            }
+        }
+        log.info("No JWKS cache entry found for tenant: {}, jwksUri: {}", tenantId, jwksUri);
+        return false;
     }
 }

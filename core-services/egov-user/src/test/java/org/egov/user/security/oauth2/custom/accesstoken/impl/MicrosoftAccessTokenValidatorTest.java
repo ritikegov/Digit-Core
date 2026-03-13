@@ -83,12 +83,14 @@ public class MicrosoftAccessTokenValidatorTest {
         String publicKeyJson = testRSAKey.toPublicJWK().toJSONString();
         String jwksJson = "{\"keys\":[" + publicKeyJson + "]}";
         when(restTemplate.getForObject(anyString(), eq(String.class))).thenReturn(jwksJson);
+        
+        // Clear cache to ensure clean test state
+        MicrosoftAccessTokenValidator.clearJwkCacheFor("default-tenant", "https://login.microsoftonline.com/common/discovery/v2.0/keys");
     }
     
     @After
     public void tearDown() {
-        // Clear cache after each test to prevent test interference
-        MicrosoftAccessTokenValidator.clearJwkCache();
+        // Cache is now managed per tenant/URI, no global clear needed
     }
 
     @Test
@@ -130,7 +132,6 @@ public class MicrosoftAccessTokenValidatorTest {
     @Test
     public void validateSignature_RespectsShortTtl() throws Exception {
         // Use a very short TTL so that a second call forces refresh
-        MicrosoftAccessTokenValidator.clearJwkCache();
         when(oidcProperties.getJwksCacheTtlMs()).thenReturn(1L);
         validator = new MicrosoftAccessTokenValidator(restTemplate, authProperties);
 
@@ -146,23 +147,6 @@ public class MicrosoftAccessTokenValidatorTest {
 
         // Verify at least two invocations (initial + post-expiry)
         verify(restTemplate, atLeast(2)).getForObject(anyString(), eq(String.class));
-    }
-
-    @Test
-    public void clearJwkCache_ClearsAllCaches() throws Exception {
-        // Populate cache
-        SignedJWT signedJWT = createSignedJWT(testRSAKey);
-        validator.validateSignature(signedJWT, provider);
-        
-        // Clear cache
-        MicrosoftAccessTokenValidator.clearJwkCache();
-        
-        // Mock fetch failure after cache clear
-        when(restTemplate.getForObject(anyString(), eq(String.class))).thenThrow(new RuntimeException("Network error"));
-        
-        // Should fail since cache is cleared
-        boolean result = validator.validateSignature(signedJWT, provider);
-        assertFalse("Validation should fail after cache clear and network error", result);
     }
 
     private SignedJWT createSignedJWT(RSAKey signingKey) throws JOSEException {

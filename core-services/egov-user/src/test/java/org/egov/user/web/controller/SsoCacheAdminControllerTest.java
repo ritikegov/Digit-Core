@@ -13,6 +13,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -34,134 +35,84 @@ public class SsoCacheAdminControllerTest {
     }
 
     @Test
-    public void testClearAllDecoders_Success() throws Exception {
-        // Verify the method call
-        ssoCacheAdminController.clearAllDecoders();
-        
-        verify(idpJwtValidator, times(1)).clearDecoderCache();
-    }
-
-    @Test
-    public void testClearAllDecoders_ReturnsCorrectResponse() {
-        // Call the method and verify response
-        ResponseInfo response = ssoCacheAdminController.clearAllDecoders();
-        
-        assertNotNull(response);
-        assertEquals("SSO decoder cache cleared successfully", response.getStatus());
-    }
-
-    @Test
-    public void testClearDecoderForProvider_ValidProviderId_Success() throws Exception {
+    public void testClearDecodersForTenantAndProvider_WithProviderId_Success() throws Exception {
+        String tenantId = "pb.amritsar";
         String providerId = "azure";
         
         // Verify the method call
-        ssoCacheAdminController.clearDecoderForProvider(providerId);
+        ssoCacheAdminController.clearDecodersForTenantAndProvider(tenantId, providerId);
         
-        verify(idpJwtValidator, times(1)).clearDecoderForProvider(providerId);
+        verify(idpJwtValidator, times(1)).clearDecoderCacheFor(tenantId, providerId);
     }
 
     @Test
-    public void testClearDecoderForProvider_ReturnsCorrectResponse() {
-        String providerId = "microsoft";
+    public void testClearDecodersForTenantAndProvider_WithoutProviderId_Success() throws Exception {
+        String tenantId = "pb.amritsar";
         
-        // Call the method and verify response
-        ResponseInfo response = ssoCacheAdminController.clearDecoderForProvider(providerId);
+        // Verify the method call with null providerId
+        ssoCacheAdminController.clearDecodersForTenantAndProvider(tenantId, null);
         
-        assertNotNull(response);
-        assertEquals("SSO decoder cache cleared successfully for provider: " + providerId, response.getStatus());
+        verify(idpJwtValidator, times(1)).clearDecoderCacheFor(tenantId, null);
     }
 
     @Test
-    public void testClearDecoderForProvider_NullProviderId_Success() throws Exception {
-        String providerId = null;
-        
-        // Verify the method call
-        ssoCacheAdminController.clearDecoderForProvider(providerId);
-        
-        verify(idpJwtValidator, times(1)).clearDecoderForProvider(providerId);
-    }
-
-    @Test
-    public void testClearDecoderForProvider_EmptyProviderId_Success() throws Exception {
-        String providerId = "";
-        
-        // Verify the method call
-        ssoCacheAdminController.clearDecoderForProvider(providerId);
-        
-        verify(idpJwtValidator, times(1)).clearDecoderForProvider(providerId);
-    }
-
-    @Test
-    public void testClearAllDecoders_Endpoint_Success() throws Exception {
-        mockMvc.perform(post("/sso/_clear"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("SSO decoder cache cleared successfully"));
-        
-        verify(idpJwtValidator, times(1)).clearDecoderCache();
-    }
-
-    @Test
-    public void testClearDecoderForProvider_Endpoint_Success() throws Exception {
+    public void testClearDecodersForTenantAndProvider_WithProviderId_ReturnsCorrectResponse() {
+        String tenantId = "pb.amritsar";
         String providerId = "azure";
         
-        mockMvc.perform(post("/sso/{providerId}/_clear", providerId))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("SSO decoder cache cleared successfully for provider: " + providerId));
-        
-        verify(idpJwtValidator, times(1)).clearDecoderForProvider(providerId);
-    }
-
-    @Test
-    public void testClearDecoderForProvider_Endpoint_WithSpecialCharacters_Success() throws Exception {
-        String providerId = "azure-ad-prod";
-        
-        mockMvc.perform(post("/sso/{providerId}/_clear", providerId))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("SSO decoder cache cleared successfully for provider: " + providerId));
-        
-        verify(idpJwtValidator, times(1)).clearDecoderForProvider(providerId);
-    }
-
-    @Test
-    public void testClearAllDecoders_MultipleCalls_VerifyMultipleInvocations() throws Exception {
-        // Call the method multiple times
-        ssoCacheAdminController.clearAllDecoders();
-        ssoCacheAdminController.clearAllDecoders();
-        ssoCacheAdminController.clearAllDecoders();
-        
-        // Verify the method was called 3 times
-        verify(idpJwtValidator, times(3)).clearDecoderCache();
-    }
-
-    @Test
-    public void testClearDecoderForProvider_DifferentProviders_VerifyCorrectInvocations() throws Exception {
-        // Call the method with different provider IDs
-        ssoCacheAdminController.clearDecoderForProvider("azure");
-        ssoCacheAdminController.clearDecoderForProvider("microsoft");
-        ssoCacheAdminController.clearDecoderForProvider("google");
-        
-        // Verify each provider was cleared once
-        verify(idpJwtValidator, times(1)).clearDecoderForProvider("azure");
-        verify(idpJwtValidator, times(1)).clearDecoderForProvider("microsoft");
-        verify(idpJwtValidator, times(1)).clearDecoderForProvider("google");
-    }
-
-    @Test
-    public void testClearAllDecoders_ResponseInfoFields() {
-        ResponseInfo response = ssoCacheAdminController.clearAllDecoders();
+        // Call the method and verify response
+        ResponseInfo response = ssoCacheAdminController.clearDecodersForTenantAndProvider(tenantId, providerId);
         
         assertNotNull(response);
-        assertNotNull(response.getTs()); // timestamp should not be null
-        assertEquals("SSO decoder cache cleared successfully", response.getStatus());
+        assertEquals("SSO decoder cache cleared successfully for tenant: " + tenantId + ", provider: " + providerId, response.getStatus());
     }
 
     @Test
-    public void testClearDecoderForProvider_ResponseInfoFields() {
-        String providerId = "test-provider";
-        ResponseInfo response = ssoCacheAdminController.clearDecoderForProvider(providerId);
+    public void testClearDecodersForTenantAndProvider_WithoutProviderId_ReturnsCorrectResponse() {
+        String tenantId = "pb.amritsar";
+        
+        // Call the method and verify response
+        ResponseInfo response = ssoCacheAdminController.clearDecodersForTenantAndProvider(tenantId, null);
         
         assertNotNull(response);
-        assertNotNull(response.getTs()); // timestamp should not be null
-        assertEquals("SSO decoder cache cleared successfully for provider: " + providerId, response.getStatus());
+        assertEquals("SSO decoder cache cleared successfully for tenant: " + tenantId, response.getStatus());
+    }
+
+    @Test
+    public void testClearDecodersForTenantAndProvider_Endpoint_WithoutProviderId_Success() throws Exception {
+        String tenantId = "pb.amritsar";
+        
+        mockMvc.perform(post("/sso/decoders/_clear")
+                .param("tenantId", tenantId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SSO decoder cache cleared successfully for tenant: " + tenantId));
+        
+        verify(idpJwtValidator, times(1)).clearDecoderCacheFor(tenantId, null);
+    }
+
+    @Test
+    public void testClearJwks_Endpoint_Success() throws Exception {
+        String tenantId = "pb.amritsar";
+        String jwksUri = "https://login.microsoftonline.com/common/discovery/v2.0/keys";
+        
+        mockMvc.perform(post("/sso/jwks/_clear")
+                .param("tenantId", tenantId)
+                .param("jwksUri", jwksUri))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").exists()); // Just check that status exists, content depends on cache state
+    }
+
+    @Test
+    public void testClearJwks_ReturnsCorrectResponse() {
+        String tenantId = "pb.amritsar";
+        String jwksUri = "https://login.microsoftonline.com/common/discovery/v2.0/keys";
+        
+        // Call the method and verify response
+        ResponseInfo response = ssoCacheAdminController.clearJwks(tenantId, jwksUri);
+        
+        assertNotNull(response);
+        assertTrue(response.getStatus().contains("SSO JWKS cache")); // Check that it contains relevant text
+        assertTrue(response.getStatus().contains(tenantId));
+        assertTrue(response.getStatus().contains(jwksUri));
     }
 }

@@ -25,7 +25,7 @@ public class IDPJwtValidator implements JwtValidator {
     private final AuthProperties authProperties;
     private final OidcProviderSupplier oidcProviderSupplier;
 
-    // cache by providerId
+    // cache by tenant:providerId
     private final Map<String, DecoderEntry> decoders = new ConcurrentHashMap<>();
 
     /**
@@ -117,9 +117,8 @@ public class IDPJwtValidator implements JwtValidator {
             }
 
             // Likely signature failure: refresh decoder once and retry
-            String providerId = provider.getId();
-            log.info(SsoErrorCodes.MSG_DECODER_REFRESH_ON_SIGNATURE_FAILURE, providerId);
-            clearDecoderForProvider(providerId);
+            log.info(SsoErrorCodes.MSG_DECODER_REFRESH_ON_SIGNATURE_FAILURE, provider.getId());
+            clearDecoderForProvider(provider.getTenantId(), provider.getId());
             JwtDecoder freshDecoder = getDecoder(provider);
             try {
                 jwt = freshDecoder.decode(token);
@@ -166,18 +165,50 @@ public class IDPJwtValidator implements JwtValidator {
     }
 
     /**
-     * Clears the JWT decoder cache entry for a specific provider ID.
+     * Clears JWT decoder cache entries by tenant and/or provider.
+     * <ul>
+     *   <li>tenantId + providerId: clear specific entry for that tenant+provider.</li>
+     *   <li>tenantId only (providerId null): clear all decoders for that tenant.</li>
+     * </ul>
      *
-     * @param providerId the provider ID whose decoder cache entry should be removed
+     * @param tenantId tenant ID (required, null/empty treated as "default")
+     * @param providerId provider ID, or null for "all providers for given tenant"
      */
-    public void clearDecoderForProvider(String providerId) {
-        if (providerId == null) {
-            return;
+    public void clearDecoderCacheFor(String tenantId, String providerId) {
+        if (providerId != null) {
+            // Clear specific tenant+provider combination
+            String key = cacheKey(tenantId, providerId);
+            DecoderEntry removed = decoders.remove(key);
+            if (removed != null) {
+                log.info(SsoErrorCodes.MSG_DECODER_CACHE_PROVIDER_CLEARED, key);
+            }
+        } else {
+            // Clear all entries for this tenant
+            String prefix = normalizedTenant(tenantId) + ":";
+            boolean removed = decoders.keySet().removeIf(k -> k.startsWith(prefix));
+            if (removed) {
+                log.info(SsoErrorCodes.MSG_DECODER_CACHE_TENANT_CLEARED, normalizedTenant(tenantId));
+            }
         }
-        DecoderEntry removed = decoders.remove(providerId);
-        if (removed != null) {
-            log.info(SsoErrorCodes.MSG_DECODER_CACHE_PROVIDER_CLEARED, providerId);
-        }
+    }
+
+    /**
+     * Clears decoder cache for a specific tenant and provider combination.
+     * This is a convenience method that calls {@link #clearDecoderCacheFor(String, String)}.
+     *
+     * @param tenantId the tenant ID
+     * @param providerId the provider ID
+     */
+    public void clearDecoderForProvider(String tenantId, String providerId) {
+        clearDecoderCacheFor(tenantId, providerId);
+    }
+
+    private static String normalizedTenant(String tenantId) {
+        return (tenantId != null && !tenantId.isEmpty()) ? tenantId : "default";
+    }
+
+    private static String cacheKey(String tenantId, String providerId) {
+        return normalizedTenant(tenantId) + ":" + providerId;
     }
 
     /**
@@ -300,10 +331,10 @@ public class IDPJwtValidator implements JwtValidator {
      * @throws OidcProviderConfigException if JWKS URI or issuer URI is missing
      */
     private JwtDecoder getDecoder(AuthProperties.Provider provider) {
-        String providerId = provider.getId();
+        String key = cacheKey(provider.getTenantId(), provider.getId());
         long now = System.currentTimeMillis();
 
-        DecoderEntry existing = decoders.get(providerId);
+        DecoderEntry existing = decoders.get(key);
         if (existing != null && !existing.isExpired(now, decoderCacheTtlMs)) {
             return existing.getDecoder();
         }
@@ -313,7 +344,7 @@ public class IDPJwtValidator implements JwtValidator {
         decoder.setJwtValidator(createJwtValidator(provider));
 
         DecoderEntry newEntry = new DecoderEntry(decoder, now);
-        decoders.put(providerId, newEntry);
+        decoders.put(key, newEntry);
         return newEntry.getDecoder();
     }
 

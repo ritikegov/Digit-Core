@@ -58,4 +58,6 @@ public final class SsoErrorCodes {
             "Refreshing JWT decoder after signature failure for provider: {}";
     public static final String MSG_DECODER_REFRESH_FAILED_AFTER_RETRY =
             "JWT validation still failing after decoder refresh for issuer: {}";
+    public static final String MSG_DECODER_CACHE_TENANT_CLEARED =
+            "OIDC JWT decoder cache cleared for tenant: {}";
 }

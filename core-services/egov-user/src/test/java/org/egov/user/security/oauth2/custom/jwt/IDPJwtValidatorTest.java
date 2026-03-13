@@ -22,6 +22,7 @@ import java.time.Instant;
 import java.util.*;
 
 import static org.junit.Assert.*;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.*;
 
 @RunWith(MockitoJUnitRunner.class)
@@ -116,7 +117,7 @@ public class IDPJwtValidatorTest {
 
                 // Inject mocked decoder into the decoders map
                 Map<String, Object> decoders = getDecoderEntries();
-                decoders.put("azure", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+                decoders.put("pb.amritsar:azure", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", issuer);
@@ -234,7 +235,7 @@ public class IDPJwtValidatorTest {
                 when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
 
                 Map<String, Object> decoders = getDecoderEntries();
-                decoders.put("azure", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+                decoders.put("pb.amritsar:azure", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
 
                 OAuth2Error error = new OAuth2Error("invalid_token", "Token expired", null);
                 JwtValidationException expired = new JwtValidationException("expired", Collections.singletonList(error));
@@ -268,7 +269,7 @@ public class IDPJwtValidatorTest {
             when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
 
             Map<String, Object> decoders = getDecoderEntries();
-            decoders.put("azure", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+            decoders.put("pb.amritsar:azure", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
 
             OAuth2Error error = new OAuth2Error("invalid_token", "audience invalid", null);
             JwtValidationException invalidAud = new JwtValidationException("invalid audience", Collections.singletonList(error));
@@ -354,7 +355,7 @@ public class IDPJwtValidatorTest {
                 when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
 
                 Map<String, Object> decoders = getDecoderEntries();
-                decoders.put("azure", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+                decoders.put("pb.amritsar:azure", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", issuer);
@@ -456,7 +457,7 @@ public class IDPJwtValidatorTest {
                 when(oidcProviderSupplier.getProviders()).thenReturn(providers);
 
                 Map<String, Object> decoders = getDecoderEntries();
-                decoders.put("azure1", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+                decoders.put("pb.amritsar:azure1", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", issuer);
@@ -471,7 +472,7 @@ public class IDPJwtValidatorTest {
                 String payloadJson = "{\"iss\":\"https://sts.windows.net/tenant-id/\",\"aud\":[\"aud1\"]}";
                 String payloadB64 = Base64.getUrlEncoder().withoutPadding()
                                 .encodeToString(payloadJson.getBytes(StandardCharsets.UTF_8));
-                String header = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9";
+                String header = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9"; // RS256 header
                 String tokenWithAud = header + "." + payloadB64 + ".sig";
 
                 when(jwtDecoder.decode(tokenWithAud)).thenReturn(jwt);
@@ -539,7 +540,7 @@ public class IDPJwtValidatorTest {
                 when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
 
                 Map<String, Object> decoders = getDecoderEntries();
-                decoders.put("azure", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+                decoders.put("pb.amritsar:azure", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", issuerWithSlash);
@@ -619,7 +620,7 @@ public class IDPJwtValidatorTest {
                 when(oidcProviderSupplier.getProviders()).thenReturn(Collections.singletonList(provider));
 
                 Map<String, Object> decoders = getDecoderEntries();
-                decoders.put("azure", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+                decoders.put("pb.amritsar:azure", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
 
                 String header = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9";
                 String payload = "eyJpc3MiOiJodHRwczovL3N0cy53aW5kb3dzLm5ldC90ZW5hbnQtaWQvIn0";
@@ -684,15 +685,15 @@ public class IDPJwtValidatorTest {
                 Map<String, Object> decoders = getDecoderEntries();
                 decoders.clear();
 
-                // Seed map with two providers
-                decoders.put("azure1", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
-                decoders.put("azure2", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+                // Seed map with two providers using new cache key shape
+                decoders.put("default:azure1", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+                decoders.put("pb.amritsar:azure2", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
                 assertEquals(2, decoders.size());
 
-                // Clear single provider
-                idpJwtValidator.clearDecoderForProvider("azure1");
-                assertFalse(decoders.containsKey("azure1"));
-                assertTrue(decoders.containsKey("azure2"));
+                // Clear specific provider (by tenant + provider)
+                idpJwtValidator.clearDecoderCacheFor("default", "azure1");
+                assertFalse(decoders.containsKey("default:azure1"));
+                assertTrue(decoders.containsKey("pb.amritsar:azure2"));
 
                 // Clear all
                 idpJwtValidator.clearDecoderCache();
@@ -720,7 +721,7 @@ public class IDPJwtValidatorTest {
 
                 // Seed decoder cache with mocked decoder
                 Map<String, Object> decoders = (Map<String, Object>) ReflectionTestUtils.getField(spyValidator, "decoders");
-                decoders.put("azure", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+                decoders.put("pb.amritsar:azure", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", issuer);
@@ -747,13 +748,13 @@ public class IDPJwtValidatorTest {
                         .thenReturn(jwt);
 
                 // Do not actually remove from cache so that spy still uses mocked decoder
-                doNothing().when(spyValidator).clearDecoderForProvider("azure");
+                doNothing().when(spyValidator).clearDecoderForProvider(eq(tenantId), eq("azure"));
 
                 OidcValidatedJwt result = spyValidator.validate(realLookingToken, tenantId);
 
                 assertNotNull(result);
                 assertEquals("azure", result.getProviderId());
-                verify(spyValidator, times(1)).clearDecoderForProvider("azure");
+                verify(spyValidator, times(1)).clearDecoderForProvider(eq(tenantId), eq("azure"));
                 verify(jwtDecoder, times(2)).decode(realLookingToken);
         }
 
@@ -809,14 +810,14 @@ public class IDPJwtValidatorTest {
         @Test
         public void testClearDecoderForProvider_NullProviderId_NoException() {
                 Map<String, Object> decoders = getDecoderEntries();
-                decoders.put("test", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+                decoders.put("other-tenant:test", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
 
-                // Should not throw exception
-                idpJwtValidator.clearDecoderForProvider(null);
-                
-                // Cache should remain unchanged
+                // Should not throw exception (providerId null = clear all for tenant)
+                idpJwtValidator.clearDecoderCacheFor("test", null);
+
+                // Cache should remain unchanged (different tenant)
                 assertEquals(1, decoders.size());
-                assertTrue(decoders.containsKey("test"));
+                assertTrue(decoders.containsKey("other-tenant:test"));
         }
 
         @Test
@@ -825,7 +826,7 @@ public class IDPJwtValidatorTest {
                 decoders.put("existing", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
 
                 // Should not throw exception for non-existent provider
-                idpJwtValidator.clearDecoderForProvider("non-existent");
+                idpJwtValidator.clearDecoderCacheFor("test", "non-existent");
                 
                 // Cache should remain unchanged
                 assertEquals(1, decoders.size());
@@ -866,6 +867,79 @@ public class IDPJwtValidatorTest {
 
                 // Should always create new decoder since TTL is 0
                 assertNotSame(first, second);
+        }
+
+        @Test
+        public void testClearDecoderForProvider_TenantAndProvider_RemovesSingleEntry() {
+                Map<String, Object> decoders = getDecoderEntries();
+                decoders.clear();
+
+                // Seed map with multiple tenants and providers
+                decoders.put("default:azure1", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+                decoders.put("pb.amritsar:azure1", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+                decoders.put("pb.amritsar:azure2", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+                assertEquals(3, decoders.size());
+
+                // Clear specific provider using new method (removes only specific tenant+provider combination)
+                idpJwtValidator.clearDecoderForProvider("pb.amritsar", "azure1");
+                assertFalse(decoders.containsKey("pb.amritsar:azure1"));
+                assertTrue(decoders.containsKey("default:azure1")); // Should remain since we only cleared specific tenant
+                // Other provider entries should remain
+                assertTrue(decoders.containsKey("pb.amritsar:azure2"));
+        }
+
+        @Test
+        public void testClearDecodersForTenant_RemovesAllTenantEntries() {
+                Map<String, Object> decoders = getDecoderEntries();
+                decoders.clear();
+
+                // Seed map with multiple providers for same tenant
+                decoders.put("pb.amritsar:azure1", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+                decoders.put("pb.amritsar:azure2", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+                decoders.put("default:azure1", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+                assertEquals(3, decoders.size());
+
+                // Clear all entries for specific tenant using new method
+                idpJwtValidator.clearDecoderCacheFor("pb.amritsar", null);
+                assertFalse(decoders.containsKey("pb.amritsar:azure1"));
+                assertFalse(decoders.containsKey("pb.amritsar:azure2"));
+                assertTrue(decoders.containsKey("default:azure1"));
+        }
+
+        @Test
+        public void testClearDecoderForProvider_TenantOnly_RemovesAllTenantEntries() {
+                Map<String, Object> decoders = getDecoderEntries();
+                decoders.clear();
+
+                // Seed map with multiple providers for same tenant
+                decoders.put("pb.amritsar:azure1", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+                decoders.put("pb.amritsar:azure2", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+                decoders.put("default:azure1", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+                assertEquals(3, decoders.size());
+
+                // Clear all entries for specific tenant
+                idpJwtValidator.clearDecoderCacheFor("pb.amritsar", null);
+                assertFalse(decoders.containsKey("pb.amritsar:azure1"));
+                assertFalse(decoders.containsKey("pb.amritsar:azure2"));
+                assertTrue(decoders.containsKey("default:azure1"));
+        }
+
+        @Test
+        public void testClearDecoderForProvider_ProviderOnly_RemovesAllProviderEntries() {
+                Map<String, Object> decoders = getDecoderEntries();
+                decoders.clear();
+
+                // Seed map with same provider across multiple tenants
+                decoders.put("default:azure1", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+                decoders.put("pb.amritsar:azure1", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+                decoders.put("pb.ludhiana:azure2", createDecoderEntry(jwtDecoder, System.currentTimeMillis()));
+                assertEquals(3, decoders.size());
+
+                // Clear specific provider for specific tenant
+                idpJwtValidator.clearDecoderCacheFor("default", "azure1");
+                assertFalse(decoders.containsKey("default:azure1"));
+                assertTrue(decoders.containsKey("pb.amritsar:azure1")); // Should remain (different tenant)
+                assertTrue(decoders.containsKey("pb.ludhiana:azure2"));
         }
 
         @Test
