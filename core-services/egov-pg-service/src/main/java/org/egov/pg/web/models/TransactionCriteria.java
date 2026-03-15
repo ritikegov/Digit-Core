@@ -12,27 +12,27 @@ import org.egov.pg.models.Transaction;
 @ToString
 public class TransactionCriteria {
 
-    private String tenantId;
+	@JsonIgnore
+	private String tenantId;
 
-    private String txnId;
+	private String txnId;
 
-    private String billId;
+	private String billId;
 
-    private String userUuid;
+	private String userUuid;
 
-    private String receipt;
+	private String receipt;
 
-    private String consumerCode;
+	private String consumerCode;
 
-    @JsonIgnore
-    private Long createdTime;
+	@JsonIgnore
+	private Long createdTime;
 
-    private Transaction.TxnStatusEnum txnStatus;
+	private Transaction.TxnStatusEnum txnStatus;
 
-    @JsonIgnore
-    private int limit;
+	@JsonIgnore
+	private int limit;
 
-    @JsonIgnore
-    private int offset;
-
+	@JsonIgnore
+	private int offset;
 }

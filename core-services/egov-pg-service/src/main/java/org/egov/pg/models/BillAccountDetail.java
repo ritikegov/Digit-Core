@@ -15,6 +15,8 @@ import lombok.Setter;
 import lombok.ToString;
 
 import jakarta.validation.constraints.Size;
+import org.egov.pg.models.enums.Purpose;
+import org.egov.tracer.model.AuditDetails;
 
 @Setter
 @Getter

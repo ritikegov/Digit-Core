@@ -1,12 +1,11 @@
 package org.egov.pg.repository;
 
 import lombok.extern.slf4j.Slf4j;
-import org.egov.common.exception.InvalidTenantIdException;
-import org.egov.common.utils.MultiStateInstanceUtil;
 import org.egov.pg.models.Transaction;
+import org.egov.pg.models.TransactionDump;
 import org.egov.pg.web.models.TransactionCriteria;
 import org.egov.tracer.model.CustomException;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -17,30 +16,130 @@ import java.util.List;
 @Slf4j
 public class TransactionRepository {
 
-    private final JdbcTemplate jdbcTemplate;
-    private static final TransactionRowMapper rowMapper = new TransactionRowMapper();
+	private static final TransactionRowMapper rowMapper = new TransactionRowMapper();
+	private static final String INSERT_TXN = "INSERT INTO eg_pg_transactions " +
+			"(txn_id, txn_amount, txn_status, txn_status_msg, gateway, consumer_code, bill_id, product_info, " +
+			"user_uuid, user_name, mobile_number, email_id, name, user_tenant_id, tenant_id, " +
+			"gateway_txn_id, gateway_payment_mode, gateway_status_code, gateway_status_msg, receipt, " +
+			"additional_details, created_by, created_time, last_modified_by, last_modified_time) " +
+			"VALUES (?, ?::numeric, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?)";
+	private static final String UPDATE_TXN = "UPDATE eg_pg_transactions SET " +
+			"txn_status=?, txn_status_msg=?, gateway_txn_id=?, gateway_payment_mode=?, " +
+			"gateway_status_code=?, gateway_status_msg=?, receipt=?, " +
+			"last_modified_by=?, last_modified_time=? " +
+			"WHERE txn_id=? AND tenant_id=?";
+	private static final String INSERT_TXN_DUMP = "INSERT INTO eg_pg_transactions_dump " +
+			"(txn_id, txn_request, txn_response, created_by, created_time, last_modified_by, last_modified_time) " +
+			"VALUES (?, ?, ?::jsonb, ?, ?, ?, ?)";
+	private static final String UPDATE_TXN_DUMP = "UPDATE eg_pg_transactions_dump SET " +
+			"txn_response=?::jsonb, last_modified_by=?, last_modified_time=? " +
+			"WHERE txn_id=?";
 
-    @Autowired
-    private MultiStateInstanceUtil centralInstanceutil;
+	private final JdbcTemplate jdbcTemplate;
 
-    @Autowired
-    TransactionRepository(JdbcTemplate jdbcTemplate) {
-        this.jdbcTemplate = jdbcTemplate;
-    }
+	public TransactionRepository(JdbcTemplate jdbcTemplate) {
+		this.jdbcTemplate = jdbcTemplate;
+	}
 
-    public List<Transaction> fetchTransactions(TransactionCriteria transactionCriteria) {
-        List<Object> params = new ArrayList<>();
-        String query = TransactionQueryBuilder.getPaymentSearchQueryByCreatedTimeRange(transactionCriteria, params);
+	public void saveTransaction(Transaction txn) {
+		try {
+			jdbcTemplate.update(INSERT_TXN,
+					txn.getTxnId(),
+					txn.getTxnAmount(),
+					txn.getTxnStatus().toString(),
+					txn.getTxnStatusMsg(),
+					txn.getGateway(),
+					txn.getConsumerCode(),
+					txn.getBillId(),
+					txn.getProductInfo(),
+					txn.getUser().getUuid(),
+					txn.getUser().getUserName(),
+					txn.getUser().getMobileNumber(),
+					txn.getUser().getEmailId(),
+					txn.getUser().getName(),
+					txn.getUser().getTenantId(),
+					txn.getTenantId(),
+					txn.getGatewayTxnId(),
+					txn.getGatewayPaymentMode(),
+					txn.getGatewayStatusCode(),
+					txn.getGatewayStatusMsg(),
+					txn.getReceipt(),
+					txn.getAdditionalDetails() != null ? txn.getAdditionalDetails().toString() : null,
+					txn.getAuditDetails().getCreatedBy(),
+					txn.getAuditDetails().getCreatedTime(),
+					txn.getAuditDetails().getLastModifiedBy(),
+					txn.getAuditDetails().getLastModifiedTime()
+			);
+		} catch (DataAccessException e) {
+			log.error("Failed to save transaction: {}", txn.getTxnId(), e);
+			throw new CustomException("TXN_SAVE_ERROR", "Failed to save transaction: " + e.getMessage());
+		}
+	}
 
-        log.debug(query);
-        return jdbcTemplate.query(query, params.toArray(), rowMapper);
-    }
+	public void updateTransaction(Transaction txn) {
+		try {
+			jdbcTemplate.update(UPDATE_TXN,
+					txn.getTxnStatus().toString(),
+					txn.getTxnStatusMsg(),
+					txn.getGatewayTxnId(),
+					txn.getGatewayPaymentMode(),
+					txn.getGatewayStatusCode(),
+					txn.getGatewayStatusMsg(),
+					txn.getReceipt(),
+					txn.getAuditDetails().getLastModifiedBy(),
+					txn.getAuditDetails().getLastModifiedTime(),
+					txn.getTxnId(),
+					txn.getTenantId()
+			);
+		} catch (DataAccessException e) {
+			log.error("Failed to update transaction: {}", txn.getTxnId(), e);
+			throw new CustomException("TXN_UPDATE_ERROR", "Failed to update transaction: " + e.getMessage());
+		}
+	}
 
-    public List<Transaction> fetchTransactionsByTimeRange(TransactionCriteria transactionCriteria, Long startTime, Long endTime) {
-        List<Object> params = new ArrayList<>();
-        String query = TransactionQueryBuilder.getPaymentSearchQueryByCreatedTimeRange(transactionCriteria, startTime, endTime, params);
-        log.debug(query);
-        return jdbcTemplate.query(query, params.toArray(), rowMapper);
-    }
+	public void saveTransactionDump(TransactionDump dump) {
+		try {
+			jdbcTemplate.update(INSERT_TXN_DUMP,
+					dump.getTxnId(),
+					dump.getTxnRequest(),
+					dump.getTxnResponse() != null ? dump.getTxnResponse().toString() : null,
+					dump.getAuditDetails().getCreatedBy(),
+					dump.getAuditDetails().getCreatedTime(),
+					dump.getAuditDetails().getLastModifiedBy(),
+					dump.getAuditDetails().getLastModifiedTime()
+			);
+		} catch (DataAccessException e) {
+			log.error("Failed to save transaction dump: {}", dump.getTxnId(), e);
+			throw new CustomException("TXN_DUMP_SAVE_ERROR", "Failed to save transaction dump: " + e.getMessage());
+		}
+	}
 
+	public void updateTransactionDump(TransactionDump dump) {
+		try {
+			jdbcTemplate.update(UPDATE_TXN_DUMP,
+					dump.getTxnResponse() != null ? dump.getTxnResponse().toString() : null,
+					dump.getAuditDetails().getLastModifiedBy(),
+					dump.getAuditDetails().getLastModifiedTime(),
+					dump.getTxnId()
+			);
+		} catch (DataAccessException e) {
+			log.error("Failed to update transaction dump: {}", dump.getTxnId(), e);
+			throw new CustomException("TXN_DUMP_UPDATE_ERROR", "Failed to update transaction dump: " + e.getMessage());
+		}
+	}
+
+	public List<Transaction> fetchTransactions(TransactionCriteria transactionCriteria) {
+		List<Object> params = new ArrayList<>();
+		String query = TransactionQueryBuilder.getPaymentSearchQueryByCreatedTimeRange(transactionCriteria, params);
+
+		log.debug(query);
+		return jdbcTemplate.query(query, params.toArray(), rowMapper);
+	}
+
+	public List<Transaction> fetchTransactionsByTimeRange(TransactionCriteria transactionCriteria, Long startTime, Long endTime) {
+		List<Object> params = new ArrayList<>();
+		String query = TransactionQueryBuilder.getPaymentSearchQueryByCreatedTimeRange(transactionCriteria, startTime, endTime, params);
+		log.debug(query);
+		return jdbcTemplate.query(query, params.toArray(), rowMapper);
+	}
 }

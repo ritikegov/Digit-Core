@@ -20,60 +20,60 @@ import java.util.Properties;
 
 @Configuration
 public class QuartzConfig {
-    private final Logger log = LoggerFactory.getLogger(this.getClass().getSimpleName());
+	private final Logger log = LoggerFactory.getLogger(this.getClass().getSimpleName());
 
-    @Autowired
-    private DataSource dataSource;
+	@Autowired
+	private DataSource dataSource;
 
-    @Autowired
-    private PlatformTransactionManager transactionManager;
+	@Autowired
+	private PlatformTransactionManager transactionManager;
 
-    @Autowired
-    private ApplicationContext applicationContext;
+	@Autowired
+	private ApplicationContext applicationContext;
 
-    @Autowired
-    private List<Trigger> triggersList;
+	@Autowired
+	private List<Trigger> triggersList;
 
-    @PostConstruct
-    private void init() {
-        log.debug("QuartzConfig initialized.");
-    }
+	@PostConstruct
+	private void init() {
+		log.debug("QuartzConfig initialized.");
+	}
 
-    //     Uncomment for local dev run
+	//     Uncomment for local dev run
 //    @DependsOn("flywayInitializer")
-    @Bean
-    SchedulerFactoryBean quartzScheduler() {
-        SchedulerFactoryBean quartzScheduler = new SchedulerFactoryBean();
+	@Bean
+	SchedulerFactoryBean quartzScheduler() {
+		SchedulerFactoryBean quartzScheduler = new SchedulerFactoryBean();
 
-        quartzScheduler.setDataSource(dataSource);
-        quartzScheduler.setTransactionManager(transactionManager);
-        quartzScheduler.setOverwriteExistingJobs(true);
-        quartzScheduler.setSchedulerName("pg-quartz-scheduler");
+		quartzScheduler.setDataSource(dataSource);
+		quartzScheduler.setTransactionManager(transactionManager);
+		quartzScheduler.setOverwriteExistingJobs(true);
+		quartzScheduler.setSchedulerName("pg-quartz-scheduler");
 
-        // custom job factory of spring with DI support for @Autowired!
-        AutowiringSpringBeanJobFactory jobFactory = new AutowiringSpringBeanJobFactory();
-        jobFactory.setApplicationContext(applicationContext);
-        quartzScheduler.setJobFactory(jobFactory);
+		// custom job factory of spring with DI support for @Autowired!
+		AutowiringSpringBeanJobFactory jobFactory = new AutowiringSpringBeanJobFactory();
+		jobFactory.setApplicationContext(applicationContext);
+		quartzScheduler.setJobFactory(jobFactory);
 
-        quartzScheduler.setQuartzProperties(quartzProperties());
-        quartzScheduler.setTriggers(triggersList.toArray(new Trigger[triggersList.size()]));
+		quartzScheduler.setQuartzProperties(quartzProperties());
+		quartzScheduler.setTriggers(triggersList.toArray(new Trigger[triggersList.size()]));
 
-        return quartzScheduler;
-    }
+		return quartzScheduler;
+	}
 
-    private Properties quartzProperties() {
-        PropertiesFactoryBean propertiesFactoryBean = new PropertiesFactoryBean();
-        propertiesFactoryBean.setLocation(new ClassPathResource("/quartz.properties"));
-        Properties properties = null;
-        try {
-            propertiesFactoryBean.afterPropertiesSet();
-            properties = propertiesFactoryBean.getObject();
+	private Properties quartzProperties() {
+		PropertiesFactoryBean propertiesFactoryBean = new PropertiesFactoryBean();
+		propertiesFactoryBean.setLocation(new ClassPathResource("/quartz.properties"));
+		Properties properties = null;
+		try {
+			propertiesFactoryBean.afterPropertiesSet();
+			properties = propertiesFactoryBean.getObject();
 
-        } catch (IOException e) {
-            log.warn("Cannot load quartz.properties.");
-        }
+		} catch (IOException e) {
+			log.warn("Cannot load quartz.properties.");
+		}
 
-        return properties;
-    }
+		return properties;
+	}
 
 }

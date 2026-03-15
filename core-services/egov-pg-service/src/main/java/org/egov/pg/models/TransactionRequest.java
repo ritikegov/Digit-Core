@@ -11,8 +11,8 @@ import lombok.ToString;
 @ToString
 public class TransactionRequest {
 
-    @JsonProperty("RequestInfo")
-    private org.egov.common.contract.request.RequestInfo requestInfo;
+    @JsonProperty("tenantId")
+    private String tenantId;
 
     @JsonProperty("Transaction")
     private Transaction transaction;

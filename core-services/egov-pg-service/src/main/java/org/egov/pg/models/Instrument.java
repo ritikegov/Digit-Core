@@ -42,6 +42,7 @@ package org.egov.pg.models;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.*;
 import lombok.*;
+import org.egov.pg.models.enums.TransactionType;
 
 
 import java.math.BigDecimal;

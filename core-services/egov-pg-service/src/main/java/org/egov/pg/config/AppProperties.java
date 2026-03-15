@@ -3,7 +3,6 @@ package org.egov.pg.config;
 import lombok.Getter;
 import lombok.ToString;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.env.Environment;
@@ -13,114 +12,112 @@ import org.springframework.core.env.Environment;
 @Configuration
 @PropertySource("classpath:application.properties")
 public class AppProperties {
+	// App Configuration
+	private final Integer earlyReconcileJobRunInterval;
+	private final String egovPgReconciliationSystemUserUuid;
 
-    private final Integer earlyReconcileJobRunInterval;
+	// Message Broker Configuration
+	private final Boolean messageBrokerEnabled;
+	private final String messageBrokerType;
+	private final String createTxnTopic;
+	private final String updateTxnTopic;
 
-    private final String saveTxnTopic;
+	// IdGen Configuration
+	private final String idGenHost;
+	private final String idGenGenerateIdPath;
+	private final String idGenTxnIdTemplateCode;
 
-    private final String updateTxnTopic;
+	// Registry Configuration
+	private final String registryHost;
+	private final String registryDataSearchPath;
+	private final String registryBankAccountSchema;
 
-    private final String saveTxnDumpTopic;
+	// individual Configuration
+	private final String individualHost;
+	private final String individualCreatePath;
+	private final String individualSearchPath;
+	private final Boolean isUserCreationEnable;
 
-    private final String updateTxnDumpTopic;
-    
-    private final String idGenHost;
+	// Billing Configuration
+	private final String billingHost;
+	private final String billingPaymentCreatePath;
+	private final String billingPaymentValidatePath;
 
-    private final String idGenPath;
 
-    private final String idGenName;
+	// Notification Configuration
+	private final Boolean notificationEnabled;
+	private final String notificationType;
+	private final String notificationEmailTopic;
+	private final String notificationSmsTopic;
+	private final String notificationHost;
+	private final String notificationEmailPath;
+	private final String notificationSmsPath;
 
-    private final String idGenFormat;
+	// App Pay Configuration
+	private final String applicationPayHost;
+	private final String applicationPayLink;
 
-    private final String collectionServiceHost;
+	// URL Shortner Configuration
+	private final String urlShortnerHost;
+	private final String urlShortnerPath;
 
-    private final String collectionServiceCreatePath;
+	// Single Instance Configuration
+	private final Integer stateLevelTenantLength;
+	private final Boolean isEnvironmentCentralInstance;
 
-    private final String collectionServiceValidatePath;
-    
-    private final String paymentCreatePath;
+	@Autowired
+	public AppProperties(Environment environment) {
+		// App Configuration
+		this.earlyReconcileJobRunInterval = Integer.valueOf(environment.getRequiredProperty("pg.earlyReconcileJobRunInterval.mins"));
+		this.egovPgReconciliationSystemUserUuid = environment.getRequiredProperty("egov.pg.reconciliation.system.user.uuid");
 
-    private final String paymentValidatePath;
+		// Message Broker Configuration
+		this.messageBrokerEnabled = Boolean.parseBoolean(environment.getRequiredProperty("message.broker.enabled"));
+		this.messageBrokerType = environment.getRequiredProperty("message.broker.type");
+		this.createTxnTopic = environment.getRequiredProperty("messaging.broker.topic.create.txn");
+		this.updateTxnTopic = environment.getRequiredProperty("messaging.broker.topic.update.txn");
 
-    private final String bankAccountHost;
+		// IdGen Configuration
+		this.idGenHost = environment.getRequiredProperty("idgen.host");
+		this.idGenGenerateIdPath = environment.getRequiredProperty("idgen.generate.id.path");
+		this.idGenTxnIdTemplateCode = environment.getRequiredProperty("idgen.txn.id.template.code");
 
-    private final String bankAccountPath;
+		// Registry Configuration
+		this.registryHost = environment.getRequiredProperty("registry.host");
+		this.registryDataSearchPath = environment.getRequiredProperty("individual.create.path");
+		this.registryBankAccountSchema = environment.getRequiredProperty("individual.search.path");
 
-    private final String userServiceHost;
+		// Individual Configuration
+		this.individualHost = environment.getRequiredProperty("individual.host");
+		this.individualCreatePath = environment.getRequiredProperty("registry.data.search.path");
+		this.individualSearchPath = environment.getRequiredProperty("registry.bank.account.schema");
+		this.isUserCreationEnable = Boolean.valueOf(environment.getRequiredProperty("pg.is.user.create.enabled"));
 
-    private final String userServiceCreatePath;
+		// Billing Configuration
+		this.billingHost = environment.getRequiredProperty("billing.host");
+		this.billingPaymentCreatePath = environment.getRequiredProperty("billing.payments.create.path");
+		this.billingPaymentValidatePath = environment.getRequiredProperty("billing.payments.validate.path");
 
-    private final String userServiceSearchPath;
+		// Notification Configuration
+		this.notificationEnabled = Boolean.parseBoolean(environment.getRequiredProperty("notification.enabled"));
+		this.notificationType = environment.getRequiredProperty("notification.type");
+		this.notificationEmailTopic = environment.getRequiredProperty("notification.email.topic");
+		this.notificationSmsTopic = environment.getRequiredProperty("notification.sms.topic");
+		this.notificationHost = environment.getRequiredProperty("notification.host");
+		this.notificationEmailPath = environment.getRequiredProperty("notification.email.path");
+		this.notificationSmsPath = environment.getRequiredProperty("notification.sms.path");
 
-    private final Boolean isUserCreationEnable;
+		// App Pay Configuration
+		this.applicationPayHost = environment.getRequiredProperty("application.pay.host");
+		this.applicationPayLink = environment.getRequiredProperty("application.pay.link");
 
-    private final Boolean isSMSEnable;
+		//URL Shortner Configuration
+		this.urlShortnerHost = environment.getRequiredProperty("url.shortner.host");
+		this.urlShortnerPath = environment.getRequiredProperty("url.shortner.path");
 
-    private final Boolean isLocalizationStateLevel;
-
-    private final String localizationHost;
-
-    private final String localizationContextPath;
-
-    private final String localizationSearchEndpoint;
-
-    private final String smsNotifTopic;
-
-    private final String applicationPayLink;
-
-    private final String urlShortnerHost;
-
-    private final String urlShortnerEndpoint;
-
-    private final String billingServiceHost;
-
-    private final String billingServiceSearchEndpoint;
-
-    private final String notificationHost;
-
-    private final String egovPgReconciliationSystemUserUuid;
-
-    private final Integer stateLevelTenantLength;
-
-    private final Boolean isEnvironmentCentralInstance;
-
-    @Autowired
-    public AppProperties(Environment environment){
-        this.earlyReconcileJobRunInterval = Integer.valueOf(environment.getRequiredProperty("pg.earlyReconcileJobRunInterval.mins"));
-        this.saveTxnTopic = environment.getRequiredProperty("persister.save.pg.txns");
-        this.updateTxnTopic = environment.getRequiredProperty("persister.update.pg.txns");
-        this.saveTxnDumpTopic = environment.getRequiredProperty("persister.save.pg.txnsDump");
-        this.updateTxnDumpTopic = environment.getRequiredProperty("persister.update.pg.txnsDump");
-        this.idGenHost = environment.getRequiredProperty("egov.idgen.host");
-        this.idGenPath = environment.getRequiredProperty("egov.idgen.path");
-        this.idGenName = environment.getRequiredProperty("egov.idgen.ack.name");
-        this.idGenFormat = environment.getRequiredProperty("egov.idgen.ack.format");
-        this.collectionServiceHost = environment.getRequiredProperty("egov.collectionservice.host");
-        this.collectionServiceCreatePath = environment.getRequiredProperty("egov.collectionservice.create.path");
-        this.collectionServiceValidatePath = environment.getRequiredProperty("egov.collectionservice.validate.path");
-        this.bankAccountHost = environment.getRequiredProperty("egov.bankaccountservice.host");
-        this.bankAccountPath = environment.getRequiredProperty("egov.bankaccountservice.path");
-        this.paymentCreatePath = environment.getRequiredProperty("egov.collectionservice.payment.create.path");
-        this.paymentValidatePath = environment.getRequiredProperty("egov.collectionservice.payment.validate.path");
-        this.userServiceHost = environment.getRequiredProperty("egov.userservice.host");
-        this.userServiceCreatePath = environment.getRequiredProperty("egov.userservice.create.path");
-        this.userServiceSearchPath = environment.getRequiredProperty("egov.userservice.search.path");
-        this.isUserCreationEnable = Boolean.valueOf(environment.getRequiredProperty("pg.is.user.create.enabled"));
-        this.isSMSEnable = Boolean.valueOf(environment.getRequiredProperty("notification.sms.enabled"));
-        this.isLocalizationStateLevel = Boolean.valueOf(environment.getRequiredProperty("egov.localization.statelevel"));
-        this.localizationHost = environment.getRequiredProperty("egov.localization.host");
-        this.localizationContextPath = environment.getRequiredProperty("egov.localization.context.path");
-        this.localizationSearchEndpoint = environment.getRequiredProperty("egov.localization.search.endpoint");
-        this.smsNotifTopic = environment.getRequiredProperty("kafka.topics.notification.sms");
-        this.applicationPayLink = environment.getRequiredProperty("egov.application.pay.link");
-        this.urlShortnerHost = environment.getRequiredProperty("egov.url.shortner.host");
-        this.urlShortnerEndpoint =environment.getRequiredProperty("egov.url.shortner.endpoint");
-        this.billingServiceHost = environment.getRequiredProperty("egov.billing.service.host");
-        this.billingServiceSearchEndpoint = environment.getRequiredProperty("egov.bill.searchendpoint");
-        this.notificationHost = environment.getRequiredProperty("notification.url");
-        this.egovPgReconciliationSystemUserUuid = environment.getRequiredProperty("egov.pg.reconciliation.system.user.uuid");
-        this.stateLevelTenantLength = Integer.parseInt(environment.getRequiredProperty("state.level.tenantid.length"));
-        this.isEnvironmentCentralInstance = Boolean.parseBoolean(environment.getRequiredProperty("is.environment.central.instance"));
-    }
+		// Single Instance Configuration
+		this.stateLevelTenantLength = Integer.parseInt(environment.getRequiredProperty("state.level.tenantid.length"));
+		this.isEnvironmentCentralInstance = Boolean.parseBoolean(environment.getRequiredProperty("is.environment.central.instance"));
+	}
 
 }

@@ -12,11 +12,7 @@ import org.egov.pg.models.Transaction;
 @Builder
 public class TransactionCreateResponse {
 
-    @JsonProperty("ResponseInfo")
-    @Valid
-    private ResponseInfo responseInfo;
-
-    @JsonProperty("Transaction")
-    @Valid
-    private Transaction transaction;
+	@JsonProperty("Transaction")
+	@Valid
+	private Transaction transaction;
 }

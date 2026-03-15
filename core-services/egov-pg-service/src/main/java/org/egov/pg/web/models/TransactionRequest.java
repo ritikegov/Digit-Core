@@ -3,7 +3,6 @@ package org.egov.pg.web.models;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.Valid;
 import lombok.*;
-import org.egov.common.contract.request.RequestInfo;
 import org.egov.pg.models.Transaction;
 import org.springframework.validation.annotation.Validated;
 
@@ -20,14 +19,8 @@ import org.springframework.validation.annotation.Validated;
 @Builder
 public class TransactionRequest {
 
-    @JsonProperty("RequestInfo")
-    @Valid
-    private RequestInfo requestInfo;
-
-    @JsonProperty("Transaction")
-    @Valid
-    private Transaction transaction;
-
-
+	@JsonProperty("Transaction")
+	@Valid
+	private Transaction transaction;
 }
 

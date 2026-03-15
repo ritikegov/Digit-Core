@@ -18,6 +18,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.egov.tracer.model.AuditDetails;
 import org.springframework.util.CollectionUtils;
 
 @Getter

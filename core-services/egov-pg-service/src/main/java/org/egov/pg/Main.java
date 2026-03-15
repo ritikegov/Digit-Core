@@ -9,12 +9,10 @@ import org.springframework.stereotype.Component;
 
 @SpringBootApplication
 @Component
-@Import({ TracerConfiguration.class, MultiStateInstanceUtil.class })
+@Import({TracerConfiguration.class, MultiStateInstanceUtil.class})
 public class Main {
 
-    public static void main(String[] args) {
-        SpringApplication.run(Main.class);
-
-    }
-
+	public static void main(String[] args) {
+		SpringApplication.run(Main.class);
+	}
 }

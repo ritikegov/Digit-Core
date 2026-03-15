@@ -3,7 +3,6 @@ package org.egov.pg.repository;
 
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.pg.config.AppProperties;
-import org.egov.pg.models.IdGenerationResponse;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;

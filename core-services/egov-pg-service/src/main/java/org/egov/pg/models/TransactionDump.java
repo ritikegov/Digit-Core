@@ -2,6 +2,7 @@ package org.egov.pg.models;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
+import org.egov.tracer.model.AuditDetails;
 
 @Getter
 @Setter

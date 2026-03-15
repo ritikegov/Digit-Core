@@ -40,5 +40,5 @@
 package org.egov.pg.models.enums;
 
 public enum BankAccountType {
-    RECEIPTS, PAYMENTS, RECEIPTS_PAYMENTS
+	RECEIPTS, PAYMENTS, RECEIPTS_PAYMENTS
 }

@@ -1,122 +1,88 @@
 package org.egov.pg.service;
 
 import lombok.extern.slf4j.Slf4j;
-import org.egov.common.contract.request.RequestInfo;
+import org.egov.common.contract.request.Role;
+import org.egov.pg.clients.individual.IndividualClient;
+import org.egov.pg.clients.individual.models.Individual;
+import org.egov.pg.clients.individual.models.IndividualSearchCriteria;
 import org.egov.pg.config.AppProperties;
 import org.egov.pg.models.Transaction;
-import org.egov.pg.web.models.TransactionRequest;
-import org.egov.pg.web.models.User;
-import org.egov.pg.web.models.UserResponse;
+import org.egov.pg.models.User;
 import org.egov.tracer.model.CustomException;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
-import org.springframework.web.client.RestTemplate;
 
-import java.util.*;
-
-import static java.util.Objects.isNull;
-import static org.springframework.util.StringUtils.isEmpty;
+import java.util.List;
 
 @Service
 @Slf4j
 public class UserService {
 
-    @Autowired
-    private RestTemplate restTemplate;
+	private static final String CITIZEN_ROLE_CODE = "CITIZEN";
+	private static final String CITIZEN_ROLE_NAME = "Citizen";
+	private static final String CITIZEN_TYPE = "CITIZEN";
 
-    @Autowired
-    private AppProperties appProperties;
+	private final IndividualClient individualClient;
+	private final AppProperties appProperties;
 
+	public UserService(IndividualClient individualClient, AppProperties appProperties) {
+		this.individualClient = individualClient;
+		this.appProperties = appProperties;
+	}
 
-    public User createOrSearchUser(TransactionRequest transactionRequest) {
-        List<User> userList = new ArrayList<>();
-        Transaction transaction = transactionRequest.getTransaction();
-        userList = getUser(transactionRequest.getRequestInfo(), transaction.getUser().getMobileNumber(),
-                transaction.getUser().getTenantId(), transaction.getUser().getName());
-        if(CollectionUtils.isEmpty(userList) && appProperties.getIsUserCreationEnable())
-            userList = createUser(transactionRequest);
+	public User createOrSearchUser(Transaction transaction, String tenantId, String clientId) {
 
-        User user = userList.get(0);
-        if (isNull(user) || isNull(user.getUuid()) || isEmpty(user.getName()) || isNull(user.getUserName()) ||
-                isNull(user.getTenantId()) || isNull(user.getMobileNumber()))
-            throw new CustomException("INVALID_USER_DETAILS", "User UUID, Name, Username, Mobile Number and Tenant Id are " +
-                    "mandatory");
+		List<Individual> individuals = individualClient.search(tenantId, clientId,
+				IndividualSearchCriteria.builder()
+						.mobileNumber(List.of(transaction.getUser().getMobileNumber()))
+						.givenName(transaction.getUser().getName())
+						.build()
+		);
 
-        return user;
-    }
+		Individual individual;
+		if (CollectionUtils.isEmpty(individuals) && appProperties.getIsUserCreationEnable()) {
+			individual = individualClient.create(tenantId, clientId, toIndividual(transaction.getUser(), tenantId));
+		} else if (!CollectionUtils.isEmpty(individuals)) {
+			individual = individuals.get(0);
+		} else {
+			throw new CustomException("INDIVIDUAL_NOT_FOUND",
+					"Individual not found and creation is disabled");
+		}
 
+		User user = toUser(individual, tenantId);
 
-    /**
-     * Fetched user based on phone number and name.
-     * Note: Currently all CITIZEN are state-level and hence the phone no (which is set as username) is unique across state.
-     *
-     * @param requestInfo
-     * @param phoneNo
-     * @param tenantId
-     * @param name
-     * @return
-     */
-    public List<User> getUser(RequestInfo requestInfo, String phoneNo, String tenantId, String name){
-        Map<String, Object> request = new HashMap<>();
-        UserResponse userResponse = null;
-        request.put("RequestInfo", requestInfo);
-        request.put("name", name);
-        request.put("mobileNumber", phoneNo);
-        request.put("type", "CITIZEN");
-        request.put("tenantid", tenantId.split("\\.")[0]);
-        StringBuilder url = new StringBuilder();
-        url.append(appProperties.getUserServiceHost()).append(appProperties.getUserServiceSearchPath());
-        try {
-            userResponse = restTemplate.postForObject(url.toString(), request, UserResponse.class);
-        }catch(Exception e) {
-            log.error("Exception while fetching user: ", e);
-        }
+		if (user.getUuid() == null || user.getName() == null || user.getMobileNumber() == null || user.getTenantId() == null) {
+			throw new CustomException("INVALID_INDIVIDUAL_DETAILS", "User UUID, Name, Mobile Number and Tenant Id are mandatory");
+		}
 
-        return userResponse.getUser();
+		return user;
+	}
 
-    }
+	public Individual toIndividual(User user, String tenantId) {
+		return Individual.builder()
+				.userUuid(user.getUuid())
+				.givenName(user.getName())
+				.username(user.getUserName())
+				.mobileNumber(user.getMobileNumber())
+				.email(user.getEmailId())
+				.type(CITIZEN_TYPE)
+				.active(true)
+				.roles(List.of(Role.builder()
+						.code(CITIZEN_ROLE_CODE)
+						.name(CITIZEN_ROLE_NAME)
+						.tenantId(tenantId.split("\\.")[0])
+						.build()))
+				.build();
+	}
 
-    /**
-	 * Creates user using the payer information given in transaction, if user is not exist in the system
-	 *
-	 * @param transactionRequest
-	 * @return
-	 */
-
-    public List<User> createUser(TransactionRequest transactionRequest){
-        RequestInfo requestInfo = transactionRequest.getRequestInfo();
-        Transaction transaction = transactionRequest.getTransaction();
-        Map<String, Object> request = new HashMap<>();
-        Map<String, Object> user = new HashMap<>();
-        Map<String, Object> role = new HashMap<>();
-        List<Map> roles = new ArrayList<>();
-        role.put("code", "CITIZEN");
-        role.put("name", "Citizen");
-        role.put("tenantId", transaction.getTenantId().split("\\.")[0]);
-        roles.add(role);
-
-        user.put("name", transaction.getUser().getName());
-        user.put("mobileNumber", transaction.getUser().getMobileNumber());
-        user.put("userName", transaction.getUser().getName());
-        user.put("active", true);
-        user.put("type", "CITIZEN");
-        user.put("tenantId", transaction.getTenantId().split("\\.")[0]);
-        user.put("roles", roles);
-
-        request.put("RequestInfo", requestInfo);
-        request.put("user", user);
-
-        UserResponse response = null;
-        StringBuilder url = new StringBuilder();
-        url.append(appProperties.getUserServiceHost()).append(appProperties.getUserServiceCreatePath());
-        try {
-            response = restTemplate.postForObject(url.toString(), request, UserResponse.class);
-        }catch(Exception e) {
-            log.error("Exception while creating user: ", e);
-            return null;
-        }
-
-        return response.getUser();
-    }
+	public User toUser(Individual individual, String tenantId) {
+		return User.builder()
+				.uuid(individual.getUserUuid())
+				.name(individual.getGivenName())
+				.userName(individual.getUsername())
+				.mobileNumber(individual.getMobileNumber())
+				.emailId(individual.getEmail())
+				.tenantId(tenantId)
+				.build();
+	}
 }

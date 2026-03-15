@@ -5,7 +5,7 @@ import org.egov.pg.service.gateways.axis.AxisGateway;
 import org.egov.pg.service.gateways.paytm.PaytmGateway;
 import org.egov.pg.service.gateways.phonepe.PhonepeGateway;
 import org.egov.pg.utils.Utils;
-import org.egov.pg.web.models.User;
+import org.egov.pg.models.User;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.springframework.core.env.Environment;

@@ -2,6 +2,7 @@ package org.egov.pg.models;
 
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
+import org.egov.pg.models.enums.TransactionType;
 
 @NoArgsConstructor
 @AllArgsConstructor

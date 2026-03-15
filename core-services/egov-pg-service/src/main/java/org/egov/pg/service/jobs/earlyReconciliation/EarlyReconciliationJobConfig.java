@@ -15,35 +15,33 @@ import org.springframework.scheduling.quartz.JobDetailFactoryBean;
 @Configuration
 public class EarlyReconciliationJobConfig {
 
-    @Autowired
-    private AppProperties appProperties;
+	@Autowired
+	private AppProperties appProperties;
 
-    @Bean
-    @Primary
-    JobDetailFactoryBean earlyReconciliationJobs() {
-        JobDetailFactoryBean jobDetailFactory = new JobDetailFactoryBean();
-        jobDetailFactory.setJobClass(EarlyReconciliationJob.class);
-        jobDetailFactory.setGroup("status-update");
-        jobDetailFactory.setDurability(true);
-        return jobDetailFactory;
-    }
+	@Bean
+	@Primary
+	JobDetailFactoryBean earlyReconciliationJobs() {
+		JobDetailFactoryBean jobDetailFactory = new JobDetailFactoryBean();
+		jobDetailFactory.setJobClass(EarlyReconciliationJob.class);
+		jobDetailFactory.setGroup("status-update");
+		jobDetailFactory.setDurability(true);
+		return jobDetailFactory;
+	}
 
-    @Bean
-    @Autowired
-    CronTriggerFactoryBean earlyReconciliationTrigger(JobDetail earlyReconciliationJob) {
-        int runEvery = appProperties.getEarlyReconcileJobRunInterval();
-        Integer runEveryMinutes, runEveryHours;
-        runEveryHours = runEvery / 60;
-        runEveryMinutes = runEvery % 60;
+	@Bean
+	@Autowired
+	CronTriggerFactoryBean earlyReconciliationTrigger(JobDetail earlyReconciliationJob) {
+		int runEvery = appProperties.getEarlyReconcileJobRunInterval();
+		Integer runEveryMinutes, runEveryHours;
+		runEveryHours = runEvery / 60;
+		runEveryMinutes = runEvery % 60;
 
 
-        CronTriggerFactoryBean cronTriggerFactoryBean = new CronTriggerFactoryBean();
-        cronTriggerFactoryBean.setJobDetail(earlyReconciliationJob);
+		CronTriggerFactoryBean cronTriggerFactoryBean = new CronTriggerFactoryBean();
+		cronTriggerFactoryBean.setJobDetail(earlyReconciliationJob);
 //        cronTriggerFactoryBean.setCronExpression("0 0/" + appProperties.getReconciliationTimeout().toString() + " * * * ?");
-        cronTriggerFactoryBean.setCronExpression("0 " + runEveryHours + "/" + runEveryMinutes + " * * * ?");
-        cronTriggerFactoryBean.setGroup("status-update");
-        return cronTriggerFactoryBean;
-    }
-
-
+		cronTriggerFactoryBean.setCronExpression("0 " + runEveryHours + "/" + runEveryMinutes + " * * * ?");
+		cronTriggerFactoryBean.setGroup("status-update");
+		return cronTriggerFactoryBean;
+	}
 }

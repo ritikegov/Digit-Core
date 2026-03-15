@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import lombok.*;
 import org.egov.pg.models.Transaction;
 import org.springframework.validation.annotation.Validated;
+
 import java.util.List;
 
 /**
@@ -20,13 +21,8 @@ import java.util.List;
 @Builder
 public class TransactionResponse {
 
-    @JsonProperty("ResponseInfo")
-    @Valid
-    private ResponseInfo responseInfo;
-
-    @JsonProperty("Transaction")
-    @Valid
-    private List<Transaction> transactions;
-
+	@JsonProperty("Transaction")
+	@Valid
+	private List<Transaction> transactions;
 }
 
