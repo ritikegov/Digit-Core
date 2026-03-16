@@ -143,7 +143,17 @@ public class JwtExchangeAuthenticationProviderTest {
 
         private static OidcValidatedJwt oidcJwt(Map<String, Object> claims, String token) {
                 Map<String, Object> claimsWithJti = new HashMap<>(claims);
-                claimsWithJti.putIfAbsent("jti", "test-jti-" + System.nanoTime());
+                // Only add jti if neither jti nor uti is present
+                if (!claimsWithJti.containsKey("jti") && !claimsWithJti.containsKey("uti")) {
+                        claimsWithJti.putIfAbsent("jti", "test-jti-" + System.nanoTime());
+                }
+                // Add default email if not present
+                claimsWithJti.putIfAbsent("email", "test@example.com");
+                claimsWithJti.putIfAbsent("name", "Test User");
+                // Add unique_name claim based on email if not present
+                if (!claimsWithJti.containsKey("unique_name")) {
+                        claimsWithJti.put("unique_name", claimsWithJti.get("email"));
+                }
                 return new OidcValidatedJwt(
                                 Collections.singleton("ROLE"), claimsWithJti, new Date(), new Date(), token, "oidc-azure");
         }
@@ -1032,8 +1042,7 @@ public class JwtExchangeAuthenticationProviderTest {
                 claims.put("userType", "EMPLOYEE");
                 claims.put("uti", "uti-123");
 
-                OidcValidatedJwt jwt = new OidcValidatedJwt(
-                                Collections.singleton("ROLE"), claims, new Date(), new Date(), token, "oidc-azure");
+                OidcValidatedJwt jwt = oidcJwt(claims, token);
 
                 Set<Role> sameRoles = new HashSet<>();
                 sameRoles.add(Role.builder().code("ROLE").tenantId(TENANT_PB).build());
@@ -1540,8 +1549,7 @@ public class JwtExchangeAuthenticationProviderTest {
                 }
                 claims.put("jti", longTokenId.toString());
 
-                OidcValidatedJwt jwt = new OidcValidatedJwt(
-                                Collections.singleton("ROLE"), claims, new Date(), new Date(), token, "oidc-azure");
+                OidcValidatedJwt jwt = oidcJwt(claims, token);
 
                 User user = User.builder().uuid("uuid").type(UserType.EMPLOYEE).active(true)
                                 .roles(Collections.emptySet()).tenantId(TENANT_PB).build();

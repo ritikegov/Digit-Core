@@ -629,10 +629,10 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
             }
         }
 
-        String username = jwt.getPreferredUsername();
+        String username = jwt.getClaims().get("unique_name").toString();
         return org.egov.user.domain.model.hrms.User.builder()
                 .uuid(jwt.getExternalUserId())
-                .emailId(jwt.getPreferredUsername())
+                .emailId(username)
                 .active(true)
                 .accountLocked(false)
                 .tenantId(jwt.getTenantId())
@@ -706,7 +706,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
                 .idpSubject(jwt.getSubject())
                 .idpIssuer(jwt.getIssuer())
                 .name(jwt.getName())
-                .emailId(jwt.getPreferredUsername())
+                .emailId(jwt.getClaims().get("unique_name").toString())
                 .roles(toDomainRoles(jwt.getRoles(), user.getTenantId()))
                 .createdBy(user.getCreatedBy())
                 .lastModifiedBy(user.getId())
