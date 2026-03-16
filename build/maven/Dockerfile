@@ -11,7 +11,7 @@ COPY ${WORK_DIR}/src ./src
 RUN mvn -B -f /app/pom.xml package -DskipTests
 
 # ─────────────── RUNTIME STAGE ───────────────
-FROM gcr.io/distroless/java17-debian12
+FROM gcr.io/distroless/java17-debian12:nonroot
 
 WORKDIR /opt/egov
 
