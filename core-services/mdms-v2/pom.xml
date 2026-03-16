@@ -6,7 +6,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.2.2</version>
+        <version>3.4.5</version>
         <relativePath></relativePath>
     </parent>
     <groupId>org.egov.mdms</groupId>
@@ -15,7 +15,6 @@
     <name>egov-infra-mdms-service</name>
     <url>http://maven.apache.org</url>
     <properties>
-        <log4j2.version>2.17.1</log4j2.version>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <java.version>17</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -100,7 +99,7 @@
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
-            <version>42.7.1</version>
+            <version>42.7.4</version>
         </dependency>
         <dependency>
             <groupId>org.egov.services</groupId>

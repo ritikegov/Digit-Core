@@ -6,7 +6,7 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>3.2.2</version>
+    <version>3.4.5</version>
   </parent>
   <groupId>org.egov.services</groupId>
   <artifactId>tracer</artifactId>
@@ -21,7 +21,6 @@
     </snapshotRepository>
   </distributionManagement>
   <properties>
-    <log4j2.version>2.17.1</log4j2.version>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <java.version>17</java.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -91,7 +90,6 @@
     <dependency>
       <groupId>jakarta.servlet</groupId>
       <artifactId>jakarta.servlet-api</artifactId>
-      <version>5.0.0</version>
     </dependency>
     <dependency>
       <groupId>org.jsoup</groupId>
