@@ -6,8 +6,6 @@ import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.utils.MultiStateInstanceUtil;
 import org.egov.tracer.model.CustomException;
 import org.egov.user.config.*;
-import org.egov.user.security.oauth2.custom.accesstoken.AccessTokenValidationService;
-import org.egov.user.security.oauth2.custom.accesstoken.AccessTokenValidationResult;
 import org.egov.user.domain.exception.DuplicateUserNameException;
 import org.egov.user.domain.exception.UserNotFoundException;
 import org.egov.user.domain.exception.sso.OidcProviderConfigException;
@@ -81,12 +79,11 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
     private final HrmsUserUtil hrmsUserUtil;
     private final OidcProviderSupplier oidcProviderSupplier;
     private final List<IdpGraphService> graphServices;
-    private final AccessTokenMfaExtractor accessTokenMfaExtractor;
+    private final TokenMfaExtractor tokenMfaExtractor;
     private final SsoDefaultPasswordResolver ssoDefaultPasswordResolver;
     private final NoOpGraphService noOpGraphService;
     private final SsoUserPersistenceService ssoUserPersistenceService;
     private final EncryptionDecryptionUtil encryptionDecryptionUtil;
-    private final AccessTokenValidationService accessTokenValidationService;
 
     public JwtExchangeAuthenticationProvider(
             JwtValidationService jwtValidationService,
@@ -94,46 +91,42 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
             HrmsUserUtil hrmsUserUtil,
             OidcProviderSupplier oidcProviderSupplier,
             List<IdpGraphService> graphServices,
-            AccessTokenMfaExtractor accessTokenMfaExtractor,
+            TokenMfaExtractor tokenMfaExtractor,
             SsoDefaultPasswordResolver ssoDefaultPasswordResolver,
             NoOpGraphService noOpGraphService,
             SsoUserPersistenceService ssoUserPersistenceService,
-            EncryptionDecryptionUtil encryptionDecryptionUtil,
-            AccessTokenValidationService accessTokenValidationService) {
+            EncryptionDecryptionUtil encryptionDecryptionUtil) {
         this.jwtValidationService = jwtValidationService;
         this.userService = userService;
         this.centraInstanceUtil = centraInstanceUtil;
         this.hrmsUserUtil = hrmsUserUtil;
         this.oidcProviderSupplier = oidcProviderSupplier;
         this.graphServices = graphServices != null ? graphServices : new ArrayList<>();
-        this.accessTokenMfaExtractor = requireNonNull(accessTokenMfaExtractor,
+        this.tokenMfaExtractor = requireNonNull(tokenMfaExtractor,
                 JwtConstants.MFA_EXTRACTOR_REQUIRED_MESSAGE);
         this.ssoDefaultPasswordResolver = ssoDefaultPasswordResolver;
         this.noOpGraphService = noOpGraphService;
         this.ssoUserPersistenceService = ssoUserPersistenceService;
         this.encryptionDecryptionUtil = encryptionDecryptionUtil;
-        this.accessTokenValidationService = accessTokenValidationService;
     }
 
-    /** Holds token, optional auth token, and tenant from the incoming authentication. */
+    /** Holds token and tenant from the incoming authentication. */
     private static final class JwtExchangeInput {
         final String token;
-        final String authToken;
         final String tenantId;
 
-        JwtExchangeInput(String token, String authToken, String tenantId) {
+        JwtExchangeInput(String token, String tenantId) {
             this.token = token;
-            this.authToken = authToken;
             this.tenantId = tenantId;
         }
     }
 
-    /** Holds resolved provider and MFA details from access token. */
+    /** Holds resolved provider and MFA details from JWT claims. */
     private static final class ProviderAndMfa {
         final AuthProperties.Provider provider;
-        final AccessTokenMfaDetails mfaDetails;
+        final TokenMfaDetails mfaDetails;
 
-        ProviderAndMfa(AuthProperties.Provider provider, AccessTokenMfaDetails mfaDetails) {
+        ProviderAndMfa(AuthProperties.Provider provider, TokenMfaDetails mfaDetails) {
             this.provider = provider;
             this.mfaDetails = mfaDetails;
         }
@@ -160,7 +153,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
      *   <li>Looks up existing user by issuer, external user ID, and tenant</li>
      *   <li>If user exists: updates user information with latest JWT claims and MFA details</li>
      *   <li>If user not found: creates new HRMS user with employee/project staff mapping</li>
-     *   <li>Applies MFA details from access token and provider-specific graph service</li>
+     *   <li>Applies MFA details from JWT claims and provider-specific graph service</li>
      *   <li>Sets creator ID from OID digits if available</li>
      *   <li>Validates account status (active, not locked)</li>
      *   <li>Unlocks account if eligible based on failed login attempts</li>
@@ -170,7 +163,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
      * <p>Handles both existing user updates and new user creation scenarios with proper
      * exception handling for missing users, duplicate users, inactive accounts, and locked accounts.
      *
-     * @param authentication the JwtExchangeAuthenticationToken containing JWT token, optional auth token, and tenant ID
+     * @param authentication the JwtExchangeAuthenticationToken containing JWT token and tenant ID
      * @return UsernamePasswordAuthenticationToken with authenticated SecureUser and role-based authorities
      * @throws SsoMissingParamException if tenant ID or user type is missing/invalid
      * @throws SsoUserMappingException if user is inactive, account is permanently locked, or duplicate user conflict
@@ -187,14 +180,8 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
         
         // TOKEN REPLAY PROTECTION
         validateTokenReplay(jwt, input.tenantId);
-        
-        // MANDATORY ACCESS TOKEN VALIDATION - returns validated claims
-        AccessTokenValidationResult validationResult = null;
-        if (input.authToken != null) {
-            validationResult = accessTokenValidationService.validate(input.authToken, jwt.getProviderId(), input.tenantId);
-        }
-        
-        ProviderAndMfa providerAndMfa = resolveProviderAndMfa(jwt, input.tenantId, validationResult);
+
+        ProviderAndMfa providerAndMfa = resolveProviderAndMfa(jwt, input.tenantId);
 
         UserAndRequestInfo userAndRequestInfo = findOrCreateUser(jwt, providerAndMfa.provider,
                 providerAndMfa.mfaDetails, input.tenantId);
@@ -215,18 +202,16 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
     }
 
     /**
-     * Extracts JWT, optional auth token, and tenant ID from the authentication object.
+     * Extracts JWT and tenant ID from the authentication object.
      */
     private JwtExchangeInput extractJwtExchangeInput(Authentication authentication) {
         String token = (String) authentication.getCredentials();
-        String authToken = null;
         String tenantId = null;
         if (authentication instanceof JwtExchangeAuthenticationToken) {
             JwtExchangeAuthenticationToken jwtToken = (JwtExchangeAuthenticationToken) authentication;
-            authToken = jwtToken.getAuthToken();
             tenantId = jwtToken.getTenantId();
         }
-        return new JwtExchangeInput(token, authToken, tenantId);
+        return new JwtExchangeInput(token, tenantId);
     }
 
     /**
@@ -271,19 +256,13 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
     /**
      * Resolves provider by JWT provider id and tenant, asserts issuer match, extracts MFA from validated claims.
      */
-    private ProviderAndMfa resolveProviderAndMfa(OidcValidatedJwt jwt, String tenantId, AccessTokenValidationResult validationResult) {
+    private ProviderAndMfa resolveProviderAndMfa(OidcValidatedJwt jwt, String tenantId) {
         AuthProperties.Provider provider = getProviderById(jwt.getProviderId(), tenantId);
         assertIssuerMatchesProvider(jwt, provider);
-        
-        // SECURE: Use pre-validated claims instead of parsing raw token
-        AccessTokenMfaDetails mfaDetails;
-        if (validationResult != null && validationResult.getClaimsSet() != null) {
-            mfaDetails = accessTokenMfaExtractor.extractFromValidatedClaims(validationResult.getClaimsSet());
-        } else {
-            // Fallback for cases without access token - returns MFA disabled
-            mfaDetails = AccessTokenMfaDetails.builder().mfaEnabled(false).build();
-        }
-        
+
+        // MFA is derived from validated id_token claims. If missing, default is MFA disabled.
+        TokenMfaDetails mfaDetails = tokenMfaExtractor.extractFromClaims(jwt.getClaims());
+
         return new ProviderAndMfa(provider, mfaDetails);
     }
 
@@ -292,7 +271,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
      * then persists user and IDP details. Returns the user and request info for downstream use.
      */
     private UserAndRequestInfo findOrCreateUser(OidcValidatedJwt jwt, AuthProperties.Provider provider,
-            AccessTokenMfaDetails mfaDetails, String tenantId) {
+            TokenMfaDetails mfaDetails, String tenantId) {
         try {
             return findExistingUserAndUpdate(jwt, provider, mfaDetails, tenantId);
         } catch (UserNotFoundException e) {
@@ -302,7 +281,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
     }
 
     private UserAndRequestInfo findExistingUserAndUpdate(OidcValidatedJwt jwt, AuthProperties.Provider provider,
-            AccessTokenMfaDetails mfaDetails, String tenantId) {
+            TokenMfaDetails mfaDetails, String tenantId) {
         User user = userService.getUniqueUser(jwt.getIssuer(), jwt.getExternalUserId(), tenantId,
                 UserType.fromValue(jwt.getUserType()));
         RequestInfo requestInfo = getRequestInfo(user);
@@ -328,7 +307,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
     }
 
     private UserAndRequestInfo createNewUser(OidcValidatedJwt jwt, AuthProperties.Provider provider,
-            AccessTokenMfaDetails mfaDetails, String tenantId) {
+            TokenMfaDetails mfaDetails, String tenantId) {
         RequestInfo requestInfo = getRequestInfo(jwt.getRoles(), jwt.getUserType(), jwt.getOid());
 
         String password = ssoDefaultPasswordResolver.generatePassword();
@@ -370,7 +349,6 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
         createdUser.setIdpTokenExp(jwt.getExpirationTime());
         createdUser.setLastSsoLoginAt(jwt.getIssuanceTime());
         createdUser.setActive(Boolean.TRUE);
-        createdUser.setEmailId(jwt.getPreferredUsername());
         createdUser.setCreatedBy(requestInfo.getUserInfo().getId());
         createdUser.setLastModifiedBy(createdUser.getId());
         applyMfaDetailsToUser(createdUser, mfaDetails);
@@ -629,7 +607,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
             }
         }
 
-        String username = jwt.getClaims().get("unique_name").toString();
+        String username = jwt.getClaims().get("unique_name").toString(); // Use unique_name which has the email
         return org.egov.user.domain.model.hrms.User.builder()
                 .uuid(jwt.getExternalUserId())
                 .emailId(username)
@@ -706,7 +684,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
                 .idpSubject(jwt.getSubject())
                 .idpIssuer(jwt.getIssuer())
                 .name(jwt.getName())
-                .emailId(jwt.getClaims().get("unique_name").toString())
+                .emailId(jwt.getClaims().get("unique_name").toString()) // Use unique_name which has the email
                 .roles(toDomainRoles(jwt.getRoles(), user.getTenantId()))
                 .createdBy(user.getCreatedBy())
                 .lastModifiedBy(user.getId())
@@ -783,13 +761,13 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
     }
 
     /**
-     * Applies MFA details from access token to user object (only non-null fields).
+     * Applies MFA details from JWT claims to user object (only non-null fields).
      * Used before the single update so MFA is persisted in one call.
      *
      * @param user the user object to update
-     * @param mfa the MFA details extracted from access token
+     * @param mfa the MFA details extracted from JWT claims
      */
-    private void applyMfaDetailsToUser(User user, AccessTokenMfaDetails mfa) {
+    private void applyMfaDetailsToUser(User user, TokenMfaDetails mfa) {
         if (user == null || mfa == null)
             return;
         if (mfa.getMfaEnabled() != null)

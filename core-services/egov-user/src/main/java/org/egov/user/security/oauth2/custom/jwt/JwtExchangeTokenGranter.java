@@ -31,11 +31,11 @@ public class JwtExchangeTokenGranter extends AbstractTokenGranter {
 
     /**
      * Creates an OAuth2 authentication from the token request.
-     * Extracts the JWT assertion and optional auth/access token from request parameters,
+     * Extracts the JWT assertion and tenant ID from request parameters,
      * authenticates using the JWT exchange authentication provider, and creates an OAuth2 authentication.
      *
      * @param client the OAuth2 client details
-     * @param tokenRequest the token request containing JWT assertion and optional auth token
+     * @param tokenRequest the token request containing JWT assertion and tenant ID
      * @return OAuth2Authentication object ready for token generation
      */
     @Override
@@ -43,13 +43,9 @@ public class JwtExchangeTokenGranter extends AbstractTokenGranter {
             ClientDetails client, TokenRequest tokenRequest) {
         try {
             String jwt = tokenRequest.getRequestParameters().get(JwtConstants.PARAM_ASSERTION);
-            String authToken = tokenRequest.getRequestParameters().get(JwtConstants.PARAM_AUTH_TOKEN);
-            if (authToken == null || authToken.isEmpty()) {
-                authToken = tokenRequest.getRequestParameters().get(JwtConstants.PARAM_ACCESS_TOKEN);
-            }
             String tenantId = tokenRequest.getRequestParameters().get(JwtConstants.PARAM_TENANT_ID);
             Authentication authRequest =
-                    new JwtExchangeAuthenticationToken(jwt, authToken,tenantId);
+                    new JwtExchangeAuthenticationToken(jwt, tenantId);
 
             Authentication authResult =
                     authenticationManager.authenticate(authRequest);

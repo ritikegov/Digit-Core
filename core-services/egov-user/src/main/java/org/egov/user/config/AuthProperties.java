@@ -35,7 +35,6 @@ import java.util.*;
 public class AuthProperties {
     private Oidc oidc = new Oidc();
 
-    private Forward forward = new Forward();
     private List<Provider> providers = new ArrayList<>();
 
     /**
@@ -66,20 +65,6 @@ public class AuthProperties {
          * <p>Property: {@code auth.oidc.jwks-cache-ttl-ms}</p>
          */
         private Long jwksCacheTtlMs;
-    }
-
-    /**
-     * Forward authentication configuration.
-     * 
-     * <p>Controls how authentication tokens are forwarded to downstream services
-     * in the request chain. This enables token propagation for microservice
-     * authentication scenarios.</p>
-     */
-    @Getter
-    @Setter
-    public static class Forward {
-        private boolean authorizationHeader = true;
-        private boolean requestinfoAuthtoken = false;
     }
 
     /**

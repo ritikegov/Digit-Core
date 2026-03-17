@@ -8,15 +8,16 @@ import org.springframework.stereotype.Component;
 import java.util.Collection;
 import java.util.Date;
 import java.util.Iterator;
+import java.util.Map;
 
 /**
- * Extracts MFA-related details from the IdP access_token (JWT or JSON).
- * Microsoft Entra ID puts MFA info in the access_token's "amr" (Authentication
+ * Extracts MFA-related details from token claims.
+ * Microsoft Entra ID puts MFA info in the token's "amr" (Authentication
  * Methods References) claim; optional claims may include phone/device info.
  */
 @Slf4j
 @Component
-public class AccessTokenMfaExtractor {
+public class TokenMfaExtractor {
 
     private static final String CLAIM_AMR = "amr";
     private static final String MFA_VALUE = "mfa";
@@ -25,22 +26,61 @@ public class AccessTokenMfaExtractor {
     private static final String CLAIM_MFA_DEVICE = "mfa_device_name";
     private static final String CLAIM_MFA_DETAILS = "mfa_details";
     private static final String CLAIM_MFA_REGISTERED_ON = "mfa_registered_on";
-    /** JSON key for MFA enabled flag (e.g. in non-JWT token payload). */
+    /** JSON key for MFA enabled flag (e.g. in token claims). */
     private static final String KEY_MFA_ENABLE = "mfaenable";
 
-    public AccessTokenMfaExtractor() {
+    public TokenMfaExtractor() {
         // Default constructor for Spring
+    }
+
+    /**
+     * Extracts MFA details from a validated claims map (e.g., from a validated id_token).
+     *
+     * <p>This is safe to use only when the claims map is derived from a token that has already
+     * been validated (signature, issuer, audience, timestamps).</p>
+     *
+     * @param claims validated token claims map
+     * @return TokenMfaDetails with extracted MFA information
+     */
+    public TokenMfaDetails extractFromClaims(Map<String, Object> claims) {
+        if (claims == null) {
+            return TokenMfaDetails.builder().mfaEnabled(false).build();
+        }
+
+        boolean mfaEnabled = isMfaFromAmr(claims.get(CLAIM_AMR));
+
+        if (!mfaEnabled) {
+            Object mfaEnableClaim = claims.get(KEY_MFA_ENABLE);
+            if (mfaEnableClaim instanceof Boolean) {
+                mfaEnabled = (Boolean) mfaEnableClaim;
+            } else if (mfaEnableClaim != null) {
+                mfaEnabled = Boolean.parseBoolean(mfaEnableClaim.toString());
+            }
+        }
+
+        String mfaPhoneLast4 = getStringClaim(claims.get(CLAIM_MFA_PHONE_LAST4));
+        String mfaDeviceName = getStringClaim(claims.get(CLAIM_MFA_DEVICE));
+        String mfaDetails = getStringClaim(claims.get(CLAIM_MFA_DETAILS));
+        Date mfaRegisteredOn = getDateClaim(claims.get(CLAIM_MFA_REGISTERED_ON));
+
+        return TokenMfaDetails.builder()
+                .mfaEnabled(mfaEnabled)
+                .mfaPhoneLast4(mfaPhoneLast4)
+                .mfaDeviceName(mfaDeviceName)
+                .mfaDetails(mfaDetails)
+                .mfaRegisteredOn(mfaRegisteredOn)
+                .build();
     }
     /**
      * Extracts MFA details from pre-validated JWT claims set.
      * This is the SECURE method that uses claims from already-validated tokens.
      * 
      * @param claimsSet the validated JWT claims set
-     * @return AccessTokenMfaDetails with extracted MFA information
+     * @return TokenMfaDetails with extracted MFA information
      */
-    public AccessTokenMfaDetails extractFromValidatedClaims(JWTClaimsSet claimsSet) {
+    public TokenMfaDetails extractFromValidatedClaims(JWTClaimsSet claimsSet) {
         if (claimsSet == null) {
-            return AccessTokenMfaDetails.builder().mfaEnabled(false).build();
+            return TokenMfaDetails.builder().mfaEnabled(false).build();
         }
         
         boolean mfaEnabled = isMfaFromAmr(claimsSet.getClaim(CLAIM_AMR));
@@ -60,7 +100,7 @@ public class AccessTokenMfaExtractor {
         String mfaDetails = getStringClaim(claimsSet, CLAIM_MFA_DETAILS);
         Date mfaRegisteredOn = getDateClaim(claimsSet, CLAIM_MFA_REGISTERED_ON);
         
-        return AccessTokenMfaDetails.builder()
+        return TokenMfaDetails.builder()
                 .mfaEnabled(mfaEnabled)
                 .mfaPhoneLast4(mfaPhoneLast4)
                 .mfaDeviceName(mfaDeviceName)
@@ -131,6 +171,14 @@ public class AccessTokenMfaExtractor {
         }
     }
 
+    private String getStringClaim(Object value) {
+        try {
+            return value != null ? value.toString() : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     /**
      * Safely extracts a date claim from JWT claims set.
      * Handles both Date objects and numeric timestamps.
@@ -145,6 +193,17 @@ public class AccessTokenMfaExtractor {
             if (v == null) return null;
             if (v instanceof Date) return (Date) v;
             if (v instanceof Number) return new Date(((Number) v).longValue());
+            return null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Date getDateClaim(Object value) {
+        try {
+            if (value == null) return null;
+            if (value instanceof Date) return (Date) value;
+            if (value instanceof Number) return new Date(((Number) value).longValue());
             return null;
         } catch (Exception e) {
             return null;

@@ -2,29 +2,25 @@ package org.egov.user.security.oauth2.custom.jwt;
 
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.utils.MultiStateInstanceUtil;
-import org.egov.user.domain.model.SecureUser;
-import org.egov.user.domain.model.User;
-import org.egov.user.domain.model.enums.UserType;
-import org.egov.user.domain.service.UserService;
-import org.egov.user.domain.service.utils.EncryptionDecryptionUtil;
+import org.egov.tracer.model.CustomException;
 import org.egov.user.config.AuthProperties;
 import org.egov.user.config.OidcProviderSupplier;
 import org.egov.user.config.SsoDefaultPasswordResolver;
+import org.egov.user.domain.exception.sso.SsoException;
+import org.egov.user.domain.exception.sso.SsoMissingParamException;
+import org.egov.user.domain.exception.sso.SsoUserMappingException;
+import org.egov.user.domain.exception.sso.TokenReplayException;
+import org.egov.user.domain.model.*;
+import org.egov.user.domain.model.enums.UserType;
 import org.egov.user.domain.service.SsoUserPersistenceService;
+import org.egov.user.domain.service.UserService;
+import org.egov.user.domain.service.utils.EncryptionDecryptionUtil;
 import org.egov.user.security.oauth2.custom.service.EmployeeCreationProfile;
 import org.egov.user.security.oauth2.custom.service.IdpGraphService;
 import org.egov.user.security.oauth2.custom.service.impl.MsGraphService;
 import org.egov.user.security.oauth2.custom.service.impl.NoOpGraphService;
-import org.egov.user.security.oauth2.custom.accesstoken.AccessTokenValidationService;
-import org.egov.user.security.oauth2.custom.accesstoken.AccessTokenValidationResult;
-import com.nimbusds.jwt.JWTClaimsSet;
 import org.egov.user.utils.HrmsUserUtil;
 import org.egov.user.web.contract.auth.OidcValidatedJwt;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.egov.user.domain.model.Role;
-import org.egov.user.domain.model.UserIdpDetails;
-import org.egov.user.domain.model.UserSearchCriteria;
-import org.egov.user.domain.service.SsoUserPersistenceService;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -34,33 +30,12 @@ import org.mockito.runners.MockitoJUnitRunner;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
-import org.egov.user.domain.exception.sso.SsoException;
-import org.egov.user.domain.exception.sso.SsoMissingParamException;
-import org.egov.user.domain.exception.sso.SsoUserMappingException;
-import org.egov.user.domain.exception.sso.TokenReplayException;
-import org.egov.tracer.model.CustomException;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.junit.Assert.*;
+import static org.mockito.Matchers.*;
+import static org.mockito.Mockito.*;
 
 @RunWith(MockitoJUnitRunner.class)
 public class JwtExchangeAuthenticationProviderTest {
@@ -100,10 +75,7 @@ public class JwtExchangeAuthenticationProviderTest {
         @Mock
         private EncryptionDecryptionUtil encryptionDecryptionUtil;
 
-        @Mock
-        private AccessTokenValidationService accessTokenValidationService;
-
-        private AccessTokenMfaExtractor accessTokenMfaExtractor = new AccessTokenMfaExtractor();
+        private TokenMfaExtractor tokenMfaExtractor = new TokenMfaExtractor();
 
         private JwtExchangeAuthenticationProvider authenticationProvider;
 
@@ -113,8 +85,8 @@ public class JwtExchangeAuthenticationProviderTest {
                 authenticationProvider = new JwtExchangeAuthenticationProvider(
                                 jwtValidationService, userService, multiStateInstanceUtil,
                                 hrmsUserUtil, oidcProviderSupplier, graphServices,
-                                accessTokenMfaExtractor, ssoDefaultPasswordResolver, new NoOpGraphService(),
-                                ssoUserPersistenceService, encryptionDecryptionUtil, accessTokenValidationService);
+                                tokenMfaExtractor, ssoDefaultPasswordResolver, new NoOpGraphService(),
+                                ssoUserPersistenceService, encryptionDecryptionUtil);
                 when(encryptionDecryptionUtil.encryptObject(any(UserIdpDetails.class), anyString(), eq(UserIdpDetails.class)))
                                 .thenAnswer(invocation -> invocation.getArgumentAt(0, UserIdpDetails.class));
                 when(ssoUserPersistenceService.updateUserAndUpsertIdpDetails(any(User.class), any(UserIdpDetails.class), anyString(), any(RequestInfo.class)))
@@ -158,20 +130,11 @@ public class JwtExchangeAuthenticationProviderTest {
                                 Collections.singleton("ROLE"), claimsWithJti, new Date(), new Date(), token, "oidc-azure");
         }
 
-        private void mockAccessTokenValidationWithMfa(String authToken, String... amrValues) throws Exception {
-                JWTClaimsSet accessTokenClaims = new JWTClaimsSet.Builder()
-                        .claim("amr", amrValues.length > 0 ? amrValues : null)
-                        .claim("mfaenable", authToken.contains("mfaenable"))
-                        .build();
-                AccessTokenValidationResult validationResult = AccessTokenValidationResult.success(accessTokenClaims);
-                when(accessTokenValidationService.validate(eq(authToken), eq("oidc-azure"), eq(TENANT_PB))).thenReturn(validationResult);
-        }
-
         @Test
         public void testAuthenticate_ExistingUser() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -212,7 +175,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_ExistingUser_SameRoles_SkipsUpdate_StillUpsertsIdpDetails() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -246,7 +209,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_NewUserCreation() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -294,7 +257,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_NewUserCreation_UsesGraphEmployeeProfile() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -349,7 +312,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_MissingUserType_ThrowsSsoMissingParamExceptionWithCorrectErrorCode() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -375,7 +338,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_NewUserCreation_DesignationFromClaimKey() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -421,7 +384,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_NewUserCreation_DesignationFromDesignationMapping() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -467,17 +430,17 @@ public class JwtExchangeAuthenticationProviderTest {
         }
 
         @Test
-        public void testAuthenticate_MfaEnable_AuthTokenJwt() throws Exception {
+        public void testAuthenticate_MfaEnable_FromJwtClaims() throws Exception {
                 String token = "jwt-assertion";
-                String authToken = "eyJhbGciOiJub25lIn0.eyJhbXIiOlsicHdkIiwibWZhIl19.";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, authToken, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
                 claims.put("sub", "subject");
                 claims.put("tenantId", TENANT_PB);
                 claims.put("userType", "EMPLOYEE");
+                claims.put("amr", Arrays.asList("pwd", "mfa"));
 
                 OidcValidatedJwt jwt = oidcJwt(claims, token);
 
@@ -485,152 +448,12 @@ public class JwtExchangeAuthenticationProviderTest {
                                 .roles(Collections.emptySet()).build();
 
                 when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
-                mockAccessTokenValidationWithMfa(authToken, "pwd", "mfa");
                 when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
                 authenticationProvider.authenticate(authenticationToken);
 
                 ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
                 verify(ssoUserPersistenceService).updateUserAndUpsertIdpDetails(userCaptor.capture(), any(UserIdpDetails.class), eq(TENANT_PB), any(RequestInfo.class));
                 assertTrue(userCaptor.getValue().getMfaEnabled());
-        }
-
-        @Test
-        public void testAuthenticate_MfaEnable_AuthTokenJwt_Ngcmfa() throws Exception {
-                String token = "jwt-assertion";
-                String authToken = "eyJhbGciOiJub25lIn0.eyJhbXIiOlsicHdkIiwibmdjbWZhIl19.";
-                JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, authToken, TENANT_PB);
-
-                Map<String, Object> claims = new HashMap<>();
-                claims.put("iss", "issuer");
-                claims.put("sub", "subject");
-                claims.put("tenantId", TENANT_PB);
-                claims.put("userType", "EMPLOYEE");
-
-                OidcValidatedJwt jwt = oidcJwt(claims, token);
-
-                User user = User.builder().uuid("uuid").type(UserType.EMPLOYEE).active(true)
-                                .roles(Collections.emptySet()).build();
-
-                when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
-                mockAccessTokenValidationWithMfa(authToken, "pwd", "ngcmfa");
-                when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
-                authenticationProvider.authenticate(authenticationToken);
-
-                ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-                verify(ssoUserPersistenceService).updateUserAndUpsertIdpDetails(userCaptor.capture(), any(UserIdpDetails.class), eq(TENANT_PB), any(RequestInfo.class));
-                assertTrue(userCaptor.getValue().getMfaEnabled());
-        }
-
-        @Test
-        public void testAuthenticate_MfaDisable_AuthTokenJwt() {
-                String token = "jwt-assertion";
-                String authToken = "eyJhbGciOiJub25lIn0.eyJhbXIiOlsicHdkIl19.";
-                JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, authToken, TENANT_PB);
-
-                Map<String, Object> claims = new HashMap<>();
-                claims.put("iss", "issuer");
-                claims.put("sub", "subject");
-                claims.put("tenantId", TENANT_PB);
-                claims.put("userType", "EMPLOYEE");
-
-                OidcValidatedJwt jwt = oidcJwt(claims, token);
-
-                User user = User.builder().uuid("uuid").type(UserType.EMPLOYEE).active(true)
-                                .roles(Collections.emptySet()).build();
-
-                when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
-                when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
-                authenticationProvider.authenticate(authenticationToken);
-
-                ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-                verify(ssoUserPersistenceService).updateUserAndUpsertIdpDetails(userCaptor.capture(), any(UserIdpDetails.class), eq(TENANT_PB), any(RequestInfo.class));
-                assertFalse(userCaptor.getValue().getMfaEnabled());
-        }
-
-        @Test
-        public void testAuthenticate_MfaEnable_AuthTokenJson_Amr() throws Exception {
-                String token = "jwt-assertion";
-                String authToken = "{\"amr\": [\"pwd\", \"mfa\"]}";
-                JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, authToken, TENANT_PB);
-
-                Map<String, Object> claims = new HashMap<>();
-                claims.put("iss", "issuer");
-                claims.put("sub", "subject");
-                claims.put("tenantId", TENANT_PB);
-                claims.put("userType", "EMPLOYEE");
-
-                OidcValidatedJwt jwt = oidcJwt(claims, token);
-
-                User user = User.builder().uuid("uuid").type(UserType.EMPLOYEE).active(true)
-                                .roles(Collections.emptySet()).build();
-
-                when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
-                mockAccessTokenValidationWithMfa(authToken, "pwd", "mfa");
-                when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
-                authenticationProvider.authenticate(authenticationToken);
-
-                ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-                verify(ssoUserPersistenceService).updateUserAndUpsertIdpDetails(userCaptor.capture(), any(UserIdpDetails.class), eq(TENANT_PB), any(RequestInfo.class));
-                assertTrue(userCaptor.getValue().getMfaEnabled());
-        }
-
-        @Test
-        public void testAuthenticate_MfaEnable_AuthTokenJson_MfaEnable() throws Exception {
-                String token = "jwt-assertion";
-                String authToken = "{\"mfaenable\": true}";
-                JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, authToken, TENANT_PB);
-
-                Map<String, Object> claims = new HashMap<>();
-                claims.put("iss", "issuer");
-                claims.put("sub", "subject");
-                claims.put("tenantId", TENANT_PB);
-                claims.put("userType", "EMPLOYEE");
-
-                OidcValidatedJwt jwt = oidcJwt(claims, token);
-
-                User user = User.builder().uuid("uuid").type(UserType.EMPLOYEE).active(true)
-                                .roles(Collections.emptySet()).build();
-
-                when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
-                mockAccessTokenValidationWithMfa(authToken);
-                when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
-                authenticationProvider.authenticate(authenticationToken);
-
-                ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-                verify(ssoUserPersistenceService).updateUserAndUpsertIdpDetails(userCaptor.capture(), any(UserIdpDetails.class), eq(TENANT_PB), any(RequestInfo.class));
-                assertTrue(userCaptor.getValue().getMfaEnabled());
-        }
-
-        @Test
-        public void testAuthenticate_RawAuthToken_DefaultsToFalse() {
-                String token = "jwt-token";
-                String authToken = "not-a-jwt-or-json";
-                JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, authToken, TENANT_PB);
-
-                Map<String, Object> claims = new HashMap<>();
-                claims.put("iss", "issuer");
-                claims.put("sub", "subject");
-                claims.put("tenantId", TENANT_PB);
-                claims.put("userType", "EMPLOYEE");
-
-                OidcValidatedJwt jwt = oidcJwt(claims, token);
-
-                User user = User.builder().uuid("uuid").type(UserType.EMPLOYEE).active(true)
-                                .roles(Collections.emptySet()).build();
-
-                when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
-                when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
-                authenticationProvider.authenticate(authenticationToken);
-
-                // Should default to false because parsing fails
-                ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-                verify(ssoUserPersistenceService).updateUserAndUpsertIdpDetails(userCaptor.capture(), any(UserIdpDetails.class), eq(TENANT_PB), any(RequestInfo.class));
-                assertFalse(userCaptor.getValue().getMfaEnabled());
         }
 
         @Test
@@ -642,7 +465,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_MissingJtiAndUti_Throws() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
                 claims.put("sub", "subject");
@@ -662,7 +485,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_InvalidJwt_Throws() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
                 when(jwtValidationService.validate(anyString(), anyString()))
                                 .thenThrow(org.egov.user.domain.exception.sso.IdpJwtValidationException.invalid("Invalid signature", null));
                 authenticationProvider.authenticate(authenticationToken);
@@ -672,7 +495,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_AccountLocked_NotUnlockable_Throws() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
                 claims.put("sub", "subject");
@@ -691,7 +514,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_AccountLocked_Unlockable_SucceedsAndUnlocksAccount() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
                 claims.put("sub", "subject");
@@ -738,7 +561,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_NewUserCreation_UpsertsIdpDetails() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -782,7 +605,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_ExistingUserUpdatedSuccessfully() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -834,7 +657,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_InactiveUser_ReturnsCorrectErrorCode() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
                 claims.put("sub", "subject");
@@ -857,7 +680,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_IssuerMismatch_Throws() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "other-issuer");
@@ -876,7 +699,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_ProviderNotFoundForTenant_Throws() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, "unknown-tenant");
+                                new JwtExchangeAuthenticationToken(token, "unknown-tenant");
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -897,7 +720,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_UserActiveNull_ThrowsAndReturnsCorrectErrorCode() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
                 claims.put("sub", "subject");
@@ -920,7 +743,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_DuplicateUser_ThrowsSsoUserMappingException() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -968,7 +791,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_EmployeeCreationFails_ThrowsSsoUserMappingException() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -1007,7 +830,7 @@ public class JwtExchangeAuthenticationProviderTest {
 
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer-alias");
@@ -1033,7 +856,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_UtiClaimAccepted_WhenJtiMissing() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -1064,7 +887,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_TokenReplay_ThrowsTokenReplayException() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -1088,7 +911,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_NewUserCreation_CompleteFlow() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -1132,9 +955,8 @@ public class JwtExchangeAuthenticationProviderTest {
         @Test
         public void testAuthenticate_MfaDetailsExtraction_WithNullClaims() {
                 String token = "jwt-assertion";
-                String authToken = "valid-auth-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, authToken, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -1148,8 +970,6 @@ public class JwtExchangeAuthenticationProviderTest {
                                 .roles(Collections.emptySet()).build();
 
                 when(jwtValidationService.validate(anyString(), anyString())).thenReturn(jwt);
-                AccessTokenValidationResult validationResult = AccessTokenValidationResult.success(null);
-                when(accessTokenValidationService.validate(eq(authToken), eq("oidc-azure"), eq(TENANT_PB))).thenReturn(validationResult);
                 when(userService.getUniqueUser(anyString(), anyString(), anyString(), any())).thenReturn(user);
 
                 Authentication result = authenticationProvider.authenticate(authenticationToken);
@@ -1164,7 +984,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_MissingTokenId_ThrowsException() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -1188,7 +1008,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_MultipleProviders_CorrectSelection() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -1226,7 +1046,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_GraphServiceEnrichment_Called() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -1253,7 +1073,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_NoOpGraphService_Fallback() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -1281,7 +1101,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_RequestInfo_CorrectUserMapping() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -1310,7 +1130,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_RoleMapping_PreservesTenantId() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -1340,7 +1160,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_DesignationResolution_PriorityOrder() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -1381,7 +1201,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_IssuerNormalization_TrailingSlashes() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer/");
@@ -1406,7 +1226,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_IssuerNormalization_Whitespace() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "  issuer  ");
@@ -1431,7 +1251,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_CentralInstance_MdcSet() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -1457,7 +1277,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_NonCentralInstance_MdcNotSet() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -1483,7 +1303,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_EmptyRoles_HandledCorrectly() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -1509,7 +1329,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_NullRoles_HandledCorrectly() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -1535,7 +1355,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_MaxLengthTokenId_HandledCorrectly() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");
@@ -1567,7 +1387,7 @@ public class JwtExchangeAuthenticationProviderTest {
         public void testAuthenticate_SpecialCharactersInClaims_HandledCorrectly() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
-                                new JwtExchangeAuthenticationToken(token, null, TENANT_PB);
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("iss", "issuer");

@@ -4,12 +4,11 @@ import org.springframework.security.authentication.AbstractAuthenticationToken;
 
 /**
  * Authentication token used for JWT exchange flow.
- * Contains the JWT token from the identity provider and optionally an MFA/auth token.
+ * Contains the JWT token from the identity provider and tenant ID.
  */
 public class JwtExchangeAuthenticationToken extends AbstractAuthenticationToken {
 
     private final String jwt;
-    private final String authToken;
     private final String tenantId;
 
     /**
@@ -20,21 +19,19 @@ public class JwtExchangeAuthenticationToken extends AbstractAuthenticationToken 
     public JwtExchangeAuthenticationToken(String jwt) {
         super(null);
         this.jwt = jwt;
-        this.authToken = null;
         this.tenantId = null;
         setAuthenticated(false);
     }
 
     /**
-     * Creates a JWT exchange authentication token with both JWT and MFA/auth token.
+     * Creates a JWT exchange authentication token with JWT token and tenant ID.
      *
      * @param jwt the JWT token from the identity provider
-     * @param authToken the MFA or access token (optional, can be null)
+     * @param tenantId the tenant ID
      */
-    public JwtExchangeAuthenticationToken(String jwt, String authToken, String tenantId) {
+    public JwtExchangeAuthenticationToken(String jwt, String tenantId) {
         super(null);
         this.jwt = jwt;
-        this.authToken = authToken;
         this.tenantId = tenantId;
         setAuthenticated(false);
     }
@@ -59,14 +56,6 @@ public class JwtExchangeAuthenticationToken extends AbstractAuthenticationToken 
         return null;
     }
 
-    /**
-     * Returns the MFA/auth token if provided.
-     *
-     * @return the auth token string, or null if not provided
-     */
-    public String getAuthToken() {
-        return authToken;
-    }
 
     public String getTenantId() {
         return tenantId;

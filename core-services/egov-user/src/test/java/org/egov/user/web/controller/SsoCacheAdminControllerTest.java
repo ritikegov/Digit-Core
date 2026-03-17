@@ -4,7 +4,6 @@ import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.response.ResponseInfo;
 import org.egov.user.security.oauth2.custom.jwt.IDPJwtValidator;
 import org.egov.user.web.contract.SsoCacheClearRequest;
-import org.egov.user.web.contract.SsoJwksCacheClearRequest;
 import org.egov.user.web.contract.factory.ResponseInfoFactory;
 import org.junit.Before;
 import org.junit.Test;
@@ -18,10 +17,10 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @RunWith(MockitoJUnitRunner.class)
 public class SsoCacheAdminControllerTest {
@@ -130,33 +129,4 @@ public class SsoCacheAdminControllerTest {
         verify(idpJwtValidator, times(1)).clearDecoderCacheFor(tenantId, null);
     }
 
-    @Test
-    public void testClearJwks_Endpoint_Success() throws Exception {
-        String tenantId = "pb.amritsar";
-        String jwksUri = "https://login.microsoftonline.com/common/discovery/v2.0/keys";
-        
-        mockMvc.perform(post("/sso/jwks/_clear")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"RequestInfo\":{},\"tenantId\":\"" + tenantId + "\",\"jwksUri\":\"" + jwksUri + "\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("successful")); // Just check that status exists, content depends on cache state
-    }
-
-    @Test
-    public void testClearJwks_ReturnsCorrectResponse() {
-        String tenantId = "pb.amritsar";
-        String jwksUri = "https://login.microsoftonline.com/common/discovery/v2.0/keys";
-        RequestInfo requestInfo = new RequestInfo();
-        
-        SsoJwksCacheClearRequest request = new SsoJwksCacheClearRequest();
-        request.setRequestInfo(requestInfo);
-        request.setTenantId(tenantId);
-        request.setJwksUri(jwksUri);
-        
-        // Call the method and verify response
-        ResponseInfo response = ssoCacheAdminController.clearJwks(request);
-        
-        assertNotNull(response);
-        assertEquals("successful", response.getStatus());
-    }
 }

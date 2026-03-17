@@ -1,39 +1,14 @@
 package org.egov.user.domain.service;
 
-import static java.util.Objects.isNull;
-import static org.apache.commons.lang3.StringUtils.isEmpty;
-import static org.egov.user.config.UserServiceConstants.USER_CLIENT_ID;
-import static org.springframework.util.CollectionUtils.isEmpty;
-
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
-import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.tracer.model.CustomException;
-import org.egov.user.domain.exception.AtleastOneRoleCodeException;
-import org.egov.user.domain.exception.DuplicateUserNameException;
-import org.egov.user.domain.exception.InvalidUpdatePasswordRequestException;
-import org.egov.user.domain.exception.OtpValidationPendingException;
-import org.egov.user.domain.exception.PasswordMismatchException;
-import org.egov.user.domain.exception.UserNameNotValidException;
-import org.egov.user.domain.exception.UserNotFoundException;
-import org.egov.user.domain.exception.UserProfileUpdateDeniedException;
+import org.egov.user.domain.exception.*;
 import org.egov.user.domain.model.LoggedInUserUpdatePasswordRequest;
 import org.egov.user.domain.model.NonLoggedInUserUpdatePasswordRequest;
 import org.egov.user.domain.model.User;
 import org.egov.user.domain.model.UserSearchCriteria;
-import org.egov.user.security.oauth2.custom.jwt.AccessTokenMfaDetails;
 import org.egov.user.domain.model.enums.UserType;
 import org.egov.user.domain.service.utils.EncryptionDecryptionUtil;
 import org.egov.user.domain.service.utils.NotificationUtil;
@@ -59,7 +34,16 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
-import lombok.extern.slf4j.Slf4j;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+import static java.util.Objects.isNull;
+import static org.apache.commons.lang3.StringUtils.isEmpty;
+import static org.egov.user.config.UserServiceConstants.USER_CLIENT_ID;
+import static org.springframework.util.CollectionUtils.isEmpty;
 
 @Service
 @Slf4j
