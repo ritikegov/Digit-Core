@@ -45,6 +45,8 @@ public class TransactionsApiController {
 	 */
 	@PostMapping(value = "/transaction/v3/_create")
 	public ResponseEntity<TransactionCreateResponse> transactionsV1CreatePost(@RequestHeader("X-Tenant-ID") String tenantId, @RequestHeader("X-Client-ID") String clientId, @Valid @RequestBody TransactionRequest transactionRequest) {
+		transactionRequest.getTransaction().setTenantId(tenantId);
+
 		Transaction transaction = transactionService.initiateTransaction(transactionRequest, tenantId, clientId);
 		TransactionCreateResponse response = new TransactionCreateResponse(transaction);
 		return new ResponseEntity<>(response, HttpStatus.OK);

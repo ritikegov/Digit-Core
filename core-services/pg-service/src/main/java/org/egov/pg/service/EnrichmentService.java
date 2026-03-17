@@ -107,7 +107,7 @@ public class EnrichmentService {
 
 	private BankAccount getBankAccount(String tenantId, String clientId) {
 		DataSearchRequest request = DataSearchRequest.builder()
-				.filters(Map.of("isActive", true))
+				.filters(Map.of("active", true))
 				.build();
 
 		List<RegistryData> records = registryClient.search(tenantId, clientId, "bankAccount", request);

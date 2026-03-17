@@ -1,232 +1,236 @@
 package org.egov.pg.service;
 
-import org.egov.common.contract.request.RequestInfo;
 import org.egov.pg.config.AppProperties;
-import org.egov.pg.models.Transaction;
-import org.egov.pg.models.Transaction.TxnStatusEnum;
+import org.egov.pg.constants.PgConstants;
 import org.egov.pg.messaging.producer.Producer;
+import org.egov.pg.models.TaxAndPayment;
+import org.egov.pg.models.Transaction;
+import org.egov.pg.models.TransactionDump;
+import org.egov.pg.models.User;
 import org.egov.pg.repository.TransactionRepository;
 import org.egov.pg.validator.TransactionValidator;
 import org.egov.pg.web.models.TransactionCriteria;
 import org.egov.pg.web.models.TransactionRequest;
-import org.egov.pg.models.User;
+import org.egov.tracer.model.AuditDetails;
 import org.egov.tracer.model.CustomException;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.mockito.junit.MockitoJUnitRunner;
-import org.springframework.dao.TransientDataAccessResourceException;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataAccessResourceFailureException;
 
-import lombok.extern.slf4j.Slf4j;
+import java.math.BigDecimal;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
-import static junit.framework.TestCase.assertEquals;
-import static junit.framework.TestCase.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.lenient;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.class)
-@Slf4j
-public class TransactionServiceTest {
-
-    private TransactionService transactionService;
-
-    @Mock
-    private Producer producer;
-
-    @Mock
-    private GatewayService gatewayService;
-
-    @Mock
-    private TransactionRepository transactionRepository;
-
-    @Mock
-    private EnrichmentService enrichmentService;
-
-    @Mock
-    private AppProperties appProperties;
+@ExtendWith(MockitoExtension.class)
+class TransactionServiceTest {
 
     @Mock
     private TransactionValidator validator;
-    
+    @Mock
+    private GatewayService gatewayService;
+    @Mock
+    private Producer producer;
+    @Mock
+    private TransactionRepository transactionRepository;
     @Mock
     private PaymentsService paymentsService;
+    @Mock
+    private EnrichmentService enrichmentService;
+    @Mock
+    private AppProperties appProperties;
 
-    private User user;
-    private RequestInfo requestInfo;
+    private TransactionService transactionService;
 
-    @Before
-    public void setUp() {
-        user = User.builder().userName("USER001").mobileNumber("9XXXXXXXXX").name("XYZ").tenantId("pb").emailId("").build();
-        requestInfo = new RequestInfo("", "", 0L, "", "", "", "", "", "",null, null);
-        lenient().when(gatewayService.getTxnId(any(Map.class))).thenReturn(Optional.of("ORDERID"));
-        lenient().doNothing().when(producer).push(any(String.class), any(String.class), any(Object.class));
-        lenient().doNothing().when(enrichmentService).enrichCreateTransaction(any(TransactionRequest.class));
-
-        this.transactionService = new TransactionService(validator, gatewayService, producer, transactionRepository,
-        		paymentsService,
-                enrichmentService,
-                appProperties);
+    @BeforeEach
+    void setUp() {
+        transactionService = new TransactionService(
+                validator, gatewayService, producer, transactionRepository, paymentsService, enrichmentService, appProperties);
     }
-
-    /**
-     * Valid test for initiating a transaction
-     * @throws URISyntaxException
-     */
 
     @Test
-    public void initiateTransactionSuccessTest() throws URISyntaxException {
-        String redirectUrl = "https://paytm.com";
+    void initiateTransaction_gatewayFlow_persistsDumpAndPublishesEvent() throws Exception {
+        Transaction txn = baseTransaction("100.00", Transaction.TxnStatusEnum.PENDING);
+        txn.setTxnId("TXN-1");
+        txn.setAuditDetails(new AuditDetails("u", "u", 1L, 1L));
+        TransactionRequest request = TransactionRequest.builder().transaction(txn).build();
+        when(gatewayService.initiateTxn(txn)).thenReturn(new URI("https://gateway.test/redirect"));
+        when(appProperties.getMessageBrokerEnabled()).thenReturn(true);
+        when(appProperties.getUpdateTxnTopic()).thenReturn("pg-update-topic");
 
+        Transaction result = transactionService.initiateTransaction(request, "pb.amritsar", "client-a");
 
-        Transaction txn = Transaction.builder().txnAmount("100")
-                .billId("ORDER0012")
-                .productInfo("Property Tax Payment")
-                .gateway("PAYTM")
-                .build();
-        TransactionRequest transactionRequest = new TransactionRequest(requestInfo, txn);
+        assertThat(result.getRedirectUrl()).isEqualTo("https://gateway.test/redirect");
+        verify(validator).validateCreateTxn(txn);
+        verify(paymentsService).validatePayment(txn, "pb.amritsar", "client-a");
+        verify(enrichmentService).enrichCreateTransaction(txn, "pb.amritsar", "client-a");
+        verify(transactionRepository).saveTransaction(txn);
 
-        Mockito.doNothing().when(validator).validateCreateTxn(any(TransactionRequest.class));
-        when(validator.skipGateway(txn)).thenReturn(false);
-        when(gatewayService.initiateTxn(any(Transaction.class))).thenReturn(new URI(redirectUrl));
+        ArgumentCaptor<TransactionDump> dumpCaptor = ArgumentCaptor.forClass(TransactionDump.class);
+        verify(transactionRepository).saveTransactionDump(dumpCaptor.capture());
+        assertThat(dumpCaptor.getValue().getTxnRequest()).isEqualTo("https://gateway.test/redirect");
 
-        Transaction resp = transactionService.initiateTransaction(transactionRequest);
-
-        assertTrue(resp.getRedirectUrl().equalsIgnoreCase(redirectUrl));
-
+        verify(producer).push("pg-update-topic", txn);
+        verify(paymentsService, never()).registerPayment(any(), any(), any());
     }
 
-    /**
-     * Test for invalid or inactive gateway
-     */
-    @Test(expected = CustomException.class)
-    public void initiateTransactionFailTest(){
-        Transaction txn = Transaction.builder().txnAmount("100")
-                .billId("ORDER0012")
-                .productInfo("Property Tax Payment")
-                .gateway("ABCD123")
-                .build();
-        TransactionRequest transactionRequest = new TransactionRequest(requestInfo, txn);
-
-        Mockito.doThrow(new CustomException("INVALID_GATEWAY", "Invalid Gateway")).when(validator).validateCreateTxn(any(TransactionRequest.class));
-        lenient().when(gatewayService.initiateTxn(any(Transaction.class))).thenThrow(new CustomException());
-
-        Transaction resp = transactionService.initiateTransaction(transactionRequest);
-    }
-
-    /**
-     * Test for invalid or inactive gateway
-     */
     @Test
-    public void initiateTransactionSkipGatewayTest(){
-        Transaction txn = Transaction.builder().txnAmount("100")
-                .billId("ORDER0012")
-                .productInfo("Property Tax Payment")
-                .gateway("ABCD123")
-                .txnAmount("0")
-                .build();
-        TransactionRequest transactionRequest = new TransactionRequest(requestInfo, txn);
+    void initiateTransaction_zeroAmount_skipsGatewayAndRegistersPayment() {
+        Transaction txn = baseTransaction("0", Transaction.TxnStatusEnum.PENDING);
+        txn.setTxnId("TXN-2");
+        txn.setAuditDetails(new AuditDetails("u", "u", 1L, 1L));
+        TransactionRequest request = TransactionRequest.builder().transaction(txn).build();
+        when(appProperties.getMessageBrokerEnabled()).thenReturn(false);
 
-        Mockito.doNothing().when(validator).validateCreateTxn(any(TransactionRequest.class));
+        Transaction result = transactionService.initiateTransaction(request, "pb", "client");
 
-        lenient().when(gatewayService.initiateTxn(any(Transaction.class))).thenThrow(new CustomException());
-        lenient().when(validator.skipGateway(txn)).thenReturn(true);
-        Transaction resp = transactionService.initiateTransaction(transactionRequest);
-                
-        assertTrue(resp.getTxnStatus().equals(TxnStatusEnum.SUCCESS));
-
+        assertThat(result.getTxnStatus()).isEqualTo(Transaction.TxnStatusEnum.SUCCESS);
+        verify(paymentsService).registerPayment(txn, "pb", "client");
+        verify(gatewayService, never()).initiateTxn(any());
+        verify(producer, never()).push(any(), any());
     }
 
-
-    /**
-     * Test for fetching transactions based on criteria
-     */
     @Test
-    public void getTransactionsSuccessTest(){
-        Transaction txn = Transaction.builder().txnId("PT_001")
-                .txnAmount("100")
+    void getTransactions_repositoryThrows_throwsCustomException() {
+        TransactionCriteria criteria = TransactionCriteria.builder().tenantId("pb").txnId("TXN-3").build();
+        when(transactionRepository.fetchTransactions(criteria)).thenThrow(new DataAccessResourceFailureException("db down"));
+
+        assertThatThrownBy(() -> transactionService.getTransactions(criteria))
+                .isInstanceOf(CustomException.class)
+                .satisfies(ex -> {
+                    CustomException ce = (CustomException) ex;
+                    assertThat(ce.getCode()).isEqualTo("FETCH_TXNS_FAILED");
+                    assertThat(ce.getMessage()).contains("Unable to fetch transactions from store");
+                });
+    }
+
+    @Test
+    void updateTransaction_skipGatewayAndNullTenant_registersPaymentWithExistingTenant() {
+        Transaction existing = baseTransaction("0", Transaction.TxnStatusEnum.SUCCESS);
+        existing.setTxnId("TXN-4");
+        existing.setTenantId("pb.tenant");
+        existing.setAuditDetails(new AuditDetails("u", "u", 1L, 1L));
+
+        when(validator.validateUpdateTxn(any())).thenReturn(existing);
+        when(appProperties.getMessageBrokerEnabled()).thenReturn(false);
+
+        List<Transaction> updated = transactionService.updateTransaction(Map.of("transactionId", "TXN-4"), null, "client-b");
+
+        assertThat(updated).hasSize(1);
+        assertThat(updated.get(0)).isSameAs(existing);
+        verify(paymentsService).registerPayment(existing, "pb.tenant", "client-b");
+        verify(gatewayService, never()).getLiveStatus(any(), any());
+        verify(enrichmentService, never()).enrichUpdateTransaction(any(), any(), any());
+        verify(transactionRepository).updateTransaction(existing);
+        verify(transactionRepository).updateTransactionDump(any(TransactionDump.class));
+    }
+
+    @Test
+    void updateTransaction_gatewaySuccessAmountMatches_enrichesAndPublishes() {
+        Transaction previous = baseTransaction("100", Transaction.TxnStatusEnum.PENDING);
+        previous.setTxnId("TXN-5");
+        previous.setTenantId("pb");
+
+        Transaction fromGateway = baseTransaction("100.00", Transaction.TxnStatusEnum.SUCCESS);
+        fromGateway.setTxnId("TXN-5");
+        fromGateway.setAuditDetails(new AuditDetails("u", "u", 1L, 2L));
+        fromGateway.setResponseJson(Map.of("status", "ok"));
+
+        when(validator.validateUpdateTxn(any())).thenReturn(previous);
+        when(gatewayService.getLiveStatus(eq(previous), any())).thenReturn(fromGateway);
+        when(appProperties.getMessageBrokerEnabled()).thenReturn(true);
+        when(appProperties.getUpdateTxnTopic()).thenReturn("topic-update");
+
+        List<Transaction> result = transactionService.updateTransaction(Map.of("transactionId", "TXN-5"), "pb", "client-c");
+
+        assertThat(result).singleElement().isSameAs(fromGateway);
+        assertThat(fromGateway.getTxnStatus()).isEqualTo(Transaction.TxnStatusEnum.SUCCESS);
+        assertThat(fromGateway.getTxnStatusMsg()).isEqualTo(PgConstants.TXN_SUCCESS);
+        verify(enrichmentService).enrichUpdateTransaction(previous, fromGateway, "client-c");
+        verify(paymentsService).registerPayment(fromGateway, "pb", "client-c");
+        verify(producer).push("topic-update", fromGateway);
+    }
+
+    @Test
+    void shouldGenerateReceipt_previousAlreadySuccessfulWithReceipt_returnsFalse() {
+        Transaction previous = baseTransaction("10", Transaction.TxnStatusEnum.SUCCESS);
+        previous.setReceipt("PT-REC-1");
+        Transaction latest = baseTransaction("10", Transaction.TxnStatusEnum.SUCCESS);
+
+        boolean shouldGenerate = transactionService.shouldGenerateReceipt(previous, latest);
+
+        assertThat(shouldGenerate).isFalse();
+    }
+
+    @Test
+    void shouldGenerateReceipt_amountMismatch_marksFailure() {
+        Transaction previous = baseTransaction("100", Transaction.TxnStatusEnum.PENDING);
+        Transaction latest = baseTransaction("90", Transaction.TxnStatusEnum.SUCCESS);
+
+        boolean shouldGenerate = transactionService.shouldGenerateReceipt(previous, latest);
+
+        assertThat(shouldGenerate).isFalse();
+        assertThat(latest.getTxnStatus()).isEqualTo(Transaction.TxnStatusEnum.FAILURE);
+        assertThat(latest.getTxnStatusMsg()).isEqualTo(PgConstants.TXN_FAILURE_AMT_MISMATCH);
+    }
+
+    @Test
+    void shouldGenerateReceipt_gatewayFailure_marksFailure() {
+        Transaction previous = baseTransaction("100", Transaction.TxnStatusEnum.PENDING);
+        Transaction latest = baseTransaction("100", Transaction.TxnStatusEnum.FAILURE);
+
+        boolean shouldGenerate = transactionService.shouldGenerateReceipt(previous, latest);
+
+        assertThat(shouldGenerate).isFalse();
+        assertThat(latest.getTxnStatusMsg()).isEqualTo(PgConstants.TXN_FAILURE_GATEWAY);
+    }
+
+    @Test
+    void skipGateway_zeroAndNonZeroAmount_returnsExpectedFlag() {
+        assertThat(transactionService.skipGateway(baseTransaction("0.00", Transaction.TxnStatusEnum.PENDING))).isTrue();
+        assertThat(transactionService.skipGateway(baseTransaction("1", Transaction.TxnStatusEnum.PENDING))).isFalse();
+    }
+
+    private Transaction baseTransaction(String amount, Transaction.TxnStatusEnum status) {
+        TaxAndPayment tax = TaxAndPayment.builder()
+                .amountPaid(new BigDecimal(amount))
+                .taxAmount(new BigDecimal(amount))
+                .billId("B1")
+                .build();
+
+        User user = User.builder()
                 .tenantId("pb")
-                .billId("ORDER0012")
-                .productInfo("Property Tax Payment")
-                .gateway("ABCD123")
+                .name("Test User")
+                .mobileNumber("9999999999")
+                .uuid("uuid-1")
+                .userName("user-1")
                 .build();
-        TransactionCriteria criteria = TransactionCriteria.builder().tenantId("pb").txnId("PT_001").build();
 
-        when(transactionRepository.fetchTransactions(criteria)).thenReturn(Collections.singletonList(txn));
-        assertEquals(1, transactionService.getTransactions(criteria).size());
-
-        when(transactionRepository.fetchTransactions(criteria)).thenReturn(Collections.emptyList());
-        assertEquals(0, transactionService.getTransactions(criteria).size());
-    }
-
-    /**
-     * DB error occurs while running fetch
-     */
-    @Test(expected = CustomException.class)
-    public void getTransactionsFailTest(){
-        TransactionCriteria criteria = TransactionCriteria.builder().tenantId("pb").txnId("PT_001").build();
-        when(transactionRepository.fetchTransactions(criteria)).thenThrow(new TransientDataAccessResourceException("test"));
-
-        transactionService.getTransactions(criteria);
-    }
-
-    @Test
-    public void updateTransactionSuccessTest() {
-
-        Transaction txnStatus = Transaction.builder().txnId("PT_001")
-                .txnAmount("100")
-                .billId("ORDER0012")
-                .txnStatus(Transaction.TxnStatusEnum.PENDING)
-                .productInfo("Property Tax Payment")
+        return Transaction.builder()
+                .tenantId("pb")
+                .txnAmount(amount)
+                .billId("B1")
+                .module("PT")
+                .consumerCode("PT-1")
+                .taxAndPayments(Collections.singletonList(tax))
+                .productInfo("Property Tax")
                 .gateway("PAYTM")
+                .callbackUrl("https://callback")
+                .user(user)
+                .txnStatus(status)
                 .build();
-
-        Transaction finalTxnStatus = Transaction.builder().txnId("PT_001")
-                .txnAmount("100.00")
-                .billId("ORDER0012")
-                .txnStatus(Transaction.TxnStatusEnum.SUCCESS)
-                .productInfo("Property Tax Payment")
-                .gateway("PAYTM")
-                .build();
-
-        when(validator.validateUpdateTxn(any(Map.class))).thenReturn(txnStatus);
-        when(validator.skipGateway(any(Transaction.class))).thenReturn(false);
-        when(validator.shouldGenerateReceipt(any(Transaction.class), any(Transaction.class))).thenReturn(true);
-        when(gatewayService.getLiveStatus(txnStatus, Collections.singletonMap("ORDERID", "PT_001"))).thenReturn(finalTxnStatus);
-
-
-        assertEquals(transactionService.updateTransaction(requestInfo, Collections.singletonMap
-                ("ORDERID", "PT_001")).get(0).getTxnStatus(), Transaction.TxnStatusEnum.SUCCESS);
-    }
-
-    /**
-     * Invalid transaction id key,
-     *  ex, ORDERID, specific to gateway
-     */
-    @Test(expected = CustomException.class)
-    public void updateTransactionFailTest(){
-
-        when(validator.validateUpdateTxn(any(Map.class))).thenThrow(new CustomException("MISSING_TXN_ID", "Cannot process request, missing transaction id"));
-
-        transactionService.updateTransaction(requestInfo, Collections.singletonMap("abc", "PT_001"));
-
-    }
-
-    /**
-     * No record of the Transaction exists in DB
-     */
-    @Test(expected = CustomException.class)
-    public void updateTransactionInvalidTxnIdTest() {
-
-        when(validator.validateUpdateTxn(any(Map.class))).thenThrow(new CustomException("TXN_NOT_FOUND", "Transaction not found"));
-
-        transactionService.updateTransaction(requestInfo, Collections.singletonMap("abc", "PT_001"));
     }
 }

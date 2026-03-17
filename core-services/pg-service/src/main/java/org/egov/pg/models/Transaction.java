@@ -27,9 +27,7 @@ import java.util.Map;
 public class Transaction {
 
 	//@SafeHtml
-	@JsonProperty("tenantId")
-	@NotNull
-	@Size(min = 2, max = 50)
+	@JsonProperty(value = "tenantId", access = JsonProperty.Access.READ_ONLY)
 	private String tenantId;
 
 	/**

@@ -1,0 +1,202 @@
+{
+	"info": {
+		"_postman_id": "fd1a5377-8db7-4b90-ac84-2cdd2d9cf17e",
+		"name": "PaymentGateway-3.0",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "32125612"
+	},
+	"item": [
+		{
+			"name": "Initiate Transaction",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "X-Tenant-ID",
+						"value": "pg",
+						"type": "text"
+					},
+					{
+						"key": "X-Client-ID",
+						"value": "initiate-txn",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"Transaction\": {\n        \"txnAmount\": \"100.00\",\n        \"billId\": \"a5558f16-23d9-4959-8533-fbd11fb1b148\",\n        \"module\": \"PT\",\n        \"consumerCode\": \"PG-PT-0100\",\n        \"taxAndPayments\": [\n            {\n                \"billId\": \"a5558f16-23d9-4959-8533-fbd11fb1b148\",\n                \"taxAmount\": 100.0,\n                \"amountPaid\": 100.0\n            }\n        ],\n        \"productInfo\": \"Property Tax Payment\",\n        \"gateway\": \"AXIS\",\n        \"callbackUrl\": \"https://my-app.example.org/payment/callback\",\n        \"user\": {\n            \"uuid\": \"8d2a34df-7f65-4b9b-bf5e-cf0d2a23fb9b\",\n            \"name\": \"Test Citizen\",\n            \"userName\": \"test.citizen\",\n            \"mobileNumber\": \"+919999999999\",\n            \"emailId\": \"test@example.org\",\n            \"tenantId\": \"pb\"\n        }\n    }\n}"
+				},
+				"url": {
+					"raw": "http://localhost:9000/pg-service/transaction/v3/_create",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9000",
+					"path": [
+						"pg-service",
+						"transaction",
+						"v3",
+						"_create"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Update Transaction",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "X-Client-ID",
+						"value": "update-txn",
+						"type": "text"
+					},
+					{
+						"key": "X-Tenant-ID",
+						"value": "pg",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": ""
+				},
+				"url": {
+					"raw": "http://localhost:9000/pg-service/transaction/v3/_update?transactionId=pg-PG-2026-03-17-0008-IX",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9000",
+					"path": [
+						"pg-service",
+						"transaction",
+						"v3",
+						"_update"
+					],
+					"query": [
+						{
+							"key": "transactionId",
+							"value": "pg-PG-2026-03-17-0008-IX"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Search Transactions",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "X-Tenant-ID",
+						"value": "pg",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": ""
+				},
+				"url": {
+					"raw": "http://localhost:9000/pg-service/transaction/v3/_search?txnId=pg-PG-2026-03-17-0008-IX&billId=a5558f16-23d9-4959-8533-fbd11fb1b148&userUuid=8d2a34df-7f65-4b9b-bf5e-cf0d2a23fb9b&receipt=&consumerCode=PG-PT-0100&txnStatus=PENDING",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9000",
+					"path": [
+						"pg-service",
+						"transaction",
+						"v3",
+						"_search"
+					],
+					"query": [
+						{
+							"key": "txnId",
+							"value": "pg-PG-2026-03-17-0008-IX"
+						},
+						{
+							"key": "billId",
+							"value": "a5558f16-23d9-4959-8533-fbd11fb1b148"
+						},
+						{
+							"key": "userUuid",
+							"value": "8d2a34df-7f65-4b9b-bf5e-cf0d2a23fb9b"
+						},
+						{
+							"key": "receipt",
+							"value": ""
+						},
+						{
+							"key": "consumerCode",
+							"value": "PG-PT-0100"
+						},
+						{
+							"key": "txnStatus",
+							"value": "PENDING"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Available Gateways",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "X-Tenant-ID",
+						"value": "pg",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": ""
+				},
+				"url": {
+					"raw": "http://localhost:9000/pg-service/gateway/v3/_search",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9000",
+					"path": [
+						"pg-service",
+						"gateway",
+						"v3",
+						"_search"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

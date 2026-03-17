@@ -84,13 +84,13 @@ public class AppProperties {
 
 		// Registry Configuration
 		this.registryHost = environment.getRequiredProperty("registry.host");
-		this.registryDataSearchPath = environment.getRequiredProperty("individual.create.path");
-		this.registryBankAccountSchema = environment.getRequiredProperty("individual.search.path");
+		this.registryDataSearchPath = environment.getRequiredProperty("registry.data.search.path");
+		this.registryBankAccountSchema = environment.getRequiredProperty("registry.bank.account.schema");
 
 		// Individual Configuration
 		this.individualHost = environment.getRequiredProperty("individual.host");
-		this.individualCreatePath = environment.getRequiredProperty("registry.data.search.path");
-		this.individualSearchPath = environment.getRequiredProperty("registry.bank.account.schema");
+		this.individualCreatePath = environment.getRequiredProperty("individual.create.path");
+		this.individualSearchPath = environment.getRequiredProperty("individual.search.path");
 		this.isUserCreationEnable = Boolean.valueOf(environment.getRequiredProperty("pg.is.user.create.enabled"));
 
 		// Billing Configuration

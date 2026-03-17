@@ -1,33 +1,81 @@
 # Local Setup
 
-To setup the egov-pg-serivce in your local system, clone the [Core Service repository](https://github.com/egovernments/core-services).
+This guide helps you run `pg-service` locally with minimum required dependencies.
 
-## Dependencies
+## Prerequisites
 
-### Infra Dependency
+- Java 17
+- Maven 3.8+
+- Postgres DB
 
-- [X] Postgres DB
-- [ ] Redis
-- [X] Elastic search
-- [X] Kafka
-  - [ ] Consumer
-  - [X] Producer
+Optional (only when messaging broker is enabled):
 
-## Running Locally
+- Redis/Kafka
 
-To run the egov-pg-serivce locally, you need to port forward below services in your local system
+## 1) Start infrastructure
 
-```bash
-function kgpt(){kubectl get pods -n egov --selector=app=$1 --no-headers=true | head -n1 | awk '{print $1}'}
-kubectl port-forward -n egov $(kgpt egov-idgen) 8084:8080 &
-kubectl port-forward -n egov $(kgpt collection-services) 8085:8080 &
-kubectl port-forward -n egov $(kgpt egf-master) 8086:8080
-```
+Clone the [Digit-Core repository](https://github.com/egovernments/Digit-Core).
 
-To run the egov-pg-serivce locally, update below listed properties in `application.properties` prior to running the project:
+## 2) Start infrastructure
+
+Start PostgreSQL locally and ensure the credentials in `src/main/resources/application.properties` are valid.
+
+Default properties already present:
 
 ```ini
-egov.idgen.host = http://localhost:8084
-egov.collectionservice.host = http://localhost:8085
-egov.bankaccountservice.host = http://localhost:8086
+spring.datasource.url=jdbc:otel:postgresql://localhost:5432/postgres
+spring.datasource.username=postgres
+spring.datasource.password=postgres
+
+spring.flyway.url=jdbc:postgresql://localhost:5432/postgres
+spring.flyway.user=postgres
+spring.flyway.password=postgres
 ```
+
+## 2) Configure dependent services
+
+By default, service clients point to local endpoints:
+
+```ini
+idgen.host=http://localhost:8100/
+billing.host=http://localhost:
+registry.host=http://localhost:8085/
+individual.host=http://localhost:8999/
+```
+
+Update these hosts/ports as per your running environment.
+
+## 3) Configure gateway flags for local testing
+
+At least one gateway should be active for non-zero amount transactions:
+
+```ini
+axis.active=true
+paytm.active=false
+phonepe.active=false
+payu.active=true
+```
+
+> For zero amount transactions (`txnAmount=0`), gateway redirect is skipped.
+
+## 4) Run the service
+
+From `pg-service` folder:
+
+```bash
+mvn clean spring-boot:run
+```
+
+Service starts at:
+
+- `http://localhost:9000/pg-service`
+
+## 5) Verify APIs quickly
+
+Use the updated postman collection at:
+
+- `postman/PaymentGateway-3.0.postman_collection.json`
+
+Or call directly:
+
+- `GET http://localhost:9000/pg-service/gateway/v3/_search`

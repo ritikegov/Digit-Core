@@ -1,5 +1,7 @@
 package org.egov.pg.repository;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.pg.models.Transaction;
 import org.egov.pg.models.TransactionDump;
@@ -36,9 +38,11 @@ public class TransactionRepository {
 			"WHERE txn_id=?";
 
 	private final JdbcTemplate jdbcTemplate;
+	private final ObjectMapper objectMapper;
 
-	public TransactionRepository(JdbcTemplate jdbcTemplate) {
+	public TransactionRepository(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
 		this.jdbcTemplate = jdbcTemplate;
+		this.objectMapper = objectMapper;
 	}
 
 	public void saveTransaction(Transaction txn) {
@@ -102,7 +106,7 @@ public class TransactionRepository {
 			jdbcTemplate.update(INSERT_TXN_DUMP,
 					dump.getTxnId(),
 					dump.getTxnRequest(),
-					dump.getTxnResponse() != null ? dump.getTxnResponse().toString() : null,
+					toJson(dump.getTxnResponse()),
 					dump.getAuditDetails().getCreatedBy(),
 					dump.getAuditDetails().getCreatedTime(),
 					dump.getAuditDetails().getLastModifiedBy(),
@@ -117,7 +121,7 @@ public class TransactionRepository {
 	public void updateTransactionDump(TransactionDump dump) {
 		try {
 			jdbcTemplate.update(UPDATE_TXN_DUMP,
-					dump.getTxnResponse() != null ? dump.getTxnResponse().toString() : null,
+					toJson(dump.getTxnResponse()),
 					dump.getAuditDetails().getLastModifiedBy(),
 					dump.getAuditDetails().getLastModifiedTime(),
 					dump.getTxnId()
@@ -141,5 +145,14 @@ public class TransactionRepository {
 		String query = TransactionQueryBuilder.getPaymentSearchQueryByCreatedTimeRange(transactionCriteria, startTime, endTime, params);
 		log.debug(query);
 		return jdbcTemplate.query(query, params.toArray(), rowMapper);
+	}
+
+	private String toJson(Object obj) {
+		try {
+			return obj != null ? objectMapper.writeValueAsString(obj) : null;
+		} catch (JsonProcessingException e) {
+			throw new CustomException("JSON_SERIALIZATION_ERROR",
+					"Failed to serialize object: " + e.getMessage());
+		}
 	}
 }
