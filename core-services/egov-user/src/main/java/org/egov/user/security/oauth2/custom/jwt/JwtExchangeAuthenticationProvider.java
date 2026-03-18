@@ -43,6 +43,7 @@ import java.util.stream.Collectors;
 
 import static java.util.Objects.isNull;
 import static java.util.Objects.requireNonNull;
+import static org.egov.user.config.UserServiceConstants.SYSTEM_USER_ID;
 import static org.springframework.util.StringUtils.isEmpty;
 
 /**
@@ -174,20 +175,25 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
     @Override
     public Authentication authenticate(Authentication authentication) {
         JwtExchangeInput input = extractJwtExchangeInput(authentication);
-        OidcValidatedJwt jwt = jwtValidationService.validate(input.token, input.tenantId);
-
-        validateRequiredParams(jwt, input.tenantId);
         
-        // TOKEN REPLAY PROTECTION
-        validateTokenReplay(jwt, input.tenantId);
+        try {
+            OidcValidatedJwt jwt = jwtValidationService.validate(input.token, input.tenantId);
 
-        ProviderAndMfa providerAndMfa = resolveProviderAndMfa(jwt, input.tenantId);
+            validateRequiredParams(jwt, input.tenantId);
+            
+            // TOKEN REPLAY PROTECTION
+            validateTokenReplay(jwt, input.tenantId);
 
-        UserAndRequestInfo userAndRequestInfo = findOrCreateUser(jwt, providerAndMfa.provider,
-                providerAndMfa.mfaDetails, input.tenantId);
-        User user = ensureAccountEligible(userAndRequestInfo.user, userAndRequestInfo.requestInfo);
+            ProviderAndMfa providerAndMfa = resolveProviderAndMfa(jwt, input.tenantId);
 
-        return buildSuccessAuthentication(user, providerAndMfa.provider);
+            UserAndRequestInfo userAndRequestInfo = findOrCreateUser(jwt, providerAndMfa.provider,
+                    providerAndMfa.mfaDetails, input.tenantId);
+            User user = ensureAccountEligible(userAndRequestInfo.user, userAndRequestInfo.requestInfo);
+
+            return buildSuccessAuthentication(user, providerAndMfa.provider);
+        } catch (org.egov.user.domain.exception.sso.IdpJwtValidationException e) {
+            throw new OAuth2AuthenticationException(new OAuth2Error("invalid_token", e.getMessage(), null));
+        }
     }
 
     /**
@@ -211,6 +217,17 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
             JwtExchangeAuthenticationToken jwtToken = (JwtExchangeAuthenticationToken) authentication;
             tenantId = jwtToken.getTenantId();
         }
+        
+        // Validate token is not null or empty
+        if (token == null || token.trim().isEmpty()) {
+            throw new OAuth2AuthenticationException(new OAuth2Error("invalid_token", "Token cannot be null or empty", null));
+        }
+        
+        // Validate token size to prevent DoS attacks (max 10KB)
+        if (token.length() > 10240) {
+            throw new OAuth2AuthenticationException(new OAuth2Error("invalid_token", "Token size exceeds maximum allowed limit", null));
+        }
+        
         return new JwtExchangeInput(token, tenantId);
     }
 
@@ -583,7 +600,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
         }
 
         org.egov.common.contract.request.User userInfo = org.egov.common.contract.request.User.builder().uuid(userUuid)
-                .type(userType).roles(contract_roles).id(97L).build();
+                .type(userType).roles(contract_roles).id(SYSTEM_USER_ID).build();
         return RequestInfo.builder().userInfo(userInfo).build();
     }
 
@@ -607,7 +624,9 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
             }
         }
 
-        String username = jwt.getClaims().get("unique_name").toString(); // Use unique_name which has the email
+        String username = jwt.getClaims().get("unique_name") != null ? 
+            jwt.getClaims().get("unique_name").toString() : 
+            jwt.getPreferredUsername(); // Use unique_name which has the email, fallback to preferred_username
         return org.egov.user.domain.model.hrms.User.builder()
                 .uuid(jwt.getExternalUserId())
                 .emailId(username)
@@ -684,7 +703,9 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
                 .idpSubject(jwt.getSubject())
                 .idpIssuer(jwt.getIssuer())
                 .name(jwt.getName())
-                .emailId(jwt.getClaims().get("unique_name").toString()) // Use unique_name which has the email
+                .emailId(jwt.getClaims().get("unique_name") != null ? 
+                    jwt.getClaims().get("unique_name").toString() : 
+                    jwt.getPreferredUsername()) // Use unique_name which has the email, fallback to preferred_username
                 .roles(toDomainRoles(jwt.getRoles(), user.getTenantId()))
                 .createdBy(user.getCreatedBy())
                 .lastModifiedBy(user.getId())

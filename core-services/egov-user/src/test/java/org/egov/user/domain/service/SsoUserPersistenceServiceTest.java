@@ -238,7 +238,7 @@ public class SsoUserPersistenceServiceTest {
 
         // Assert
         assertFalse(result);
-        verify(userIdpDetailsRepository, never()).isTokenReplay(anyString(), anyString());
+        verify(userIdpDetailsRepository).isTokenReplay(eq(null), eq(TENANT_ID));
     }
 
     @Test
@@ -248,7 +248,7 @@ public class SsoUserPersistenceServiceTest {
 
         // Assert
         assertFalse(result);
-        verify(userIdpDetailsRepository, never()).isTokenReplay(anyString(), anyString());
+        verify(userIdpDetailsRepository).isTokenReplay(eq(""), eq(TENANT_ID));
     }
 
     @Test

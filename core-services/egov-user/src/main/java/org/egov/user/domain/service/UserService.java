@@ -78,6 +78,9 @@ public class UserService {
     @Value("${egov.user.pwd.pattern}")
     private String pwdRegex;
 
+    @Value("${egov.user.oauth.client.basic.auth:ZWdvdi11c2VyLWNsaWVudDo=}")
+    private String oauthClientBasicAuth;
+
     @Value("${egov.user.pwd.pattern.min.length}")
     private Integer pwdMinLength;
 
@@ -284,7 +287,7 @@ public class UserService {
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-            headers.set("Authorization", "Basic ZWdvdi11c2VyLWNsaWVudDo=");
+            headers.set("Authorization", "Basic " + oauthClientBasicAuth);
             MultiValueMap<String, String> map = new LinkedMultiValueMap<>();
             map.add("username", user.getUsername());
             if (!isEmpty(password))

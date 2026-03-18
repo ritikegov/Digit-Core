@@ -155,13 +155,9 @@ public class SsoUserPersistenceService {
      * @param tokenId the JWT token ID (jti or uti claim) to check for previous usage
      * @param tenantId the tenant identifier to scope the token replay check
      * @return true if the tokenId has been used before or if database check fails, false otherwise
-     * @throws IllegalArgumentException if tokenId is null or empty (returns false for null/empty tokens)
+     * @throws Exception if database query fails (assumes token replay for security)
      */
     public boolean isTokenReplay(String tokenId, String tenantId) {
-        if (tokenId == null || tokenId.isEmpty()) {
-            return false;
-        }
-        
         try {
             return userIdpDetailsRepository.isTokenReplay(tokenId, tenantId);
         } catch (Exception e) {

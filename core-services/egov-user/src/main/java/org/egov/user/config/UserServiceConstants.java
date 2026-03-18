@@ -72,5 +72,7 @@ public class UserServiceConstants {
 
     public static final String INVALID_TENANT_ID_ERR_CODE = "INVALID_TENANT_ID";
     
+    public static final Long SYSTEM_USER_ID = 97L;
+    
 }
 

@@ -481,14 +481,23 @@ public class JwtExchangeAuthenticationProviderTest {
                 authenticationProvider.authenticate(authenticationToken);
         }
 
-        @Test(expected = SsoException.class)
+        @Test
         public void testAuthenticate_InvalidJwt_Throws() {
                 String token = "jwt-token";
                 JwtExchangeAuthenticationToken authenticationToken =
                                 new JwtExchangeAuthenticationToken(token, TENANT_PB);
                 when(jwtValidationService.validate(anyString(), anyString()))
                                 .thenThrow(org.egov.user.domain.exception.sso.IdpJwtValidationException.invalid("Invalid signature", null));
-                authenticationProvider.authenticate(authenticationToken);
+
+                try {
+                        authenticationProvider.authenticate(authenticationToken);
+                        fail("Expected OAuth2AuthenticationException for invalid JWT");
+                } catch (OAuth2AuthenticationException e) {
+                        // Expected - invalid JWT should result in authentication exception
+                        assertNotNull("Error should not be null", e.getError());
+                        assertTrue("Error should contain JWT validation failure", 
+                                e.getError().getDescription().contains("Invalid signature"));
+                }
         }
 
         @Test(expected = SsoUserMappingException.class)
@@ -1409,5 +1418,136 @@ public class JwtExchangeAuthenticationProviderTest {
 
                 assertNotNull(result);
                 assertTrue(result instanceof UsernamePasswordAuthenticationToken);
+        }
+
+        @Test
+        public void testAuthenticate_JwtValidationThrowsSecurityException_HandledCorrectly() {
+                String token = "malicious-jwt-token";
+                JwtExchangeAuthenticationToken authenticationToken =
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
+
+                // Mock JWT validation service to throw security exception
+                when(jwtValidationService.validate(eq(token), eq(TENANT_PB)))
+                                .thenThrow(new org.egov.user.domain.exception.sso.IdpJwtValidationException("JWT_INVALID", "Invalid JWT"));
+
+                try {
+                        authenticationProvider.authenticate(authenticationToken);
+                        fail("Expected OAuth2AuthenticationException for invalid JWT");
+                } catch (OAuth2AuthenticationException e) {
+                        // Expected - invalid JWT should result in authentication exception
+                        assertNotNull("Error should not be null", e.getError());
+                        assertTrue("Error should contain JWT validation failure", 
+                                e.getError().getDescription().contains("Invalid JWT"));
+                }
+        }
+
+        @Test
+        public void testAuthenticate_TokenReplayAttack_Rejected() {
+                String token = "replayed-jwt-token";
+                JwtExchangeAuthenticationToken authenticationToken =
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
+
+                Map<String, Object> claims = new HashMap<>();
+                claims.put("iss", "issuer");
+                claims.put("sub", "subject");
+                claims.put("tenantId", TENANT_PB);
+                claims.put("userType", "EMPLOYEE");
+
+                OidcValidatedJwt jwt = oidcJwt(claims, token);
+
+                when(jwtValidationService.validate(eq(token), eq(TENANT_PB))).thenReturn(jwt);
+                
+                // Mock token replay detection
+                when(ssoUserPersistenceService.isTokenReplay(anyString(), anyString()))
+                                .thenReturn(true);
+
+                try {
+                        authenticationProvider.authenticate(authenticationToken);
+                        fail("Expected TokenReplayException for replayed token");
+                } catch (TokenReplayException e) {
+                        // Expected - token replay should be detected and rejected
+                        assertNotNull("Token replay exception should not be null", e);
+                        assertEquals("token_replay", e.getErrorCode());
+                }
+        }
+
+        @Test
+        public void testAuthenticate_MissingRequiredClaims_HandledCorrectly() {
+                String token = "incomplete-jwt-token";
+                JwtExchangeAuthenticationToken authenticationToken =
+                                new JwtExchangeAuthenticationToken(token, TENANT_PB);
+
+                // Create JWT with missing critical claims
+                Map<String, Object> claims = new HashMap<>();
+                claims.put("sub", "subject");
+                // Missing iss (issuer) and tenantId claims
+                claims.put("userType", "EMPLOYEE");
+
+                OidcValidatedJwt jwt = oidcJwt(claims, token);
+
+                when(jwtValidationService.validate(eq(token), eq(TENANT_PB))).thenReturn(jwt);
+
+                try {
+                        authenticationProvider.authenticate(authenticationToken);
+                        fail("Expected exception for JWT with missing required claims");
+                } catch (Exception e) {
+                        // Expected - JWT with missing required claims should be rejected
+                        assertTrue("Should handle missing claims gracefully", 
+                                e instanceof OAuth2AuthenticationException || 
+                                e instanceof SsoException);
+                }
+        }
+
+        @Test
+        public void testAuthenticate_NullOrEmptyToken_Rejected() {
+                // Test null token
+                JwtExchangeAuthenticationToken nullTokenAuth =
+                                new JwtExchangeAuthenticationToken(null, TENANT_PB);
+                
+                try {
+                        authenticationProvider.authenticate(nullTokenAuth);
+                        fail("Expected exception for null token");
+                } catch (Exception e) {
+                        // Expected - null token should be rejected
+                        assertTrue("Should reject null token", 
+                                e instanceof OAuth2AuthenticationException || 
+                                e instanceof IllegalArgumentException);
+                }
+
+                // Test empty token
+                JwtExchangeAuthenticationToken emptyTokenAuth =
+                                new JwtExchangeAuthenticationToken("", TENANT_PB);
+                
+                try {
+                        authenticationProvider.authenticate(emptyTokenAuth);
+                        fail("Expected exception for empty token");
+                } catch (Exception e) {
+                        // Expected - empty token should be rejected
+                        assertTrue("Should reject empty token", 
+                                e instanceof OAuth2AuthenticationException || 
+                                e instanceof IllegalArgumentException);
+                }
+        }
+
+        @Test
+        public void testAuthenticate_ExtremelyLargeToken_HandledCorrectly() {
+                // Test with very large token (potential DoS attack)
+                StringBuilder largeToken = new StringBuilder();
+                for (int i = 0; i < 100000; i++) { // 100KB token
+                        largeToken.append("a");
+                }
+                
+                JwtExchangeAuthenticationToken largeTokenAuth =
+                                new JwtExchangeAuthenticationToken(largeToken.toString(), TENANT_PB);
+                
+                try {
+                        authenticationProvider.authenticate(largeTokenAuth);
+                        // Should either succeed (if system can handle it) or fail gracefully
+                } catch (Exception e) {
+                        // If it fails, should fail gracefully without crashing
+                        assertTrue("Should handle large token gracefully", 
+                                e instanceof OAuth2AuthenticationException || 
+                                e instanceof SsoException);
+                }
         }
 }

@@ -23,7 +23,7 @@ ALTER TABLE eg_user
 ALTER TABLE eg_user_audit_table
     ADD COLUMN IF NOT EXISTS idpissuer    character varying(512),
     ADD COLUMN IF NOT EXISTS idpsubject   character varying(512),
-    ADD COLUMN IF NOT EXISTS authprovider character varying(64);
+    ADD COLUMN IF NOT EXISTS authprovider character varying(64) DEFAULT 'LOCAL';
 
 
 -- =====================================================
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS eg_user_idp_details (
     lastssologinat    timestamp,
     tokenid           character varying(128),
 
-    mfaenabled        boolean   DEFAULT FALSE   NOT NULL,
+    mfaenabled        boolean   DEFAULT NULL,
     mfadevicename     character varying(256),
     mfaphonelast4     character varying(4),
     mfaregisteredon   timestamp,
@@ -100,7 +100,7 @@ CREATE TABLE IF NOT EXISTS eg_user_idp_details_audit_table (
     lastssologinat    timestamp,
     tokenid           character varying(128),
 
-    mfaenabled        boolean DEFAULT FALSE,
+    mfaenabled        boolean DEFAULT NULL,
     mfadevicename     character varying(256),
     mfaphonelast4     character varying(4),
     mfaregisteredon   timestamp,
