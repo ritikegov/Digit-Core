@@ -133,11 +133,14 @@ public class CustomAuthenticationProvider implements AuthenticationProvider {
         // If account is locked, perform lazy unlock if eligible
 
         if (user.getAccountLocked() != null && user.getAccountLocked()) {
-
-            if (userService.isAccountUnlockAble(user)) {
-                user = unlockAccount(user, requestInfo);
-            } else
-                throw new OAuth2Exception("Account locked");
+            if (userService.isLoginAttemptTrackingEnabled()) {
+                if (userService.isAccountUnlockAble(user)) {
+                    user = unlockAccount(user, requestInfo);
+                } else
+                    throw new OAuth2Exception("Account locked");
+            } else {
+                log.info("Login attempt tracking is disabled, skipping account lock check for user: {}", user.getUuid());
+            }
         }
 
 

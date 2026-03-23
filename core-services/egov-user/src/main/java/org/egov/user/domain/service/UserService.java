@@ -89,6 +89,9 @@ public class UserService {
     @Value("${max.invalid.login.attempts}")
     private Long maxInvalidLoginAttempts;
 
+    @Value("${login.attempt.tracking.enabled:true}")
+    private boolean loginAttemptTrackingEnabled;
+
 
     @Value("${egov.user.pwd.pattern}")
     private String pwdRegex;
@@ -512,6 +515,10 @@ public class UserService {
      * @param user whose failed login attempts are to be reset
      */
     public void resetFailedLoginAttempts(User user) {
+        if (!loginAttemptTrackingEnabled) {
+            log.info("Login attempt tracking is disabled, skipping reset of failed login attempts");
+            return;
+        }
         if (user.getUuid() != null)
             userRepository.resetFailedLoginAttemptsForUser(user.getUuid());
     }
@@ -525,6 +532,10 @@ public class UserService {
      * @param user to be checked for eligibility for unlock
      * @return if unlock able
      */
+    public boolean isLoginAttemptTrackingEnabled() {
+        return loginAttemptTrackingEnabled;
+    }
+
     public boolean isAccountUnlockAble(User user) {
         if (user.getAccountLocked()) {
             boolean unlockAble =
@@ -550,6 +561,10 @@ public class UserService {
      * @param ipAddress IP address of remote
      */
     public void handleFailedLogin(User user, String ipAddress, RequestInfo requestInfo) {
+        if (!loginAttemptTrackingEnabled) {
+            log.info("Login attempt tracking is disabled, skipping failed login handling");
+            return;
+        }
         if (!Objects.isNull(user.getUuid())) {
             List<FailedLoginAttempt> failedLoginAttempts =
                     userRepository.fetchFailedAttemptsByUserAndTime(user.getUuid(),
