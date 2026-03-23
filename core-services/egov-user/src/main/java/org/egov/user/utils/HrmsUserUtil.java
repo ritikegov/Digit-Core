@@ -356,11 +356,8 @@ public class HrmsUserUtil {
                         // Validate response - handle business validation separately
                         if (response == null || CollectionUtils.isEmpty(response.getEmployees())) {
                                 log.error("Failed to create employee in HRMS for user: {} - null or empty response", user.getName());
-                                publishHrmsCreationErrorToDlq(user, tenantId, employeeType, designation,
-                                        department, jwt, HRMS_ERROR_EVENT_CODE,
-                                        "HRMS employee creation failed: null or empty response");
                                 throw new CustomException(CUSTOM_EXCEPTION_EMPLOYEE_CREATION_FAILED,
-                                        HRMS_ERROR_EVENT_MESSAGE);
+                                        "HRMS employee creation failed: null or empty response");
                         }
 
                         Employee createdEmployee = response.getEmployees().get(0);

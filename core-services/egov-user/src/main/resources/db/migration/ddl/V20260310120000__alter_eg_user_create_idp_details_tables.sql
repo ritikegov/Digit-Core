@@ -76,15 +76,17 @@ ALTER TABLE eg_user_idp_details
     ADD CONSTRAINT IF NOT EXISTS eg_user_idp_details_tokenid_tenantid_key
         UNIQUE (tokenid, tenantid);
 
--- Create index for better performance on token replay checks
-CREATE INDEX IF NOT EXISTS idx_eg_user_idp_details_tokenid_tenantid 
-    ON eg_user_idp_details (tokenid, tenantid) 
-    WHERE tokenid IS NOT NULL;
-
 -- Add check constraint to ensure tokenId is not empty when present
 ALTER TABLE eg_user_idp_details
     ADD CONSTRAINT IF NOT EXISTS eg_user_idp_details_tokenid_not_empty 
         CHECK (tokenid IS NULL OR length(trim(tokenid)) > 0);
+
+ALTER TABLE eg_user_idp_details
+    ADD CONSTRAINT IF NOT EXISTS eg_user_idp_details_tokenid_required_for_active_sessions
+    CHECK (
+    (lastssologinat IS NULL AND tokenid IS NULL) OR
+    (lastssologinat IS NOT NULL AND tokenid IS NOT NULL)
+    );
 
 
 -- =====================================================
