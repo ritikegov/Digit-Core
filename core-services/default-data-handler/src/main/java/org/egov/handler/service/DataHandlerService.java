@@ -55,6 +55,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StreamUtils;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -454,7 +455,8 @@ public class DataHandlerService {
 
                     HttpEntity<JsonNode> entity = new HttpEntity<>(payload, headers);
 
-                    restTemplate.postForObject(hierarchyRelationshipCreateUri, entity, Object.class);
+                    createRelationshipWithRetry(payload, entity, hierarchyRelationshipCreateUri);
+                   
 
                     log.info("Created boundary relationship entry for tenant: {}", targetTenantId);
                 } catch (Exception ex) {
@@ -527,6 +529,30 @@ public class DataHandlerService {
 	    JsonNode boundaries = response.getBody().path("Boundary");
 
 	    return boundaries.isArray() && boundaries.size() > 0;
+	}
+	
+	private void createRelationshipWithRetry(JsonNode payload, HttpEntity<JsonNode> entity, String uri) {
+	    int retries = 5;
+	    int delay = 1000;
+
+	    for (int i = 1; i <= retries; i++) {
+	        try {
+	            restTemplate.postForObject(uri, entity, Object.class);
+	            return;
+	        } catch (HttpClientErrorException e) {
+	            if (e.getResponseBodyAsString().contains("PARENT_NOT_FOUND")) {
+	                log.warn("Parent not found, retrying... attempt {}", i);
+	                try {
+	                    Thread.sleep(delay);
+	                } catch (InterruptedException ie) {
+	                    Thread.currentThread().interrupt();
+	                }
+	            } else {
+	                throw e;
+	            }
+	        }
+	    }
+	    throw new RuntimeException("Failed after retries");
 	}
 
 }
