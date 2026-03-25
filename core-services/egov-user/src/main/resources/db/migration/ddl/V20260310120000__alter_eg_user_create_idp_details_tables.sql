@@ -13,7 +13,7 @@ ALTER TABLE eg_user
     ADD COLUMN IF NOT EXISTS authprovider character varying(64) DEFAULT 'LOCAL';
 
 ALTER TABLE eg_user
-    ADD CONSTRAINT IF NOT EXISTS eg_user_idpissuer_idpsubject_tenantid_key
+    ADD CONSTRAINT eg_user_idpissuer_idpsubject_tenantid_key
         UNIQUE (idpissuer, idpsubject, tenantid);
 
 
@@ -73,16 +73,16 @@ CREATE INDEX IF NOT EXISTS idx_eg_user_idp_details_uuid
 -- Add unique constraint on tokenId within tenant to prevent token replay
 -- This ensures no duplicate tokens can be inserted, solving the race condition
 ALTER TABLE eg_user_idp_details
-    ADD CONSTRAINT IF NOT EXISTS eg_user_idp_details_tokenid_tenantid_key
+    ADD CONSTRAINT eg_user_idp_details_tokenid_tenantid_key
         UNIQUE (tokenid, tenantid);
 
 -- Add check constraint to ensure tokenId is not empty when present
 ALTER TABLE eg_user_idp_details
-    ADD CONSTRAINT IF NOT EXISTS eg_user_idp_details_tokenid_not_empty 
+    ADD CONSTRAINT eg_user_idp_details_tokenid_not_empty
         CHECK (tokenid IS NULL OR length(trim(tokenid)) > 0);
 
 ALTER TABLE eg_user_idp_details
-    ADD CONSTRAINT IF NOT EXISTS eg_user_idp_details_tokenid_required_for_active_sessions
+    ADD CONSTRAINT eg_user_idp_details_tokenid_required_for_active_sessions
     CHECK (
     (lastssologinat IS NULL AND tokenid IS NULL) OR
     (lastssologinat IS NOT NULL AND tokenid IS NOT NULL)
