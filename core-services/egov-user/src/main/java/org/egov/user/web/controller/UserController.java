@@ -81,9 +81,11 @@ public class UserController {
         log.info("Received Citizen Registration Request  " + createUserRequest);
         User user = createUserRequest.toDomain(true);
 
-        // Validate mobile number using MDMS-v2
-        mobileNumberValidator.validateMobileNumber(user.getMobileNumber(), user.getTenantId(), createUserRequest.getRequestInfo());
-        mobileNumberValidator.validateMobileNumber(user.getAlternateMobileNumber(), user.getTenantId(), createUserRequest.getRequestInfo());
+        // Validate mobile number with country code using MDMS-v2
+        mobileNumberValidator.validateMobileNumberWithCountryCode(user.getMobileNumber(), user.getCountryCode(),
+                user.getTenantId(), createUserRequest.getRequestInfo());
+        mobileNumberValidator.validateMobileNumberWithCountryCode(user.getAlternateMobileNumber(), user.getCountryCode(), user.getTenantId(),
+                createUserRequest.getRequestInfo());
 
         user.setOtpValidationMandatory(IsValidationMandatory);
         if (isRegWithLoginEnabled) {
@@ -107,9 +109,11 @@ public class UserController {
 
         User user = createUserRequest.toDomain(true);
 
-        // Validate mobile number using MDMS-v2
-        mobileNumberValidator.validateMobileNumber(user.getMobileNumber(), user.getTenantId(), createUserRequest.getRequestInfo());
-        mobileNumberValidator.validateMobileNumber(user.getAlternateMobileNumber(), user.getTenantId(), createUserRequest.getRequestInfo());
+        // Validate mobile number with country code using MDMS-v2
+        mobileNumberValidator.validateMobileNumberWithCountryCode(user.getMobileNumber(), user.getCountryCode(),
+                user.getTenantId(), createUserRequest.getRequestInfo());
+        mobileNumberValidator.validateMobileNumberWithCountryCode(user.getAlternateMobileNumber(), user.getCountryCode(), user.getTenantId(),
+                createUserRequest.getRequestInfo());
 
         user.setMobileValidationMandatory(isMobileValidationRequired(headers));
         user.setOtpValidationMandatory(false);
@@ -172,9 +176,11 @@ public class UserController {
                                                       @RequestHeader HttpHeaders headers) {
         User user = createUserRequest.toDomain(false);
 
-        // Validate mobile number using MDMS-v2
-        mobileNumberValidator.validateMobileNumber(user.getMobileNumber(), user.getTenantId(), createUserRequest.getRequestInfo());
-        mobileNumberValidator.validateMobileNumber(user.getAlternateMobileNumber(), user.getTenantId(), createUserRequest.getRequestInfo());
+        // Validate mobile number with country code using MDMS-v2
+        mobileNumberValidator.validateMobileNumberWithCountryCode(user.getMobileNumber(), user.getCountryCode(),
+                user.getTenantId(), createUserRequest.getRequestInfo());
+        mobileNumberValidator.validateMobileNumberWithCountryCode(user.getAlternateMobileNumber(), user.getCountryCode(), user.getTenantId(),
+                createUserRequest.getRequestInfo());
 
         user.setMobileValidationMandatory(isMobileValidationRequired(headers));
         final User updatedUser = userService.updateWithoutOtpValidation(user, createUserRequest.getRequestInfo());
@@ -192,9 +198,11 @@ public class UserController {
         log.info("Received Profile Update Request  " + createUserRequest);
         User user = createUserRequest.toDomain(false);
 
-        // Validate mobile number using MDMS-v2
-        mobileNumberValidator.validateMobileNumber(user.getMobileNumber(), user.getTenantId(), createUserRequest.getRequestInfo());
-        mobileNumberValidator.validateMobileNumber(user.getAlternateMobileNumber(), user.getTenantId(), createUserRequest.getRequestInfo());
+        // Validate mobile number with country code using MDMS-v2
+        mobileNumberValidator.validateMobileNumberWithCountryCode(user.getMobileNumber(), user.getCountryCode(),
+                user.getTenantId(), createUserRequest.getRequestInfo());
+        mobileNumberValidator.validateMobileNumberWithCountryCode(user.getAlternateMobileNumber(), user.getCountryCode(), user.getTenantId(),
+                createUserRequest.getRequestInfo());
 
         final User updatedUser = userService.partialUpdate(user, createUserRequest.getRequestInfo());
         return createResponseforUpdate(updatedUser);
