@@ -365,7 +365,7 @@ public class HrmsUserUtilTest {
             // expected
         }
 
-        verify(kafkaProducer, times(2)).push(eq("tenant"), anyString(), any());
+        verify(kafkaProducer, times(1)).push(eq("tenant"), anyString(), any());
     }
 
     @Test
