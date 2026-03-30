@@ -1,0 +1,673 @@
+openapi: 3.0.3
+info:
+  title: Trade License Service API
+  description: DIGIT 3.0 Trade License Service for managing trade license applications
+  version: 1.0.0
+  contact:
+    name: Trade License Service
+servers:
+  - url: http://localhost:8087
+    description: Local development server
+
+security:
+  - bearerAuth: []
+
+paths:
+
+  /trade-license/create:
+    post:
+      summary: Create a new trade license application
+      operationId: createTradeLicense
+      tags: [Trade License]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TradeLicenseWrapper'
+            example:
+              tradeLicense:
+                tradeName: "Raj Electronics"
+                licenseType: "PERMANENT"
+                applicationType: "NEW"
+                structureType: "IMMOVABLE"
+                commencementDate: 1704067200000
+                validFrom: 1709251200000
+                validTo: 1740787199000
+                financialYear: "2025-26"
+                owners:
+                  - name: "Rajesh Kumar"
+                    mobileNumber: "9876543210"
+                    emailId: "rajesh@example.com"
+                    gender: "MALE"
+                    isPrimaryOwner: true
+                tradeUnits:
+                  - tradeType: "RETAIL"
+                    uom: "SQFT"
+                    uomValue: 500.0
+                    active: true
+                address:
+                  city: "Bothell"
+                  pincode: "98011"
+                documents:
+                  - documentType: "OWNER_PHOTO"
+                    fileStoreId: "abc123"
+                    active: true
+              workflow:
+                action: "APPLY"
+      responses:
+        '200':
+          description: Trade license created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TradeLicenseResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /trade-license/update:
+    post:
+      summary: Update a trade license application (workflow actions)
+      description: |
+        Used for all workflow transitions: SUBMIT_FOR_SCRUTINY, APPROVE, REJECT, PAY, CANCEL, REOPEN.
+        The applicationNumber must be provided in the tradeLicense body.
+      operationId: updateTradeLicense
+      tags: [Trade License]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TradeLicenseWrapper'
+            example:
+              tradeLicense:
+                applicationNumber: "TL-APP-20260317-0005-T8"
+                action: "APPROVE"
+              workflow:
+                action: "APPROVE"
+      responses:
+        '200':
+          description: Trade license updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TradeLicenseResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /trade-license/search:
+    get:
+      summary: Search trade license applications
+      operationId: searchTradeLicenses
+      tags: [Trade License]
+      parameters:
+        - name: applicationNumber
+          in: query
+          schema:
+            type: string
+          example: "TL-APP-20260317-0005-T8"
+        - name: mobileNumber
+          in: query
+          schema:
+            type: string
+          example: "9876543210"
+        - name: status
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          example: ["APPLIED", "PENDING_PAYMENT"]
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+        - name: sortOrder
+          in: query
+          schema:
+            type: string
+            enum: [ASC, DESC]
+            default: ASC
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TradeLicenseResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /trade-license/_calculate:
+    post:
+      summary: Calculate trade license fees (preview before submission)
+      description: Returns fee breakdown without creating an application or demand.
+      operationId: calculateFees
+      tags: [Trade License]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TradeLicenseWrapper'
+            example:
+              tradeLicense:
+                tradeName: "Raj Electronics"
+                licenseType: "PERMANENT"
+                applicationType: "NEW"
+                structureType: "IMMOVABLE"
+                tradeUnits:
+                  - tradeType: "RETAIL"
+                    uom: "SQFT"
+                    uomValue: 500.0
+                    active: true
+      responses:
+        '200':
+          description: Fee calculation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Calculation'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /tl-calculator/billingslab/_search:
+    post:
+      summary: Search billing slabs
+      operationId: searchBillingSlabs
+      tags: [Billing Slab]
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+          example: "BOTHELL"
+        - name: licenseType
+          in: query
+          schema:
+            type: string
+            enum: [PERMANENT, TEMPORARY]
+        - name: applicationType
+          in: query
+          schema:
+            type: string
+            enum: [NEW, RENEWAL]
+        - name: structureType
+          in: query
+          schema:
+            type: string
+            enum: [IMMOVABLE, MOVABLE]
+        - name: tradeType
+          in: query
+          schema:
+            type: string
+          example: "RETAIL"
+        - name: accessoryCategory
+          in: query
+          schema:
+            type: string
+          example: "SIGNBOARD"
+        - name: uom
+          in: query
+          schema:
+            type: string
+          example: "SQFT"
+        - name: uomValue
+          in: query
+          schema:
+            type: number
+          example: 500.0
+      responses:
+        '200':
+          description: Matching billing slabs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingSlabResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+
+    TradeLicenseWrapper:
+      type: object
+      required: [tradeLicense]
+      properties:
+        tradeLicense:
+          $ref: '#/components/schemas/TradeLicense'
+        workflow:
+          $ref: '#/components/schemas/Workflow'
+
+    TradeLicense:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+          description: Auto-generated UUID
+        tenantId:
+          type: string
+          readOnly: true
+          description: Resolved from JWT issuer (Keycloak realm)
+          example: "BOTHELL"
+        applicationNumber:
+          type: string
+          readOnly: true
+          example: "TL-APP-20260317-0005-T8"
+        licenseNumber:
+          type: string
+          readOnly: true
+          description: Generated after payment
+          example: "TL-LIC-2026-01023"
+        tradeName:
+          type: string
+          example: "Raj Electronics"
+        businessService:
+          type: string
+          default: "TL"
+        licenseType:
+          type: string
+          enum: [PERMANENT, TEMPORARY]
+          example: "PERMANENT"
+        applicationType:
+          type: string
+          enum: [NEW, RENEWAL]
+          example: "NEW"
+        status:
+          type: string
+          readOnly: true
+          description: Current workflow state
+          example: "APPLIED"
+        action:
+          type: string
+          description: Workflow action to apply
+          example: "APPLY"
+        applicationDate:
+          type: integer
+          format: int64
+          readOnly: true
+          description: Epoch milliseconds
+        commencementDate:
+          type: integer
+          format: int64
+          description: Epoch milliseconds
+        validFrom:
+          type: integer
+          format: int64
+          description: Epoch milliseconds
+        validTo:
+          type: integer
+          format: int64
+          description: Epoch milliseconds
+        financialYear:
+          type: string
+          example: "2025-26"
+        structureType:
+          type: string
+          enum: [IMMOVABLE, MOVABLE]
+        owners:
+          type: array
+          items:
+            $ref: '#/components/schemas/Owner'
+        tradeUnits:
+          type: array
+          items:
+            $ref: '#/components/schemas/TradeUnit'
+        accessories:
+          type: array
+          items:
+            $ref: '#/components/schemas/Accessory'
+        address:
+          $ref: '#/components/schemas/Address'
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/Document'
+        verificationDocuments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Document'
+        adhocPenalty:
+          type: number
+          format: decimal
+        adhocExemption:
+          type: number
+          format: decimal
+        billingInfo:
+          $ref: '#/components/schemas/BillingInfo'
+          readOnly: true
+
+    TradeLicenseResponse:
+      type: object
+      properties:
+        Licenses:
+          type: array
+          items:
+            $ref: '#/components/schemas/TradeLicense'
+        Count:
+          type: integer
+        TotalCount:
+          type: integer
+        Offset:
+          type: integer
+        Limit:
+          type: integer
+
+    Owner:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          example: "Rajesh Kumar"
+        mobileNumber:
+          type: string
+          example: "9876543210"
+        emailId:
+          type: string
+          example: "rajesh@example.com"
+        gender:
+          type: string
+          enum: [MALE, FEMALE, OTHER]
+        ownerType:
+          type: string
+          description: INDIVIDUAL or INSTITUTIONAL
+        isPrimaryOwner:
+          type: boolean
+        ownershipPercentage:
+          type: number
+        institutionName:
+          type: string
+        institutionType:
+          type: string
+          description: COMPANY, TRUST, SOCIETY, GOVERNMENT
+        designationOfAuthorizedPerson:
+          type: string
+        nameOfAuthorizedPerson:
+          type: string
+
+    TradeUnit:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        tradeType:
+          type: string
+          example: "RETAIL"
+        uom:
+          type: string
+          example: "SQFT"
+        uomValue:
+          type: number
+          example: 500.0
+        active:
+          type: boolean
+          default: true
+
+    Accessory:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        accessoryCategory:
+          type: string
+          example: "SIGNBOARD"
+        uom:
+          type: string
+          example: "SQFT"
+        uomValue:
+          type: number
+        count:
+          type: integer
+        active:
+          type: boolean
+
+    Address:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        doorNo:
+          type: string
+        buildingName:
+          type: string
+        street:
+          type: string
+        locality:
+          type: string
+        localityCode:
+          type: string
+        ward:
+          type: string
+        city:
+          type: string
+          example: "Bothell"
+        pincode:
+          type: string
+          example: "98011"
+        latitude:
+          type: number
+        longitude:
+          type: number
+
+    Document:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        documentType:
+          type: string
+          example: "OWNER_PHOTO"
+        fileStoreId:
+          type: string
+          example: "1a326002-b5ab-4184-b015-ceff2c9820a2"
+        documentUid:
+          type: string
+        active:
+          type: boolean
+
+    Workflow:
+      type: object
+      properties:
+        action:
+          type: string
+          example: "APPLY"
+          description: |
+            Valid actions per state:
+            - INIT → APPLY
+            - APPLIED → SUBMIT_FOR_SCRUTINY
+            - PENDING_SCRUTINY → FORWARD_TO_INSPECTION, APPROVE_SCRUTINY, REJECT
+            - PENDING_FIELD_INSPECTION → SUBMIT_INSPECTION_REPORT
+            - PENDING_APPROVAL → APPROVE, REJECT
+            - PENDING_PAYMENT → PAY
+            - LICENSE_ISSUED → CANCEL
+            - REJECTED → REOPEN
+        assignes:
+          type: array
+          items:
+            type: string
+        comment:
+          type: string
+
+    BillingInfo:
+      type: object
+      readOnly: true
+      description: Enriched billing data from Billing Service (read-only, not stored)
+      properties:
+        demandId:
+          type: string
+        demandStatus:
+          type: string
+          enum: [ACTIVE, PAID, CANCELLED]
+        totalAmount:
+          type: number
+        paidAmount:
+          type: number
+        pendingAmount:
+          type: number
+        billId:
+          type: string
+        billNumber:
+          type: string
+        billDate:
+          type: integer
+          format: int64
+        billStatus:
+          type: string
+          enum: [ACTIVE, PAID, EXPIRED]
+        payments:
+          type: array
+          items:
+            type: object
+        feeDetails:
+          type: array
+          items:
+            type: object
+
+    Calculation:
+      type: object
+      properties:
+        applicationNumber:
+          type: string
+        tenantId:
+          type: string
+        totalAmount:
+          type: number
+          example: 1000.00
+        taxAmount:
+          type: number
+        feeDetails:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeeDetail'
+
+    FeeDetail:
+      type: object
+      properties:
+        feeType:
+          type: string
+          example: "TL_TRADE_UNIT_FEE"
+        amount:
+          type: number
+          example: 1000.00
+        description:
+          type: string
+          example: "RETAIL trade fee"
+
+    BillingSlabResponse:
+      type: object
+      properties:
+        billingSlabs:
+          type: array
+          items:
+            $ref: '#/components/schemas/BillingSlab'
+        count:
+          type: integer
+
+    BillingSlab:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        licenseType:
+          type: string
+          enum: [PERMANENT, TEMPORARY]
+        applicationType:
+          type: string
+          enum: [NEW, RENEWAL]
+        structureType:
+          type: string
+          enum: [IMMOVABLE, MOVABLE]
+        tradeType:
+          type: string
+        accessoryCategory:
+          type: string
+        type:
+          type: string
+          enum: [FLAT, RATE]
+        uom:
+          type: string
+        fromUom:
+          type: number
+        toUom:
+          type: number
+        rate:
+          type: number
+        active:
+          type: boolean
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+        description:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+              code:
+                type: string
