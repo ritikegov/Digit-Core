@@ -565,3 +565,11 @@ config:
         dockerfile: "build/maven/Dockerfile"
       - work-dir: "accelerators/vault-enc-service/src/main/resources/db"
         image-name: "vault-enc-service-db"
+
+  - name: "builds/Digit-Core/business-services/tl-service"
+    build:
+      - work-dir: "business-services/tl-service"
+        image-name: "tl-service"
+        dockerfile: "build/maven/Dockerfile"
+      - work-dir: "business-services/tl-service/src/main/resources/db"
+        image-name: "tl-service-db"
