@@ -30,6 +30,9 @@ public class ApplicationProperties {
     @Value("${spring.data.redis.default.burstCapacity}")
     private Integer defaultBurstCapacity;
 
+    @Value("${spring.data.redis.ratelimit.enabled:true}")
+    private Boolean rateLimitEnabled;
+
     @Value("${egov.authorize.access.control.host}${egov.authorize.access.control.uri}")
     private String authorizationUrl;
 
