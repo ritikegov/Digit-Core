@@ -1,0 +1,467 @@
+package org.egov.keycloak.auth;
+
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.Response;
+import lombok.extern.jbosslog.JBossLog;
+import org.egov.keycloak.auth.clients.otp.OtpClient;
+import org.egov.keycloak.auth.clients.otp.OtpClientException;
+import org.egov.keycloak.auth.clients.otp.models.*;
+import org.egov.keycloak.auth.config.OtpConfig.ChannelConfig;
+import org.egov.keycloak.auth.config.OtpConstants;
+import org.keycloak.authentication.AuthenticationFlowContext;
+import org.keycloak.authentication.AuthenticationFlowError;
+import org.keycloak.authentication.AuthenticationFlowException;
+import org.keycloak.authentication.authenticators.browser.AbstractUsernameFormAuthenticator;
+import org.keycloak.events.Errors;
+import org.keycloak.forms.login.LoginFormsProvider;
+import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.RealmModel;
+import org.keycloak.models.UserModel;
+import org.keycloak.models.utils.FormMessage;
+import org.keycloak.services.messages.Messages;
+import org.keycloak.sessions.AuthenticationSessionModel;
+
+/**
+ * Generic OTP authenticator.
+ * <p>
+ * This class is channel-agnostic. It does not know whether it is sending
+ * an email or SMS. The channel is determined entirely by what the factory
+ * injects at construction time:
+ * <p>
+ * - {@link ChannelConfig}  → OTP length, destinationType, purpose
+ * - {@code destinationAttr} → which Keycloak user attribute to read
+ * <p>
+ * EmailOtpAuthenticatorFactory injects email channel config.
+ * SmsOtpAuthenticatorFactory  injects SMS channel config.
+ * The authenticator logic is identical for both.
+ * <p>
+ * Supports browser flow and direct grant (two-round-trip) flow.
+ */
+@JBossLog
+public class OtpAuthenticator extends AbstractUsernameFormAuthenticator {
+
+	private final OtpClient otpClient;
+	private final ChannelConfig channelConfig;
+	private final String destinationAttr;
+
+	/**
+	 * @param otpClient       HTTP client for the OTP microservice
+	 * @param channelConfig   channel-specific settings from {@link org.egov.keycloak.auth.config.OtpConfig}
+	 * @param destinationAttr Keycloak user attribute that holds the destination
+	 *                        (e.g. "email" → user.getEmail(), "mobileNumber" → user attribute)
+	 */
+	public OtpAuthenticator(OtpClient otpClient, ChannelConfig channelConfig, String destinationAttr) {
+		this.otpClient = otpClient;
+		this.channelConfig = channelConfig;
+		this.destinationAttr = destinationAttr;
+	}
+
+	// -----------------------------------------------------------------------
+	// Entry point
+	// -----------------------------------------------------------------------
+
+	private static Response jsonError(Response.Status status, String error, String description) {
+		return Response.status(status)
+				.entity(String.format(
+						"{\"error\":\"%s\",\"error_description\":\"%s\"}", error, description))
+				.type("application/json")
+				.build();
+	}
+
+	// -----------------------------------------------------------------------
+	// Browser flow – form actions
+	// -----------------------------------------------------------------------
+
+	@Override
+	public void authenticate(AuthenticationFlowContext context) {
+		if (isDirectGrant(context)) {
+			handleDirectGrant(context);
+		} else {
+			generateOtp(context);
+			showForm(context, null, null);
+		}
+	}
+
+	// -----------------------------------------------------------------------
+	// Generate
+	// -----------------------------------------------------------------------
+
+	@Override
+	public void action(AuthenticationFlowContext context) {
+		if (!enabledUser(context, context.getUser())) return;
+
+		MultivaluedMap<String, String> form =
+				context.getHttpRequest().getDecodedFormParameters();
+
+		if (form.containsKey(OtpConstants.PARAM_RESEND)) {
+			handleResend(context);
+		} else if (form.containsKey(OtpConstants.PARAM_CANCEL)) {
+			handleCancel(context);
+		} else {
+			String otp = form.getFirst(OtpConstants.PARAM_OTP);
+			if (otp == null || otp.isBlank()) {
+				showForm(context, Messages.MISSING_TOTP, OtpConstants.PARAM_OTP);
+			} else {
+				verifyBrowserFlow(context, otp);
+			}
+		}
+	}
+
+	// -----------------------------------------------------------------------
+	// Resend
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Calls /otp/v3/generate and stores request_id in the auth session.
+	 * Idempotent — skips if request_id already present (browser reload).
+	 */
+	private void generateOtp(AuthenticationFlowContext context) {
+		AuthenticationSessionModel session = context.getAuthenticationSession();
+		if (session.getAuthNote(OtpConstants.SESSION_REQUEST_ID) != null) {
+			log.debug("OTP already generated for this session – skipping.");
+			return;
+		}
+
+		try {
+			GenerateOtpRequest req = GenerateOtpRequest.builder()
+					.destination(resolveDestination(context))
+					.destinationType(channelConfig.destinationType())   // from injected channel
+					.purpose(channelConfig.purpose())                   // from injected channel
+					.otpLength(channelConfig.length())                  // from injected channel
+					.build();
+
+			GenerateOtpResponse res = otpClient.generate(context.getRealm().getName(), req);
+
+			session.setAuthNote(OtpConstants.SESSION_REQUEST_ID, res.getRequestId());
+			session.setAuthNote(OtpConstants.SESSION_EXPIRES_AT,
+					res.getExpiresAt() != null ? res.getExpiresAt() : "");
+
+			log.infof("OTP generated – request_id=%s  destType=%s  user=%s",
+					res.getRequestId(), channelConfig.destinationType(),
+					context.getUser().getUsername());
+
+		} catch (OtpClientException e) {
+			log.errorf(e, "OTP generate failed HTTP %d for user=%s",
+					e.getStatusCode(), context.getUser().getUsername());
+			throw new AuthenticationFlowException(AuthenticationFlowError.INTERNAL_ERROR);
+		} catch (Exception e) {
+			log.errorf(e, "OTP generate unexpected error for user=%s",
+					context.getUser().getUsername());
+			throw new AuthenticationFlowException(AuthenticationFlowError.INTERNAL_ERROR);
+		}
+	}
+
+	// -----------------------------------------------------------------------
+	// Cancel
+	// -----------------------------------------------------------------------
+
+	private void handleResend(AuthenticationFlowContext context) {
+		String requestId = getRequestId(context);
+
+		if (requestId == null) {
+			// Session lost — generate a fresh OTP
+			clearSession(context);
+			generateOtp(context);
+			showForm(context, null, null);
+			return;
+		}
+
+		try {
+			otpClient.resend(context.getRealm().getName(),
+					ResendOtpRequest.builder().requestId(requestId).build());
+
+			log.infof("OTP resent – request_id=%s  user=%s",
+					requestId, context.getUser().getUsername());
+
+		} catch (OtpClientException e) {
+			// 429 = too soon; surface a message but stay on the form
+			log.warnf(e, "Resend failed HTTP %d for request_id=%s", e.getStatusCode(), requestId);
+			showForm(context, "otpResendFailed", null);
+			return;
+		} catch (Exception e) {
+			log.errorf(e, "Resend unexpected error for request_id=%s", requestId);
+			showForm(context, "otpResendFailed", null);
+			return;
+		}
+
+		showForm(context, null, null);
+	}
+
+	// -----------------------------------------------------------------------
+	// Verify – browser flow
+	// -----------------------------------------------------------------------
+
+	private void handleCancel(AuthenticationFlowContext context) {
+		String requestId = getRequestId(context);
+
+		if (requestId != null) {
+			try {
+				otpClient.invalidate(context.getRealm().getName(),
+						InvalidateOtpRequest.builder()
+								.requestId(requestId)
+								.reason("user_cancelled")
+								.build());
+				log.infof("OTP invalidated – request_id=%s  user=%s",
+						requestId, context.getUser().getUsername());
+			} catch (Exception e) {
+				log.warnf(e, "Failed to invalidate OTP request_id=%s – resetting flow anyway.", requestId);
+			}
+		}
+
+		clearSession(context);
+		context.resetFlow();
+	}
+
+	// -----------------------------------------------------------------------
+	// Direct grant – two-round-trip model
+	//
+	// Round 1: POST /token (no otp) → generate OTP → 400 otp_required
+	// Round 2: POST /token (otp=X)  → verify       → 200 token or 400 error
+	// -----------------------------------------------------------------------
+
+	private void verifyBrowserFlow(AuthenticationFlowContext context, String otp) {
+		String requestId = getRequestId(context);
+
+		if (requestId == null) {
+			// Auth session lost (e.g. idle timeout)
+			clearSession(context);
+			context.getEvent().user(context.getUser()).error(Errors.EXPIRED_CODE);
+			Response cr = errorForm(context, Messages.EXPIRED_ACTION_TOKEN_SESSION_EXISTS,
+					OtpConstants.PARAM_OTP);
+			context.failureChallenge(AuthenticationFlowError.EXPIRED_CODE, cr);
+			return;
+		}
+
+		try {
+			VerifyOtpResponse res = otpClient.verify(context.getRealm().getName(),
+					VerifyOtpRequest.builder().requestId(requestId).otp(otp).build());
+
+			if ("VERIFIED".equalsIgnoreCase(res.getStatus())) {
+				clearSession(context);
+				log.infof("OTP verified – request_id=%s  user=%s",
+						requestId, context.getUser().getUsername());
+				context.success();
+
+			} else if ("EXPIRED".equalsIgnoreCase(res.getStatus())) {
+				clearSession(context);
+				context.getEvent().user(context.getUser()).error(Errors.EXPIRED_CODE);
+				Response cr = errorForm(context,
+						Messages.EXPIRED_ACTION_TOKEN_SESSION_EXISTS, OtpConstants.PARAM_OTP);
+				context.failureChallenge(AuthenticationFlowError.EXPIRED_CODE, cr);
+
+			} else {
+				// Wrong code — keep session alive so user can retry or resend
+				context.getEvent().user(context.getUser()).error(Errors.INVALID_USER_CREDENTIALS);
+				Response cr = errorForm(context, Messages.INVALID_ACCESS_CODE, OtpConstants.PARAM_OTP);
+				context.failureChallenge(AuthenticationFlowError.INVALID_CREDENTIALS, cr);
+			}
+
+		} catch (OtpClientException e) {
+			log.errorf(e, "Verify failed HTTP %d for request_id=%s", e.getStatusCode(), requestId);
+			Response cr = errorForm(context, Messages.UNEXPECTED_ERROR_HANDLING_REQUEST, null);
+			context.failureChallenge(AuthenticationFlowError.INTERNAL_ERROR, cr);
+		} catch (Exception e) {
+			log.errorf(e, "Verify unexpected error for request_id=%s", requestId);
+			Response cr = errorForm(context, Messages.UNEXPECTED_ERROR_HANDLING_REQUEST, null);
+			context.failureChallenge(AuthenticationFlowError.INTERNAL_ERROR, cr);
+		}
+	}
+
+	// -----------------------------------------------------------------------
+	// Destination resolution
+	// -----------------------------------------------------------------------
+
+	private void handleDirectGrant(AuthenticationFlowContext context) {
+		MultivaluedMap<String, String> params =
+				context.getHttpRequest().getDecodedFormParameters();
+
+		String enteredOtp = params.getFirst(OtpConstants.PARAM_OTP);
+		String requestId = params.getFirst("request_id");
+
+		boolean hasOtp = enteredOtp != null && !enteredOtp.isBlank();
+		boolean hasRequestId = requestId != null && !requestId.isBlank();
+
+		// -------------------------------
+		// ROUND 1 → Generate OTP
+		// -------------------------------
+		if (!hasOtp) {
+
+			generateOtp(context);
+
+			String generatedRequestId = getRequestId(context);
+
+			context.getEvent().user(context.getUser()).error(Errors.INVALID_USER_CREDENTIALS);
+
+			context.failure(AuthenticationFlowError.INVALID_CREDENTIALS,
+					Response.status(Response.Status.BAD_REQUEST)
+							.entity(String.format(
+									"{\"error\":\"otp_required\",\"request_id\":\"%s\",\"error_description\":\"OTP sent. Retry with otp and request_id\"}",
+									generatedRequestId))
+							.type("application/json")
+							.build());
+
+			return;
+		}
+
+		// -------------------------------
+		// ROUND 2 → Validate request_id
+		// -------------------------------
+		if (!hasRequestId) {
+			context.failure(AuthenticationFlowError.INVALID_CREDENTIALS,
+					jsonError(Response.Status.BAD_REQUEST,
+							"invalid_request",
+							"request_id is required"));
+			return;
+		}
+
+		// -------------------------------
+		// VERIFY OTP
+		// -------------------------------
+		try {
+			VerifyOtpResponse res = otpClient.verify(context.getRealm().getName(),
+					VerifyOtpRequest.builder()
+							.requestId(requestId)
+							.otp(enteredOtp)
+							.build());
+
+			if ("VERIFIED".equalsIgnoreCase(res.getStatus())) {
+
+				log.infof("OTP verified (direct grant) – request_id=%s user=%s",
+						requestId, context.getUser().getUsername());
+
+				context.success();
+
+			} else if ("EXPIRED".equalsIgnoreCase(res.getStatus())) {
+
+				context.getEvent().user(context.getUser()).error(Errors.EXPIRED_CODE);
+
+				context.failure(AuthenticationFlowError.EXPIRED_CODE,
+						jsonError(Response.Status.BAD_REQUEST,
+								"otp_expired", "OTP expired"));
+
+			} else {
+
+				context.getEvent().user(context.getUser()).error(Errors.INVALID_USER_CREDENTIALS);
+
+				context.failure(AuthenticationFlowError.INVALID_CREDENTIALS,
+						jsonError(Response.Status.BAD_REQUEST,
+								"invalid_otp", "Invalid OTP"));
+			}
+
+		} catch (OtpClientException e) {
+
+			log.errorf(e, "Direct grant verify failed HTTP %d for request_id=%s",
+					e.getStatusCode(), requestId);
+
+			context.failure(AuthenticationFlowError.INTERNAL_ERROR,
+					jsonError(Response.Status.INTERNAL_SERVER_ERROR,
+							"server_error", "OTP verification failed"));
+
+		} catch (Exception e) {
+
+			log.errorf(e, "Direct grant verify unexpected error for request_id=%s", requestId);
+
+			context.failure(AuthenticationFlowError.INTERNAL_ERROR,
+					jsonError(Response.Status.INTERNAL_SERVER_ERROR,
+							"server_error", "OTP verification failed"));
+		}
+	}
+
+	// -----------------------------------------------------------------------
+	// Form helpers
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Reads the destination from the Keycloak user.
+	 * <p>
+	 * The {@code destinationAttr} injected by the factory decides the source:
+	 * "email"        → user.getEmail()
+	 * anything else  → user.getFirstAttribute(attrName)
+	 */
+	private String resolveDestination(AuthenticationFlowContext context) {
+		UserModel user = context.getUser();
+		String destination = OtpConstants.DEST_TYPE_EMAIL.equalsIgnoreCase(destinationAttr)
+				? user.getEmail()
+				: user.getFirstAttribute(destinationAttr);
+
+		if (destination == null || destination.isBlank()) {
+			log.warnf("User %s has no value for attribute '%s'",
+					user.getUsername(), destinationAttr);
+			throw new AuthenticationFlowException(AuthenticationFlowError.INVALID_USER);
+		}
+		return destination;
+	}
+
+	private void showForm(AuthenticationFlowContext context, String error, String field) {
+		LoginFormsProvider form = context.form();
+		if (error != null) {
+			if (field != null) form.addError(new FormMessage(field, error));
+			else form.setError(error);
+		}
+		context.challenge(form.createForm("otp-form.ftl"));
+	}
+
+	private Response errorForm(AuthenticationFlowContext context, String messageKey, String field) {
+		LoginFormsProvider form = context.form();
+		if (field != null) form.addError(new FormMessage(field, messageKey));
+		else form.setError(messageKey);
+		return form.createForm("otp-form.ftl");
+	}
+
+	@Override
+	protected Response challenge(AuthenticationFlowContext context, String error, String field) {
+		showForm(context, error, field);
+		return null;
+	}
+
+	// -----------------------------------------------------------------------
+	// SPI contract
+	// -----------------------------------------------------------------------
+
+	@Override
+	protected String disabledByBruteForceError() {
+		return Messages.INVALID_ACCESS_CODE;
+	}
+
+	@Override
+	public boolean requiresUser() {
+		return true;
+	}
+
+	@Override
+	public boolean configuredFor(KeycloakSession session, RealmModel realm, UserModel user) {
+		// Check that the user actually has a destination value for this channel
+		String value = OtpConstants.DEST_TYPE_EMAIL.equalsIgnoreCase(destinationAttr)
+				? user.getEmail()
+				: user.getFirstAttribute(destinationAttr);
+		return value != null && !value.isBlank();
+	}
+
+	@Override
+	public void setRequiredActions(KeycloakSession s, RealmModel r, UserModel u) {
+	}
+
+	// -----------------------------------------------------------------------
+	// Session helpers
+	// -----------------------------------------------------------------------
+
+	@Override
+	public void close() {
+	}
+
+	private String getRequestId(AuthenticationFlowContext context) {
+		return context.getAuthenticationSession()
+				.getAuthNote(OtpConstants.SESSION_REQUEST_ID);
+	}
+
+	private void clearSession(AuthenticationFlowContext context) {
+		AuthenticationSessionModel s = context.getAuthenticationSession();
+		s.removeAuthNote(OtpConstants.SESSION_REQUEST_ID);
+		s.removeAuthNote(OtpConstants.SESSION_EXPIRES_AT);
+	}
+
+	private boolean isDirectGrant(AuthenticationFlowContext context) {
+		return "password".equals(context.getHttpRequest()
+				.getDecodedFormParameters().getFirst("grant_type"));
+	}
+}

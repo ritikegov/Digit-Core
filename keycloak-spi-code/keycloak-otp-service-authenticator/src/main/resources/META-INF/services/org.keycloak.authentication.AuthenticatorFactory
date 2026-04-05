@@ -1,0 +1,2 @@
+org.egov.keycloak.auth.EmailOtpAuthenticatorFactory
+org.egov.keycloak.auth.SmsOtpAuthenticatorFactory
