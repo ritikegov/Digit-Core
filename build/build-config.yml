@@ -475,11 +475,11 @@ config:
       - work-dir: "core-services/TenantManagement/src/main/resources/db"
         image-name: "tenant-management-db"
 
-  - name: "builds/Digit-Core/core-services/keycloak-spi"
+  - name: "builds/Digit-Core/core-services/keycloak"
     build:
-      - work-dir: "core-services/keycloak-spi"
-        image-name: "keycloak-spi"
-        dockerfile: "core-services/keycloak-spi/Dockerfile"
+      - work-dir: "core-services/keycloak"
+        image-name: "keycloak"
+        dockerfile: "core-services/keycloak/Dockerfile"
   
   # PGR AI chatbot
   - name: "builds/Digit-Core/accelerators/pgr-ai-chatbot"

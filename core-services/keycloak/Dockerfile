@@ -6,7 +6,7 @@ FROM quay.io/keycloak/keycloak:25.0.1 AS builder
 WORKDIR /opt/keycloak
 
 # Copy custom provider JARs from root context
-COPY --chown=keycloak:keycloak core-services/keycloak-spi/providers/ /opt/keycloak/providers/
+COPY --chown=keycloak:keycloak core-services/keycloak/providers/ /opt/keycloak/providers/
 
 # Run Keycloak build to optimize the server with custom providers
 RUN /opt/keycloak/bin/kc.sh build
