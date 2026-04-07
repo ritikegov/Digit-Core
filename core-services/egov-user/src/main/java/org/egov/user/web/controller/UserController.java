@@ -82,8 +82,9 @@ public class UserController {
         User user = createUserRequest.toDomain(true);
 
         // Validate mobile number with country code using MDMS-v2
-        mobileNumberValidator.validateMobileNumberWithCountryCode(user.getMobileNumber(), user.getCountryCode(),
+        String validatedCountryCode = mobileNumberValidator.validateMobileNumberWithCountryCode(user.getMobileNumber(), user.getCountryCode(),
                 user.getTenantId(), createUserRequest.getRequestInfo());
+        user.setCountryCode(validatedCountryCode);
         mobileNumberValidator.validateMobileNumberWithCountryCode(user.getAlternateMobileNumber(), user.getCountryCode(), user.getTenantId(),
                 createUserRequest.getRequestInfo());
 
@@ -105,13 +106,14 @@ public class UserController {
      */
     @PostMapping("/users/_createnovalidate")
     public UserDetailResponse createUserWithoutValidation(@RequestBody @Valid CreateUserRequest createUserRequest,
-                                                          @RequestHeader HttpHeaders headers) {
+            @RequestHeader HttpHeaders headers) {
 
         User user = createUserRequest.toDomain(true);
 
         // Validate mobile number with country code using MDMS-v2
-        mobileNumberValidator.validateMobileNumberWithCountryCode(user.getMobileNumber(), user.getCountryCode(),
+        String validatedCountryCode = mobileNumberValidator.validateMobileNumberWithCountryCode(user.getMobileNumber(), user.getCountryCode(),
                 user.getTenantId(), createUserRequest.getRequestInfo());
+        user.setCountryCode(validatedCountryCode);
         mobileNumberValidator.validateMobileNumberWithCountryCode(user.getAlternateMobileNumber(), user.getCountryCode(), user.getTenantId(),
                 createUserRequest.getRequestInfo());
 
@@ -161,7 +163,7 @@ public class UserController {
     public CustomUserDetails getUser(@RequestParam(value = "access_token") String accessToken) {
         final UserDetail userDetail = tokenService.getUser(accessToken);
         return new CustomUserDetails(userDetail);
-        //  no encrypt/decrypt
+        // no encrypt/decrypt
     }
 
     /**
@@ -173,12 +175,13 @@ public class UserController {
      */
     @PostMapping("/users/_updatenovalidate")
     public UpdateResponse updateUserWithoutValidation(@RequestBody final @Valid CreateUserRequest createUserRequest,
-                                                      @RequestHeader HttpHeaders headers) {
+            @RequestHeader HttpHeaders headers) {
         User user = createUserRequest.toDomain(false);
 
         // Validate mobile number with country code using MDMS-v2
-        mobileNumberValidator.validateMobileNumberWithCountryCode(user.getMobileNumber(), user.getCountryCode(),
+        String validatedCountryCode = mobileNumberValidator.validateMobileNumberWithCountryCode(user.getMobileNumber(), user.getCountryCode(),
                 user.getTenantId(), createUserRequest.getRequestInfo());
+        user.setCountryCode(validatedCountryCode);
         mobileNumberValidator.validateMobileNumberWithCountryCode(user.getAlternateMobileNumber(), user.getCountryCode(), user.getTenantId(),
                 createUserRequest.getRequestInfo());
 
@@ -199,8 +202,9 @@ public class UserController {
         User user = createUserRequest.toDomain(false);
 
         // Validate mobile number with country code using MDMS-v2
-        mobileNumberValidator.validateMobileNumberWithCountryCode(user.getMobileNumber(), user.getCountryCode(),
+        String validatedCountryCode = mobileNumberValidator.validateMobileNumberWithCountryCode(user.getMobileNumber(), user.getCountryCode(),
                 user.getTenantId(), createUserRequest.getRequestInfo());
+        user.setCountryCode(validatedCountryCode);
         mobileNumberValidator.validateMobileNumberWithCountryCode(user.getAlternateMobileNumber(), user.getCountryCode(), user.getTenantId(),
                 createUserRequest.getRequestInfo());
 
