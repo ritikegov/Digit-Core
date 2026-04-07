@@ -58,12 +58,11 @@ public class MobileNumberValidator {
      * @param requestInfo  Request Info
      * @throws CustomException if validation fails
      */
-    public void validateMobileNumberWithCountryCode(String mobileNumber, String countryCode,
-                                                     String tenantId, RequestInfo requestInfo) {
+    public String validateMobileNumberWithCountryCode(String mobileNumber, String countryCode, String tenantId, RequestInfo requestInfo) {
 
         // Skip validation if mobile number is null/blank (mobile is optional)
         if (!StringUtils.hasText(mobileNumber)) {
-            return;
+            return countryCode;
         }
         mobileNumber = mobileNumber.trim();
         if (countryCode != null) {
@@ -72,29 +71,20 @@ public class MobileNumberValidator {
 
         log.info("Validating mobile number with country code: {} for tenantId: {}", countryCode, tenantId);
 
+        // Perform validation
+        Map<String, String> errorMap = new HashMap<>();
+
         // Fetch validation config matching the country code from MDMS-v2
         ValidationData validationData = fetchValidationDataByCountryCode(countryCode, tenantId, requestInfo);
         ValidationRules validationRules = validationData != null ? validationData.getRules() : null;
         ValidationAttributes attributes = validationData != null ? validationData.getAttributes() : null;
 
-        // If MDMS rules not found for the country code, apply default validation
+        // If MDMS rules not found for the country code or default, throw error
         if (validationRules == null) {
-            log.info("MDMS validation rules not found for country code: {}. Applying default validation pattern: {}",
-                     countryCode, UserServiceConstants.PATTERN_MOBILE);
-            validationRules = getDefaultValidationRules();
-        }
-
-        // Perform validation
-        Map<String, String> errorMap = new HashMap<>();
-
-        // Validate country code matches the expected prefix from MDMS
-        if (StringUtils.hasText(countryCode) && attributes != null && StringUtils.hasText(attributes.getPrefix())) {
-            String expectedPrefix = attributes.getPrefix();
-            if (!countryCode.equals(expectedPrefix)) {
-                errorMap.put("INVALID_COUNTRY_CODE",
-                        String.format("Country code mismatch. Expected: %s for the validation rules, but got: %s",
-                                expectedPrefix, countryCode));
-            }
+            log.warn("No validation rules found in MDMS for country code: {} or as default. Validation skipped.",
+                    countryCode);
+            errorMap.put("VALIDATION_CONFIG_MISSING", "Validation configuration not found in MDMS");
+            throw new CustomException(errorMap);
         }
 
         // Check length
@@ -119,14 +109,8 @@ public class MobileNumberValidator {
                     errorMap.put("INVALID_MOBILE_FORMAT", errorMessage);
                 }
             } catch (PatternSyntaxException ex) {
-                log.warn("Invalid MDMS regex '{}'. Falling back to default pattern.", validationRules.getPattern(), ex);
-                Pattern fallback = Pattern.compile(UserServiceConstants.PATTERN_MOBILE);
-                if (!fallback.matcher(mobileNumber).matches()) {
-                    String errorMessage = StringUtils.hasText(validationRules.getErrorMessage())
-                            ? validationRules.getErrorMessage()
-                            : "Invalid mobile number format";
-                    errorMap.put("INVALID_MOBILE_FORMAT", errorMessage);
-                }
+                log.error("Invalid MDMS regex '{}'.", validationRules.getPattern(), ex);
+                errorMap.put("INVALID_REGEX", "Invalid validation pattern configured in MDMS");
             }
         }
 
@@ -135,6 +119,7 @@ public class MobileNumberValidator {
         }
 
         log.info("Mobile number and country code validation successful");
+        return attributes != null ? attributes.getPrefix() : countryCode;
     }
 
     /**
@@ -189,22 +174,31 @@ public class MobileNumberValidator {
                     .requestInfo(requestInfo)
                     .build();
 
-            log.info("Calling MDMS-v2 at: {} for tenant: {} with country code: {}", url, stateLevelTenantId, countryCode);
+            log.info("Calling MDMS-v2 at: {} for tenant: {} with country code: {}", url, stateLevelTenantId,
+                    countryCode);
             MdmsV2Response response = restTemplate.postForObject(url, searchRequest, MdmsV2Response.class);
 
             if (response != null && !CollectionUtils.isEmpty(response.getMdms())) {
+                ValidationData defaultData = null;
+
                 // Iterate through all MDMS data entries
                 for (MdmsV2Data mdmsData : response.getMdms()) {
                     if (mdmsData.getData() != null
-                        && Boolean.TRUE.equals(mdmsData.getIsActive())) {
+                            && Boolean.TRUE.equals(mdmsData.getIsActive())) {
 
                         ValidationData data = mdmsData.getData();
 
-                        // If country code is provided, find matching config
+                        // Keep track of the first active default entry
+                        if (defaultData == null && Boolean.TRUE.equals(data.getIsDefault())) {
+                            defaultData = data;
+                        }
+
+                        // If country code is provided, check for matching prefix
                         if (StringUtils.hasText(countryCode)
-                            && data.getAttributes() != null
-                            && countryCode.equals(data.getAttributes().getPrefix())) {
-                            log.info("Found validation config for country code: {} in tenant: {}", countryCode, stateLevelTenantId);
+                                && data.getAttributes() != null
+                                && countryCode.equals(data.getAttributes().getPrefix())) {
+                            log.info("Found validation config for country code: {} in tenant: {}", countryCode,
+                                    stateLevelTenantId);
 
                             // Cache the fetched data
                             cacheRepository.cacheValidationData(stateLevelTenantId, countryCode, data);
@@ -214,7 +208,17 @@ public class MobileNumberValidator {
                     }
                 }
 
-                log.warn("No validation configuration found for country code: {} in tenant: {}", countryCode, stateLevelTenantId);
+                // If no exact match found but we have a default entry, return it
+                if (defaultData != null) {
+                    log.info("No match for country code: {}. Returning default MDMS validation config for tenant: {}",
+                            countryCode, stateLevelTenantId);
+                    // Cache the default data for this country code as well to avoid re-searching
+                    cacheRepository.cacheValidationData(stateLevelTenantId, countryCode, defaultData);
+                    return defaultData;
+                }
+
+                log.warn("No validation configuration or default found for country code: {} in tenant: {}",
+                        countryCode, stateLevelTenantId);
             }
 
             log.warn("No validation rules found in MDMS-v2 for tenant: {}", stateLevelTenantId);

@@ -20,4 +20,7 @@ public class ValidationData {
 
     @JsonProperty("attributes")
     private ValidationAttributes attributes;
+
+    @JsonProperty("default")
+    private Boolean isDefault;
 }
