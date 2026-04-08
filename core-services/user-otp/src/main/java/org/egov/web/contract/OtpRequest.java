@@ -18,7 +18,7 @@ public class OtpRequest {
                 .tenantId(getTenantId())
                 .type(getType())
                 .userType(getUserType())
-                .userName(getUserName())
+                .prefix(getPrefix())
                 .requestInfo(getRequestInfo())
                 .build();
     }
@@ -39,10 +39,9 @@ public class OtpRequest {
         return otp != null ? otp.getTenantId() : null;
     }
 
-    private String getUserName() {
-        return otp != null ? otp.getUserName() : null;
+    private String getPrefix() {
+        return otp != null ? otp.getPrefix() : null;
     }
-
 }
 
 

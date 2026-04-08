@@ -28,14 +28,10 @@ public class OtpRequest {
     private String userType;
 	private String userName;
 
+    private String prefix;
+
 	@Setter
 	private MobileValidationConfig mdmsValidationConfig;
-
-	@Setter
-	private String defaultNumericPattern;
-
-	@Setter
-	private String defaultLengthPattern;
 
 	@Setter
 	@Getter
@@ -71,31 +67,5 @@ public class OtpRequest {
 
 	public boolean hasMdmsValidationError() {
 		return mdmsValidationErrorMessage != null && !mdmsValidationErrorMessage.isEmpty();
-	}
-
-	/**
-	 * Checks if mobile number matches the numeric pattern.
-	 * Used by error adapter for default validation error messages.
-	 */
-	public boolean isMobileNumberNumeric() {
-		if (type != null && OtpRequestType.PASSWORD_RESET.equals(type)) {
-			return false;
-		}
-		String pattern = (defaultNumericPattern != null && !defaultNumericPattern.isEmpty())
-				? defaultNumericPattern : "\\d+";
-		return !(mobileNumber != null && mobileNumber.matches(pattern));
-	}
-
-	/**
-	 * Checks if mobile number matches the length pattern.
-	 * Used by error adapter for default validation error messages.
-	 */
-	public boolean isMobileNumberValidLength() {
-		if (type != null && OtpRequestType.PASSWORD_RESET.equals(type)) {
-			return false;
-		}
-		String pattern = (defaultLengthPattern != null && !defaultLengthPattern.isEmpty())
-				? defaultLengthPattern : "^[0-9]{10,13}$";
-		return !(mobileNumber != null && mobileNumber.matches(pattern));
 	}
 }

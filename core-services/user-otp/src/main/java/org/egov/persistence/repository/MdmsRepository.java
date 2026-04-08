@@ -36,7 +36,7 @@ public class MdmsRepository {
         this.objectMapper = objectMapper;
     }
 
-    public MobileValidationConfig fetchMobileValidationConfig(String tenantId, RequestInfo requestInfo) {
+    public List<MobileValidationConfig> fetchMobileValidationConfigs(String tenantId, RequestInfo requestInfo) {
         try {
             String uri = mdmsHost + mdmsSearchEndpoint;
 
@@ -61,7 +61,7 @@ public class MdmsRepository {
             request.put("RequestInfo", requestInfo);
             request.put("MdmsCriteria", mdmsCriteria);
 
-            log.info("Fetching mobile validation config from MDMS for tenantId: {}", tenantId);
+            log.info("Fetching mobile validation configs from MDMS for tenantId: {}", tenantId);
 
             Map<String, Object> response = restTemplate.postForObject(uri, request, Map.class);
 
@@ -69,7 +69,7 @@ public class MdmsRepository {
                 Object mdmsResObj = response.get("MdmsRes");
                 if (!(mdmsResObj instanceof Map)) {
                     log.warn("Unexpected MdmsRes type: {}", mdmsResObj != null ? mdmsResObj.getClass() : "null");
-                    return null;
+                    return Collections.emptyList();
                 }
                 Map<String, Object> mdmsRes = (Map<String, Object>) mdmsResObj;
 
@@ -77,7 +77,7 @@ public class MdmsRepository {
                     Object moduleObj = mdmsRes.get(moduleName);
                     if (!(moduleObj instanceof Map)) {
                         log.warn("Unexpected module type for {}: {}", moduleName, moduleObj != null ? moduleObj.getClass() : "null");
-                        return null;
+                        return Collections.emptyList();
                     }
                     Map<String, Object> validationConfigs = (Map<String, Object>) moduleObj;
 
@@ -85,26 +85,26 @@ public class MdmsRepository {
                         Object masterObj = validationConfigs.get(masterName);
                         if (!(masterObj instanceof List)) {
                             log.warn("Unexpected master type for {}: {}", masterName, masterObj != null ? masterObj.getClass() : "null");
-                            return null;
+                            return Collections.emptyList();
                         }
                         List<Object> configList = (List<Object>) masterObj;
 
-                        if (!configList.isEmpty()) {
-                            MobileValidationConfig config = objectMapper.convertValue(
-                                    configList.get(0), MobileValidationConfig.class);
-                            log.info("Successfully fetched mobile validation config: {}", config);
-                            return config;
+                        List<MobileValidationConfig> configs = new ArrayList<>();
+                        for (Object item : configList) {
+                            configs.add(objectMapper.convertValue(item, MobileValidationConfig.class));
                         }
+                        log.info("Successfully fetched {} mobile validation configs", configs.size());
+                        return configs;
                     }
                 }
             }
 
-            log.warn("Mobile validation config not found in MDMS response for tenantId: {}", tenantId);
-            return null;
+            log.warn("Mobile validation configs not found in MDMS response for tenantId: {}", tenantId);
+            return Collections.emptyList();
 
         } catch (Exception e) {
-            log.error("Error fetching mobile validation config from MDMS: ", e);
-            return null;
+            log.error("Error fetching mobile validation configs from MDMS: ", e);
+            return Collections.emptyList();
         }
     }
 }
