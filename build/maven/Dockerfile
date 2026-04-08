@@ -1,4 +1,4 @@
-FROM egovio/maven:3.9.6-amazoncorretto-17 AS build
+FROM egovio/maven:3.9.6-amazoncorretto-25 AS build
 ARG WORK_DIR
 WORKDIR /app
 
@@ -11,7 +11,7 @@ COPY ${WORK_DIR}/src ./src
 RUN mvn -B -f /app/pom.xml package
 
 # Runtime image – using a multi-arch base image
-FROM egovio/amazoncorretto:17-alpine
+FROM egovio/amazoncorretto:25-alpine
 
 WORKDIR /opt/egov
 
