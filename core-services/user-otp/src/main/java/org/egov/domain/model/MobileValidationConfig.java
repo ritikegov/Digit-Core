@@ -20,6 +20,9 @@ public class MobileValidationConfig {
     @JsonProperty("fieldType")
     private String fieldType;
 
+    @JsonProperty("default")
+    private Boolean isDefault;
+
     @JsonProperty("attributes")
     private MobileValidationAttributes attributes;
 }

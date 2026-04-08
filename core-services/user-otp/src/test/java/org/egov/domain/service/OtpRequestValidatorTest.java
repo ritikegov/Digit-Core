@@ -4,8 +4,11 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 import static org.mockito.Mockito.*;
 
-import org.egov.config.OtpValidationConfig;
+import java.util.Arrays;
+import java.util.Collections;
+
 import org.egov.domain.exception.InvalidOtpRequestException;
+import org.egov.domain.model.MobileValidationAttributes;
 import org.egov.domain.model.MobileValidationConfig;
 import org.egov.domain.model.MobileValidationRules;
 import org.egov.domain.model.OtpRequest;
@@ -23,9 +26,6 @@ public class OtpRequestValidatorTest {
     private MdmsRepository mdmsRepository;
 
     @Mock
-    private OtpValidationConfig otpValidationConfig;
-
-    @Mock
     private ValidationRulesCacheRepository cacheRepository;
 
     private OtpRequestValidator validator;
@@ -33,9 +33,7 @@ public class OtpRequestValidatorTest {
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
-        when(otpValidationConfig.getDefaultNumericPattern()).thenReturn("\\d+");
-        when(otpValidationConfig.getDefaultLengthPattern()).thenReturn("^[0-9]{10,13}$");
-        validator = new OtpRequestValidator(mdmsRepository, otpValidationConfig, cacheRepository);
+        validator = new OtpRequestValidator(mdmsRepository, cacheRepository);
     }
 
     @Test(expected = InvalidOtpRequestException.class)
@@ -72,7 +70,142 @@ public class OtpRequestValidatorTest {
     }
 
     @Test
-    public void test_should_not_throw_exception_for_valid_register_request() {
+    public void test_should_validate_with_mdms_config_matching_prefix() {
+        MobileValidationConfig indiaConfig = MobileValidationConfig.builder()
+                .rules(MobileValidationRules.builder()
+                        .pattern("^[6-9][0-9]{9}$")
+                        .minLength(10)
+                        .maxLength(10)
+                        .errorMessage("Invalid Indian mobile number")
+                        .build())
+                .fieldType("ind.mobile")
+                .isDefault(true)
+                .attributes(MobileValidationAttributes.builder().prefix("+91").build())
+                .build();
+
+        MobileValidationConfig ethiopiaConfig = MobileValidationConfig.builder()
+                .rules(MobileValidationRules.builder()
+                        .pattern("^[79][0-9]{8}$")
+                        .minLength(9)
+                        .maxLength(9)
+                        .errorMessage("Invalid Ethiopian mobile number")
+                        .build())
+                .fieldType("etpmo.mobile")
+                .attributes(MobileValidationAttributes.builder().prefix("+251").build())
+                .build();
+
+        when(mdmsRepository.fetchMobileValidationConfigs(anyString(), any()))
+                .thenReturn(Arrays.asList(indiaConfig, ethiopiaConfig));
+
+        // Send prefix +91, mobile matches Indian pattern
+        final OtpRequest otpRequest = OtpRequest.builder()
+                .tenantId("tenantId")
+                .mobileNumber("9123456789")
+                .prefix("+91")
+                .type(OtpRequestType.REGISTER)
+                .build();
+
+        validator.validate(otpRequest);
+    }
+
+    @Test(expected = InvalidOtpRequestException.class)
+    public void test_should_fail_when_prefix_matches_but_number_invalid_for_that_pattern() {
+        MobileValidationConfig ethiopiaConfig = MobileValidationConfig.builder()
+                .rules(MobileValidationRules.builder()
+                        .pattern("^[79][0-9]{8}$")
+                        .minLength(9)
+                        .maxLength(9)
+                        .errorMessage("Invalid Ethiopian mobile number")
+                        .build())
+                .fieldType("etpmo.mobile")
+                .attributes(MobileValidationAttributes.builder().prefix("+251").build())
+                .build();
+
+        when(mdmsRepository.fetchMobileValidationConfigs(anyString(), any()))
+                .thenReturn(Collections.singletonList(ethiopiaConfig));
+
+        // Send prefix +251 but mobile doesn't match Ethiopian pattern
+        final OtpRequest otpRequest = OtpRequest.builder()
+                .tenantId("tenantId")
+                .mobileNumber("1234567890")
+                .prefix("+251")
+                .type(OtpRequestType.REGISTER)
+                .build();
+
+        validator.validate(otpRequest);
+    }
+
+    @Test
+    public void test_should_use_default_config_when_no_prefix_sent() {
+        MobileValidationConfig indiaConfig = MobileValidationConfig.builder()
+                .rules(MobileValidationRules.builder()
+                        .pattern("^[6-9][0-9]{9}$")
+                        .minLength(10)
+                        .maxLength(10)
+                        .errorMessage("Invalid Indian mobile number")
+                        .build())
+                .fieldType("ind.mobile")
+                .isDefault(true)
+                .attributes(MobileValidationAttributes.builder().prefix("+91").build())
+                .build();
+
+        MobileValidationConfig ethiopiaConfig = MobileValidationConfig.builder()
+                .rules(MobileValidationRules.builder()
+                        .pattern("^[79][0-9]{8}$")
+                        .minLength(9)
+                        .maxLength(9)
+                        .errorMessage("Invalid Ethiopian mobile number")
+                        .build())
+                .fieldType("etpmo.mobile")
+                .attributes(MobileValidationAttributes.builder().prefix("+251").build())
+                .build();
+
+        when(mdmsRepository.fetchMobileValidationConfigs(anyString(), any()))
+                .thenReturn(Arrays.asList(indiaConfig, ethiopiaConfig));
+
+        // No prefix sent, should use default (India) config
+        final OtpRequest otpRequest = OtpRequest.builder()
+                .tenantId("tenantId")
+                .mobileNumber("9123456789")
+                .type(OtpRequestType.REGISTER)
+                .build();
+
+        validator.validate(otpRequest);
+    }
+
+    @Test
+    public void test_should_fallback_to_default_when_prefix_not_found_in_mdms() {
+        MobileValidationConfig indiaConfig = MobileValidationConfig.builder()
+                .rules(MobileValidationRules.builder()
+                        .pattern("^[6-9][0-9]{9}$")
+                        .minLength(10)
+                        .maxLength(10)
+                        .errorMessage("Invalid Indian mobile number")
+                        .build())
+                .fieldType("ind.mobile")
+                .isDefault(true)
+                .attributes(MobileValidationAttributes.builder().prefix("+91").build())
+                .build();
+
+        when(mdmsRepository.fetchMobileValidationConfigs(anyString(), any()))
+                .thenReturn(Collections.singletonList(indiaConfig));
+
+        // Send unknown prefix +44, should fall back to default (India) config
+        final OtpRequest otpRequest = OtpRequest.builder()
+                .tenantId("tenantId")
+                .mobileNumber("9123456789")
+                .prefix("+44")
+                .type(OtpRequestType.REGISTER)
+                .build();
+
+        validator.validate(otpRequest);
+    }
+
+    @Test(expected = InvalidOtpRequestException.class)
+    public void test_should_fail_when_no_mdms_config_found() {
+        when(mdmsRepository.fetchMobileValidationConfigs(anyString(), any()))
+                .thenReturn(Collections.emptyList());
+
         final OtpRequest otpRequest = OtpRequest.builder()
                 .tenantId("tenantId")
                 .mobileNumber("1234567890")
@@ -82,35 +215,27 @@ public class OtpRequestValidatorTest {
         validator.validate(otpRequest);
     }
 
-    @Test
-    public void test_should_not_throw_exception_for_valid_login_request() {
+    @Test(expected = InvalidOtpRequestException.class)
+    public void test_should_fail_when_prefix_sent_but_no_matching_or_default_config() {
+        MobileValidationConfig ethiopiaConfig = MobileValidationConfig.builder()
+                .rules(MobileValidationRules.builder()
+                        .pattern("^[79][0-9]{8}$")
+                        .minLength(9)
+                        .maxLength(9)
+                        .errorMessage("Invalid Ethiopian mobile number")
+                        .build())
+                .fieldType("etpmo.mobile")
+                .attributes(MobileValidationAttributes.builder().prefix("+251").build())
+                .build();
+
+        when(mdmsRepository.fetchMobileValidationConfigs(anyString(), any()))
+                .thenReturn(Collections.singletonList(ethiopiaConfig));
+
+        // Send prefix +44, no match and no default config
         final OtpRequest otpRequest = OtpRequest.builder()
                 .tenantId("tenantId")
                 .mobileNumber("1234567890")
-                .type(OtpRequestType.LOGIN)
-                .build();
-
-        validator.validate(otpRequest);
-    }
-
-    @Test
-    public void test_should_validate_with_mdms_config() {
-        MobileValidationRules rules = MobileValidationRules.builder()
-                .pattern("^[79][0-9]{8}$")
-                .minLength(9)
-                .maxLength(9)
-                .errorMessage("Invalid mobile number")
-                .build();
-        MobileValidationConfig config = MobileValidationConfig.builder()
-                .rules(rules)
-                .fieldType("mobile")
-                .build();
-
-        when(mdmsRepository.fetchMobileValidationConfig(anyString(), any())).thenReturn(config);
-
-        final OtpRequest otpRequest = OtpRequest.builder()
-                .tenantId("tenantId")
-                .mobileNumber("712345678")
+                .prefix("+44")
                 .type(OtpRequestType.REGISTER)
                 .build();
 
@@ -119,18 +244,20 @@ public class OtpRequestValidatorTest {
 
     @Test(expected = InvalidOtpRequestException.class)
     public void test_should_fail_mdms_validation_for_invalid_pattern() {
-        MobileValidationRules rules = MobileValidationRules.builder()
-                .pattern("^[79][0-9]{8}$")
-                .minLength(9)
-                .maxLength(9)
-                .errorMessage("Invalid mobile number")
-                .build();
         MobileValidationConfig config = MobileValidationConfig.builder()
-                .rules(rules)
+                .rules(MobileValidationRules.builder()
+                        .pattern("^[79][0-9]{8}$")
+                        .minLength(9)
+                        .maxLength(9)
+                        .errorMessage("Invalid mobile number")
+                        .build())
                 .fieldType("mobile")
+                .isDefault(true)
+                .attributes(MobileValidationAttributes.builder().prefix("+251").build())
                 .build();
 
-        when(mdmsRepository.fetchMobileValidationConfig(anyString(), any())).thenReturn(config);
+        when(mdmsRepository.fetchMobileValidationConfigs(anyString(), any()))
+                .thenReturn(Collections.singletonList(config));
 
         // Mobile starts with 1, which doesn't match pattern ^[79]
         final OtpRequest otpRequest = OtpRequest.builder()
@@ -144,20 +271,10 @@ public class OtpRequestValidatorTest {
 
     @Test
     public void test_should_skip_validation_for_password_reset() {
-        MobileValidationRules rules = MobileValidationRules.builder()
-                .pattern("^[79][0-9]{8}$")
-                .minLength(9)
-                .maxLength(9)
-                .errorMessage("Invalid mobile number")
-                .build();
-        MobileValidationConfig config = MobileValidationConfig.builder()
-                .rules(rules)
-                .fieldType("mobile")
-                .build();
+        // No MDMS config available, but PASSWORD_RESET should still pass
+        when(mdmsRepository.fetchMobileValidationConfigs(anyString(), any()))
+                .thenReturn(Collections.emptyList());
 
-        when(mdmsRepository.fetchMobileValidationConfig(anyString(), any())).thenReturn(config);
-
-        // Mobile number doesn't match rules but should pass for PASSWORD_RESET
         final OtpRequest otpRequest = OtpRequest.builder()
                 .tenantId("tenantId")
                 .mobileNumber("1234567890")
@@ -168,28 +285,25 @@ public class OtpRequestValidatorTest {
     }
 
     @Test
-    public void test_isMobileNumberValid_returns_true_for_valid_number() {
+    public void test_isMobileNumberValid_returns_true_when_mobile_absent() {
         final OtpRequest otpRequest = OtpRequest.builder()
                 .tenantId("tenantId")
-                .mobileNumber("1234567890")
+                .mobileNumber(null)
                 .type(OtpRequestType.REGISTER)
-                .defaultNumericPattern("\\d+")
-                .defaultLengthPattern("^[0-9]{10,13}$")
                 .build();
 
         assertTrue(validator.isMobileNumberValid(otpRequest));
     }
 
     @Test
-    public void test_isMobileNumberValid_returns_false_for_non_numeric() {
+    public void test_isMobileNumberValid_returns_false_when_no_mdms_config() {
         final OtpRequest otpRequest = OtpRequest.builder()
                 .tenantId("tenantId")
-                .mobileNumber("abc1234567")
+                .mobileNumber("1234567890")
                 .type(OtpRequestType.REGISTER)
-                .defaultNumericPattern("\\d+")
-                .defaultLengthPattern("^[0-9]{10,13}$")
                 .build();
 
         assertFalse(validator.isMobileNumberValid(otpRequest));
+        assertTrue(otpRequest.hasMdmsValidationError());
     }
 }
