@@ -134,7 +134,7 @@ config:
     build:
       - work-dir: "core-services/egov-idgen"
         image-name: "egov-idgen"
-        dockerfile: "build/maven/Dockerfile"
+        dockerfile: "core-services/egov-idgen/Dockerfile"
       - work-dir: "core-services/egov-idgen/src/main/resources/db"
         image-name: "egov-idgen-db"
 
