@@ -1,0 +1,332 @@
+openapi: 3.0.3
+info:
+  title: DIGIT ID Generation Service
+  description: |
+    API for generating unique IDs for various DIGIT modules.
+    Supports format templates with placeholders for sequences,
+    financial year, calendar year, city codes, and random text.
+  version: 2.9.1
+  contact:
+    name: eGov Foundation
+
+servers:
+  - url: http://localhost:8088/egov-idgen
+    description: Local development server
+  - url: http://egov-idgen:8080/egov-idgen
+    description: Docker/K8s internal
+  - url: https://dev.digit.org/egov-idgen
+    description: Dev environment
+
+paths:
+  /id/_generate:
+    post:
+      summary: Generate unique IDs
+      description: |
+        Generates one or more unique IDs per IdRequest entry.
+        Formats can be sourced from MDMS, the local DB table, or
+        supplied inline via the `format` field.
+
+        Supported format placeholders:
+          - `[seq:SEQ_NAME]`   — next value from a DB sequence
+          - `[fy:yyyy-yy]`     — financial year (e.g. 2024-25)
+          - `[cy:yyyy]`        — calendar year
+          - `[city:<path>]`    — city/ULB code from tenant data
+          - `[d{n}]`           — n random digits
+          - `[a{n}]`           — n random alpha chars
+          - `[an{n}]`          — n random alphanumeric chars
+      operationId: generateIds
+      tags:
+        - ID Generation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IdGenerationRequest'
+            examples:
+              minimal:
+                summary: Minimal valid request
+                value:
+                  RequestInfo:
+                    apiId: "asset-services"
+                    ver: "1.0"
+                    ts: 1714478400000
+                    action: "POST"
+                    msgId: "20170310130900|en_IN"
+                  idRequests:
+                    - idName: "PT.PropertyId"
+                      tenantId: "pb.amritsar"
+                      count: 1
+              with_inline_format:
+                summary: Request with explicit format
+                value:
+                  RequestInfo:
+                    apiId: "asset-services"
+                    ver: "1.0"
+                    ts: 1714478400000
+                    action: "POST"
+                    msgId: "20170310130900|en_IN"
+                  idRequests:
+                    - idName: "PT.PropertyId"
+                      tenantId: "pb.amritsar"
+                      format: "PB-PT-[fy:yyyy-yy]-[SEQ_EG_PT_PROPERTY]"
+                      count: 3
+      responses:
+        '200':
+          description: IDs generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdGenerationResponse'
+              example:
+                responseInfo:
+                  apiId: "asset-services"
+                  ver: "1.0"
+                  ts: 1714478400000
+                  status: "SUCCESSFUL"
+                idResponses:
+                  - id: "PB-PT-2024-25-000001"
+        '400':
+          description: Validation error or invalid ID format / sequence
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRes'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRes'
+
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      tags:
+        - Actuator
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: UP
+
+components:
+  schemas:
+
+    # ---------------------------------------------------------------
+    # Request schemas
+    # ---------------------------------------------------------------
+
+    IdGenerationRequest:
+      type: object
+      required:
+        - RequestInfo
+        - idRequests
+      properties:
+        RequestInfo:
+          $ref: '#/components/schemas/RequestInfo'
+        idRequests:
+          type: array
+          description: One or more ID generation requests
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/IdRequest'
+
+    IdRequest:
+      type: object
+      required:
+        - idName
+        - tenantId
+      properties:
+        idName:
+          type: string
+          description: Logical name of the ID format (looked up in MDMS or local DB)
+          minLength: 1
+          maxLength: 200
+          example: "PT.PropertyId"
+        tenantId:
+          type: string
+          description: Tenant/ULB identifier (dot-separated hierarchy)
+          minLength: 1
+          maxLength: 200
+          example: "pb.amritsar"
+        format:
+          type: string
+          description: |
+            Optional inline format template. When provided, overrides the
+            format fetched from MDMS/DB.
+          maxLength: 200
+          example: "PB-PT-[fy:yyyy-yy]-[SEQ_EG_PT_PROPERTY]"
+        count:
+          type: integer
+          description: Number of IDs to generate (default 1)
+          minimum: 1
+          maximum: 1000
+          default: 1
+
+    RequestInfo:
+      type: object
+      required:
+        - apiId
+        - ver
+        - ts
+        - action
+        - msgId
+      properties:
+        apiId:
+          type: string
+          maxLength: 128
+          example: "asset-services"
+        ver:
+          type: string
+          maxLength: 32
+          example: "1.0"
+        ts:
+          type: integer
+          format: int64
+          description: Unix epoch timestamp in milliseconds
+          example: 1714478400000
+        action:
+          type: string
+          maxLength: 32
+          example: "POST"
+        did:
+          type: string
+          maxLength: 1024
+          description: Device ID
+        key:
+          type: string
+          maxLength: 256
+          description: Encryption key
+        msgId:
+          type: string
+          maxLength: 256
+          example: "20170310130900|en_IN"
+        requesterId:
+          type: string
+          maxLength: 256
+        authToken:
+          type: string
+          description: Auth token from access control service
+        correlationId:
+          type: string
+        userInfo:
+          $ref: '#/components/schemas/UserInfo'
+
+    UserInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        userName:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+        mobileNumber:
+          type: string
+        emailId:
+          type: string
+        tenantId:
+          type: string
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+
+    Role:
+      type: object
+      properties:
+        name:
+          type: string
+        code:
+          type: string
+        tenantId:
+          type: string
+
+    # ---------------------------------------------------------------
+    # Response schemas
+    # ---------------------------------------------------------------
+
+    IdGenerationResponse:
+      type: object
+      properties:
+        responseInfo:
+          $ref: '#/components/schemas/ResponseInfo'
+        idResponses:
+          type: array
+          items:
+            $ref: '#/components/schemas/IdResponse'
+
+    IdResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Generated unique ID string
+
+    ResponseInfo:
+      type: object
+      required:
+        - apiId
+        - ver
+        - ts
+        - status
+      properties:
+        apiId:
+          type: string
+          maxLength: 128
+        ver:
+          type: string
+          maxLength: 32
+        ts:
+          type: integer
+          format: int64
+        resMsgId:
+          type: string
+        msgId:
+          type: string
+          maxLength: 256
+        status:
+          type: string
+          enum:
+            - SUCCESSFUL
+            - FAILED
+
+    # ---------------------------------------------------------------
+    # Error schemas
+    # ---------------------------------------------------------------
+
+    ErrorRes:
+      type: object
+      properties:
+        ResponseInfo:
+          $ref: '#/components/schemas/ResponseInfo'
+        Errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/Error'
+
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        description:
+          type: string
+        params:
+          type: object
+          additionalProperties:
+            type: string

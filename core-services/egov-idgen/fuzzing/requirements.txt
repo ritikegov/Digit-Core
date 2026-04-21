@@ -1,0 +1,21 @@
+# Schemathesis fuzzer for egov-idgen
+# Install: pip install -r requirements.txt
+
+# Core fuzzing framework
+schemathesis>=3.27.0
+
+# HTTP client (used directly in edge-case tests)
+requests>=2.31.0
+
+# YAML parsing (for openapi.yaml)
+PyYAML>=6.0
+
+# Hypothesis (used by Schemathesis under the hood; explicit pin for stability)
+hypothesis>=6.100.0
+
+# pytest runner
+pytest>=7.4.0
+
+# Optional: pretty HTML / JUnit reports
+pytest-html>=4.0.0
+pytest-xdist>=3.3.0   # parallel test execution (-n auto)
