@@ -70,7 +70,7 @@ public class OtpRequestValidatorTest {
     }
 
     @Test
-    public void test_should_validate_with_mdms_config_matching_prefix() {
+    public void test_should_validate_with_mdms_config_matching_countryCode() {
         MobileValidationConfig indiaConfig = MobileValidationConfig.builder()
                 .rules(MobileValidationRules.builder()
                         .pattern("^[6-9][0-9]{9}$")
@@ -80,7 +80,7 @@ public class OtpRequestValidatorTest {
                         .build())
                 .fieldType("ind.mobile")
                 .isDefault(true)
-                .attributes(MobileValidationAttributes.builder().prefix("+91").build())
+                .attributes(MobileValidationAttributes.builder().countryCode("+91").build())
                 .build();
 
         MobileValidationConfig ethiopiaConfig = MobileValidationConfig.builder()
@@ -91,17 +91,17 @@ public class OtpRequestValidatorTest {
                         .errorMessage("Invalid Ethiopian mobile number")
                         .build())
                 .fieldType("etpmo.mobile")
-                .attributes(MobileValidationAttributes.builder().prefix("+251").build())
+                .attributes(MobileValidationAttributes.builder().countryCode("+251").build())
                 .build();
 
         when(mdmsRepository.fetchMobileValidationConfigs(anyString(), any()))
                 .thenReturn(Arrays.asList(indiaConfig, ethiopiaConfig));
 
-        // Send prefix +91, mobile matches Indian pattern
+        // Send countryCode +91, mobile matches Indian pattern
         final OtpRequest otpRequest = OtpRequest.builder()
                 .tenantId("tenantId")
                 .mobileNumber("9123456789")
-                .prefix("+91")
+                .countryCode("+91")
                 .type(OtpRequestType.REGISTER)
                 .build();
 
@@ -109,7 +109,7 @@ public class OtpRequestValidatorTest {
     }
 
     @Test(expected = InvalidOtpRequestException.class)
-    public void test_should_fail_when_prefix_matches_but_number_invalid_for_that_pattern() {
+    public void test_should_fail_when_countryCode_matches_but_number_invalid_for_that_pattern() {
         MobileValidationConfig ethiopiaConfig = MobileValidationConfig.builder()
                 .rules(MobileValidationRules.builder()
                         .pattern("^[79][0-9]{8}$")
@@ -118,17 +118,17 @@ public class OtpRequestValidatorTest {
                         .errorMessage("Invalid Ethiopian mobile number")
                         .build())
                 .fieldType("etpmo.mobile")
-                .attributes(MobileValidationAttributes.builder().prefix("+251").build())
+                .attributes(MobileValidationAttributes.builder().countryCode("+251").build())
                 .build();
 
         when(mdmsRepository.fetchMobileValidationConfigs(anyString(), any()))
                 .thenReturn(Collections.singletonList(ethiopiaConfig));
 
-        // Send prefix +251 but mobile doesn't match Ethiopian pattern
+        // Send countryCode +251 but mobile doesn't match Ethiopian pattern
         final OtpRequest otpRequest = OtpRequest.builder()
                 .tenantId("tenantId")
                 .mobileNumber("1234567890")
-                .prefix("+251")
+                .countryCode("+251")
                 .type(OtpRequestType.REGISTER)
                 .build();
 
@@ -136,7 +136,7 @@ public class OtpRequestValidatorTest {
     }
 
     @Test
-    public void test_should_use_default_config_when_no_prefix_sent() {
+    public void test_should_use_default_config_when_no_countryCode_sent() {
         MobileValidationConfig indiaConfig = MobileValidationConfig.builder()
                 .rules(MobileValidationRules.builder()
                         .pattern("^[6-9][0-9]{9}$")
@@ -146,7 +146,7 @@ public class OtpRequestValidatorTest {
                         .build())
                 .fieldType("ind.mobile")
                 .isDefault(true)
-                .attributes(MobileValidationAttributes.builder().prefix("+91").build())
+                .attributes(MobileValidationAttributes.builder().countryCode("+91").build())
                 .build();
 
         MobileValidationConfig ethiopiaConfig = MobileValidationConfig.builder()
@@ -157,13 +157,13 @@ public class OtpRequestValidatorTest {
                         .errorMessage("Invalid Ethiopian mobile number")
                         .build())
                 .fieldType("etpmo.mobile")
-                .attributes(MobileValidationAttributes.builder().prefix("+251").build())
+                .attributes(MobileValidationAttributes.builder().countryCode("+251").build())
                 .build();
 
         when(mdmsRepository.fetchMobileValidationConfigs(anyString(), any()))
                 .thenReturn(Arrays.asList(indiaConfig, ethiopiaConfig));
 
-        // No prefix sent, should use default (India) config
+        // No countryCode sent, should use default (India) config
         final OtpRequest otpRequest = OtpRequest.builder()
                 .tenantId("tenantId")
                 .mobileNumber("9123456789")
@@ -174,7 +174,7 @@ public class OtpRequestValidatorTest {
     }
 
     @Test
-    public void test_should_fallback_to_default_when_prefix_not_found_in_mdms() {
+    public void test_should_fallback_to_default_when_countryCode_not_found_in_mdms() {
         MobileValidationConfig indiaConfig = MobileValidationConfig.builder()
                 .rules(MobileValidationRules.builder()
                         .pattern("^[6-9][0-9]{9}$")
@@ -184,17 +184,17 @@ public class OtpRequestValidatorTest {
                         .build())
                 .fieldType("ind.mobile")
                 .isDefault(true)
-                .attributes(MobileValidationAttributes.builder().prefix("+91").build())
+                .attributes(MobileValidationAttributes.builder().countryCode("+91").build())
                 .build();
 
         when(mdmsRepository.fetchMobileValidationConfigs(anyString(), any()))
                 .thenReturn(Collections.singletonList(indiaConfig));
 
-        // Send unknown prefix +44, should fall back to default (India) config
+        // Send unknown countryCode +44, should fall back to default (India) config
         final OtpRequest otpRequest = OtpRequest.builder()
                 .tenantId("tenantId")
                 .mobileNumber("9123456789")
-                .prefix("+44")
+                .countryCode("+44")
                 .type(OtpRequestType.REGISTER)
                 .build();
 
@@ -216,7 +216,7 @@ public class OtpRequestValidatorTest {
     }
 
     @Test(expected = InvalidOtpRequestException.class)
-    public void test_should_fail_when_prefix_sent_but_no_matching_or_default_config() {
+    public void test_should_fail_when_countryCode_sent_but_no_matching_or_default_config() {
         MobileValidationConfig ethiopiaConfig = MobileValidationConfig.builder()
                 .rules(MobileValidationRules.builder()
                         .pattern("^[79][0-9]{8}$")
@@ -225,17 +225,17 @@ public class OtpRequestValidatorTest {
                         .errorMessage("Invalid Ethiopian mobile number")
                         .build())
                 .fieldType("etpmo.mobile")
-                .attributes(MobileValidationAttributes.builder().prefix("+251").build())
+                .attributes(MobileValidationAttributes.builder().countryCode("+251").build())
                 .build();
 
         when(mdmsRepository.fetchMobileValidationConfigs(anyString(), any()))
                 .thenReturn(Collections.singletonList(ethiopiaConfig));
 
-        // Send prefix +44, no match and no default config
+        // Send countryCode +44, no match and no default config
         final OtpRequest otpRequest = OtpRequest.builder()
                 .tenantId("tenantId")
                 .mobileNumber("1234567890")
-                .prefix("+44")
+                .countryCode("+44")
                 .type(OtpRequestType.REGISTER)
                 .build();
 
@@ -253,7 +253,7 @@ public class OtpRequestValidatorTest {
                         .build())
                 .fieldType("mobile")
                 .isDefault(true)
-                .attributes(MobileValidationAttributes.builder().prefix("+251").build())
+                .attributes(MobileValidationAttributes.builder().countryCode("+251").build())
                 .build();
 
         when(mdmsRepository.fetchMobileValidationConfigs(anyString(), any()))

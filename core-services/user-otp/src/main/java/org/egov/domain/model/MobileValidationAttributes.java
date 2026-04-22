@@ -14,6 +14,6 @@ import lombok.NoArgsConstructor;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class MobileValidationAttributes {
 
-    @JsonProperty("prefix")
-    private String prefix;
+    @JsonProperty("countryCode")
+    private String countryCode;
 }

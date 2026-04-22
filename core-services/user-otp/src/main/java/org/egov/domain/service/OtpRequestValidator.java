@@ -79,11 +79,11 @@ public class OtpRequestValidator {
 
         // If no MDMS config found, validation fails
         if (mdmsConfig == null || mdmsConfig.getRules() == null) {
-            String prefix = otpRequest.getPrefix();
-            if (prefix != null && !prefix.isEmpty()) {
+            String countryCode = otpRequest.getCountryCode();
+            if (countryCode != null && !countryCode.isEmpty()) {
                 otpRequest.setMdmsValidationErrorMessage(
                         "Mobile number validation failed. No validation pattern found for country code "
-                                + prefix + " and no default validation pattern is configured in MDMS");
+                                + countryCode + " and no default validation pattern is configured in MDMS");
             } else {
                 otpRequest.setMdmsValidationErrorMessage(
                         "Mobile number validation failed. No default validation pattern is configured in MDMS");
@@ -128,9 +128,9 @@ public class OtpRequestValidator {
      * Caches the result for subsequent requests (cache-aside pattern).
      *
      * Selection logic:
-     * - If prefix is sent in request -> find config where attributes.prefix matches
-     *   - If no match for that prefix -> fall back to config where default=true
-     * - If prefix is not sent -> find config where default=true
+     * - If countryCode is sent in request -> find config where attributes.countryCode matches
+     *   - If no match for that countryCode -> fall back to config where default=true
+     * - If countryCode is not sent -> find config where default=true
      */
     private void fetchAndSetMdmsValidationConfig(OtpRequest otpRequest) {
         String tenantId = otpRequest.getTenantId();
@@ -147,14 +147,14 @@ public class OtpRequestValidator {
             stateLevelTenantId = tenantId.split("\\.")[0];
         }
 
-        String prefix = otpRequest.getPrefix();
-        String cacheKeyPrefix = (prefix != null && !prefix.isEmpty()) ? prefix : "default";
+        String countryCode = otpRequest.getCountryCode();
+        String cacheKey = (countryCode != null && !countryCode.isEmpty()) ? countryCode : "default";
 
         try {
             // Check cache first
-            MobileValidationConfig cachedConfig = cacheRepository.getValidationRules(stateLevelTenantId, cacheKeyPrefix);
+            MobileValidationConfig cachedConfig = cacheRepository.getValidationRules(stateLevelTenantId, cacheKey);
             if (cachedConfig != null) {
-                log.debug("Using cached validation config for tenantId: {}, prefix: {}", stateLevelTenantId, cacheKeyPrefix);
+                log.debug("Using cached validation config for tenantId: {}, countryCode: {}", stateLevelTenantId, cacheKey);
                 otpRequest.setMdmsValidationConfig(cachedConfig);
                 return;
             }
@@ -164,19 +164,19 @@ public class OtpRequestValidator {
                     tenantId, otpRequest.getRequestInfo());
 
             if (configs.isEmpty()) {
-                log.info("No MDMS mobile validation configs found for tenantId: {} and prefix: {}", tenantId, cacheKeyPrefix);
+                log.info("No MDMS mobile validation configs found for tenantId: {} and countryCode: {}", tenantId, cacheKey);
                 return;
             }
 
-            // Select the right config based on prefix
-            MobileValidationConfig selectedConfig = selectConfig(configs, prefix);
+            // Select the right config based on countryCode
+            MobileValidationConfig selectedConfig = selectConfig(configs, countryCode);
 
             if (selectedConfig != null) {
-                log.info("MDMS mobile validation config selected for tenantId: {}, prefix: {}, caching...", tenantId, cacheKeyPrefix);
-                cacheRepository.cacheValidationRules(stateLevelTenantId, cacheKeyPrefix, selectedConfig);
+                log.info("MDMS mobile validation config selected for tenantId: {}, countryCode: {}, caching...", tenantId, cacheKey);
+                cacheRepository.cacheValidationRules(stateLevelTenantId, cacheKey, selectedConfig);
                 otpRequest.setMdmsValidationConfig(selectedConfig);
             } else {
-                log.info("No matching MDMS config found for tenantId: {} and prefix: {}", tenantId, cacheKeyPrefix);
+                log.info("No matching MDMS config found for tenantId: {} and countryCode: {}", tenantId, cacheKey);
             }
         } catch (Exception e) {
             log.warn("Failed to fetch MDMS validation config: {}", e.getMessage());
@@ -185,25 +185,25 @@ public class OtpRequestValidator {
 
     /**
      * Selects the appropriate validation config from the list.
-     * If prefix is provided, selects the config where attributes.prefix matches.
-     * If no match found for that prefix, falls back to the default config.
-     * If prefix is not provided, selects the config where default is true.
+     * If countryCode is provided, selects the config where attributes.countryCode matches.
+     * If no match found for that countryCode, falls back to the default config.
+     * If countryCode is not provided, selects the config where default is true.
      */
-    private MobileValidationConfig selectConfig(List<MobileValidationConfig> configs, String prefix) {
-        if (prefix != null && !prefix.isEmpty()) {
-            // Find config matching the given prefix
-            MobileValidationConfig prefixConfig = configs.stream()
+    private MobileValidationConfig selectConfig(List<MobileValidationConfig> configs, String countryCode) {
+        if (countryCode != null && !countryCode.isEmpty()) {
+            // Find config matching the given countryCode
+            MobileValidationConfig countryConfig = configs.stream()
                     .filter(c -> c.getAttributes() != null
-                            && prefix.equals(c.getAttributes().getPrefix()))
+                            && countryCode.equals(c.getAttributes().getCountryCode()))
                     .findFirst()
                     .orElse(null);
 
-            if (prefixConfig != null) {
-                return prefixConfig;
+            if (countryConfig != null) {
+                return countryConfig;
             }
 
-            // Prefix config not found, fall back to default
-            log.info("No MDMS config found for prefix: {}, falling back to default config", prefix);
+            // CountryCode config not found, fall back to default
+            log.info("No MDMS config found for countryCode: {}, falling back to default config", countryCode);
         }
 
         // Find the default config
