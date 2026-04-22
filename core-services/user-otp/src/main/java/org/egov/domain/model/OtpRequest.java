@@ -27,7 +27,7 @@ public class OtpRequest {
 
     private String userType;
 
-    private String prefix;
+    private String countryCode;
 
 	@Setter
 	private MobileValidationConfig mdmsValidationConfig;

@@ -18,7 +18,7 @@ public class OtpRequest {
                 .tenantId(getTenantId())
                 .type(getType())
                 .userType(getUserType())
-                .prefix(getPrefix())
+                .countryCode(getCountryCode())
                 .requestInfo(getRequestInfo())
                 .build();
     }
@@ -39,8 +39,8 @@ public class OtpRequest {
         return otp != null ? otp.getTenantId() : null;
     }
 
-    private String getPrefix() {
-        return otp != null ? otp.getPrefix() : null;
+    private String getCountryCode() {
+        return otp != null ? otp.getCountryCode() : null;
     }
 }
 
