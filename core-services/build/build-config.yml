@@ -133,10 +133,10 @@ config:
   - name: "builds/core-services/egov-user"
     build:
       - work-dir: "egov-user"
-        image-name: "egov-user-sso"
+        image-name: "egov-user"
         dockerfile: "build/maven/Dockerfile"
       - work-dir: "egov-user/src/main/resources/db"
-        image-name: "egov-user-sso-db"
+        image-name: "egov-user-db"
 
   - name: "builds/core-services/egov-workflow-v2"
     build:

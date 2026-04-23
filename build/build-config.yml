@@ -233,10 +233,10 @@ config:
   - name: "builds/Digit-Core/core-services/egov-user"
     build:
       - work-dir: "core-services/egov-user"
-        image-name: "egov-user-sso"
+        image-name: "egov-user"
         dockerfile: "build/maven-java8/Dockerfile"
       - work-dir: "core-services/egov-user/src/main/resources/db"
-        image-name: "egov-user-sso-db"
+        image-name: "egov-user-db"
 
   - name: "builds/Digit-Core/core-services/egov-user-event"
     build:
