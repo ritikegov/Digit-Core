@@ -55,7 +55,6 @@
     "pdfmake": "^0.2.23",
     "pg": "^8.20.0",
     "qrcode": "^1.5.4",
-    "resource-router-middleware": "^0.7.0",
     "uuid": "^14.0.0",
     "winston": "^3.19.0"
   },
