@@ -71,7 +71,7 @@ public class ChatbotRouter extends ZuulFilter {
 
         String mobileNumber = get10DigitMobileNumber(request);
         
-        log.debug("chatbot user is "+ mobileNumber);
+        log.debug("chatbot user identified");
 
         boolean isIsolatedUser = isHomeIsolatedUser(mobileNumber);
         

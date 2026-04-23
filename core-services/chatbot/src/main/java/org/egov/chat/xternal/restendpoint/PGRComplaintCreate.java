@@ -85,7 +85,7 @@ public class PGRComplaintCreate implements RestEndpoint {
             request.add("$.workflow.verificationDocuments", docs);
 
         }
-        log.info("PGR Create complaint request : " + request.jsonString());
+        log.info("PGR Create complaint request received");
         JsonNode requestObject = null;
         requestObject = objectMapper.readTree(request.jsonString());
         ObjectNode responseMessage = objectMapper.createObjectNode();

@@ -60,7 +60,7 @@ public class ElasticSearchRepository {
             Object response = restTemplate.postForEntity(uri.toString(), httpEntity, Map.class);
             String res = objectMapper.writeValueAsString(response);
             JsonNode responseNode = objectMapper.readValue(res, JsonNode.class);
-            log.info("RESPONSE FROM ES: " + responseNode.toString());
+            log.info("Received response from ES");
             Boolean errorWhileIndexingData = responseNode.get(IngestConstants.BODY).get(IngestConstants.ERRORS).asBoolean();
             if(errorWhileIndexingData)
                 throw new CustomException("EG_ES_IDX_ERR", "Error occurred while indexing data onto ES. Please ensure input data fields are in accordance with index mapping.");
@@ -79,7 +79,7 @@ public class ElasticSearchRepository {
             Object response = restTemplate.getForEntity(uri.toString(), Map.class);
             String res = objectMapper.writeValueAsString(response);
             JsonNode responseNode = objectMapper.readValue(res, JsonNode.class);
-            log.info(responseNode.get(IngestConstants.BODY).toString());
+            log.info("Fetched records from ES");
             recordsFound = responseNode.get(IngestConstants.BODY).get(IngestConstants.HITS).get(IngestConstants.TOTAL).asInt();
         }catch (ResourceAccessException e){
             log.error("ES is down");
