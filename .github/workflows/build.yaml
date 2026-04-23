@@ -60,6 +60,9 @@ on:
           - "zuul"
         default: "audit-service"
 
+permissions:
+  contents: read
+
 env:
   DOCKER_USERNAME: ${{ vars.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_ACCESS_TOKEN }}
