@@ -5,6 +5,7 @@ import static org.apache.commons.lang3.StringUtils.isEmpty;
 import static org.egov.user.config.UserServiceConstants.USER_CLIENT_ID;
 import static org.springframework.util.CollectionUtils.isEmpty;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -692,6 +693,7 @@ public class UserService {
         loginAuditRepository.saveLoginAudit(loginAudit);
 
     }
+
 
 
 
