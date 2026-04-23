@@ -104,9 +104,6 @@ public class UserService {
     @Value("${default.otp}")
     private String defaultOtp;
 
-    @Value("${egov.user.countrycode.default:+91}")
-    private String defaultCountryCode;
-
     @Autowired
     private RestTemplate restTemplate;
 
@@ -697,14 +694,6 @@ public class UserService {
 
     }
 
-    /**
-     * Get default country code
-     *
-     * @return default country code
-     */
-    public String getDefaultCountryCode() {
-        return defaultCountryCode;
-    }
 
 
 
