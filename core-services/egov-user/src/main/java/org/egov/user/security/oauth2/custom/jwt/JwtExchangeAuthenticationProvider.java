@@ -626,7 +626,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
 
         String username = jwt.getClaims().get("unique_name") != null ? 
             jwt.getClaims().get("unique_name").toString() : 
-            jwt.getPreferredUsername(); // Use unique_name which has the email, fallback to preferred_username
+            jwt.getEmail(); // Use unique_name which has the email, fallback to preferred_username
         return org.egov.user.domain.model.hrms.User.builder()
                 .uuid(jwt.getExternalUserId())
                 .emailId(username)
@@ -705,7 +705,7 @@ public class JwtExchangeAuthenticationProvider implements AuthenticationProvider
                 .name(jwt.getName())
                 .emailId(jwt.getClaims().get("unique_name") != null ? 
                     jwt.getClaims().get("unique_name").toString() : 
-                    jwt.getPreferredUsername()) // Use unique_name which has the email, fallback to preferred_username
+                    jwt.getEmail()) // Use unique_name which has the email, fallback to preferred_username
                 .roles(toDomainRoles(jwt.getRoles(), user.getTenantId()))
                 .createdBy(user.getCreatedBy())
                 .lastModifiedBy(user.getId())
