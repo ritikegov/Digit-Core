@@ -1,13 +1,14 @@
 # ──────────────── BUILD STAGE ────────────────
-FROM maven:3.9-eclipse-temurin-17 AS build
+FROM --platform=$BUILDPLATFORM maven:3.9-eclipse-temurin-17 AS build
 ARG WORK_DIR
 WORKDIR /app
 
-# Copy project files
+# Download dependencies as a separate layer — only re-runs when pom.xml changes
 COPY ${WORK_DIR}/pom.xml ./pom.xml
-COPY ${WORK_DIR}/src ./src
+RUN mvn -B dependency:go-offline -f /app/pom.xml
 
-# Build the project
+# Compile — re-runs on every source change, but deps are already cached above
+COPY ${WORK_DIR}/src ./src
 RUN mvn -B -f /app/pom.xml package -DskipTests
 
 # ─────────────── RUNTIME STAGE ───────────────
