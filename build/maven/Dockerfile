@@ -1,5 +1,5 @@
 # ──────────────── BUILD STAGE ────────────────
-FROM --platform=$BUILDPLATFORM maven:3.9-eclipse-temurin-17 AS build
+FROM --platform=linux/amd64 maven:3.9-eclipse-temurin-17 AS build
 ARG WORK_DIR
 WORKDIR /app
 
