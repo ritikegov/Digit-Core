@@ -5,86 +5,79 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
-import java.io.IOException;
+import java.net.ConnectException;
 import java.util.HashMap;
+import java.util.Map;
 
 @Component
 @Slf4j
 public class ErrorUtils {
 
-    private static final String SEND_ERROR_FILTER_RAN = "sendErrorFilter.ran";
-
-    private static final ThreadLocal<ObjectMapper> om = new ThreadLocal<ObjectMapper>() {
-        @Override
-        protected ObjectMapper initialValue() {
-            ObjectMapper objectMapper = new ObjectMapper();
-            objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-            return objectMapper;
-        }
-    };
-
-    public static ObjectMapper getObjectMapper() {
-        return om.get();
-    }
-
-//    public static String getResponseBody(RequestContext ctx) throws IOException {
-//        String body = ctx.getResponseBody();
-//
-//        if (body == null) {
-//            body = IOUtils.toString(ctx.getResponseDataStream());
-//            ctx.setResponseBody(body);
-//        }
-//
-//        return body;
-//    }
+    private static final ThreadLocal<ObjectMapper> om = ThreadLocal.withInitial(() -> {
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        return objectMapper;
+    });
 
     public static Mono<Void> raiseErrorFilterException(ServerWebExchange exchange, Throwable e) {
+        log.error("Gateway error for [{}] {}: {}", exchange.getRequest().getMethod(),
+                exchange.getRequest().getURI(), e.getMessage(), e);
+
+        if (exchange.getResponse().isCommitted()) {
+            return Mono.error(e);
+        }
+
+        HttpStatus status;
+        String code;
+        String message;
+
+        if (e instanceof ResponseStatusException rse) {
+            status = HttpStatus.resolve(rse.getStatusCode().value());
+            if (status == null) status = HttpStatus.INTERNAL_SERVER_ERROR;
+            code = status.name();
+            message = rse.getReason() != null ? rse.getReason() : rse.getMessage();
+        } else if (isConnectionError(e)) {
+            status = HttpStatus.SERVICE_UNAVAILABLE;
+            code = "SERVICE_UNAVAILABLE";
+            message = "Downstream service is unreachable";
+        } else {
+            status = HttpStatus.INTERNAL_SERVER_ERROR;
+            code = "INTERNAL_GATEWAY_ERROR";
+            message = e.getMessage();
+        }
 
         try {
-            String message = e.getMessage();
-            while (e.getCause() != null)
-                e = e.getCause();
-            return _setExceptionBody(exchange, HttpStatus.INTERNAL_SERVER_ERROR, getErrorInfoObject(e.getClass().getName(), message, e.getMessage()));
-        } catch (Exception e1) {
-            e1.printStackTrace();
+            exchange.getResponse().setStatusCode(status);
+            exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
+            return exchange.getResponse().writeWith(
+                    Mono.just(exchange.getResponse().bufferFactory()
+                            .wrap(om.get().writeValueAsBytes(errorBody(code, message)))));
+        } catch (JsonProcessingException ex) {
+            log.error("Failed to serialize error response", ex);
+            exchange.getResponse().setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR);
+            return exchange.getResponse().setComplete();
         }
-        return null;
     }
 
-    private static HashMap<String, Object> getErrorInfoObject(String code, String message, String description) {
+    private static boolean isConnectionError(Throwable e) {
+        Throwable cause = e;
+        while (cause != null) {
+            if (cause instanceof ConnectException) return true;
+            cause = cause.getCause();
+        }
+        return false;
+    }
 
-        HashMap<String, Object> error = new HashMap<String, Object>();
-        error.put("code", "INTERNAL_GATEWAY_ERROR");
-        error.put("message", code + " : " + message);
-        error.put("description", description);
+    private static Map<String, Object> errorBody(String code, String message) {
+        Map<String, Object> error = new HashMap<>();
+        error.put("code", code);
+        error.put("message", message);
         return error;
     }
-
-//    public static void setCustomException(HttpStatus status, String message) {
-//        try {
-//            _setExceptionBody(status, getErrorInfoObject("CustomException", message, message));
-//        } catch (JsonProcessingException e) {
-//            e.printStackTrace();
-//        }
-//    }
-
-//    private static void _setExceptionBody(HttpStatus status, Object body) throws JsonProcessingException {
-//        _setExceptionBody(status, getObjectJSONString(body));
-//    }
-
-    private static Mono<Void> _setExceptionBody(ServerWebExchange exchange , HttpStatus status, Object body) throws JsonProcessingException {
-        exchange.getResponse().setStatusCode(status);
-         return exchange.getResponse().writeWith(Mono.just(exchange.getResponse()
-                .bufferFactory().wrap(getObjectJSONString(body).getBytes())));
-
-    }
-
-    private static String getObjectJSONString(Object obj) throws JsonProcessingException {
-        return om.get().writeValueAsString(obj);
-    }
-
 }

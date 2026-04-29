@@ -4,12 +4,14 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.net.URL;
 import java.util.Map;
 
 @Slf4j
@@ -19,6 +21,9 @@ public class RoutingConfig {
     @Value("${egov.service.config.path}")
     private String serviceConfigPath;
 
+    @Autowired
+    private ResourceLoader resourceLoader;
+
     private Map<String, Map<String, String>> tenantRoutingConfigWrapper;
 
     @PostConstruct
@@ -27,8 +32,8 @@ public class RoutingConfig {
         log.info(" Translator Service Reading Configuration from tenant-config givne in path : " + serviceConfigPath);
         ObjectMapper mapper = new ObjectMapper();
         try {
-            URL serviceConfigUrl = new URL(serviceConfigPath);
-            tenantRoutingConfigWrapper = mapper.readValue(new InputStreamReader(serviceConfigUrl.openStream()),
+            Resource resource = resourceLoader.getResource(serviceConfigPath);
+            tenantRoutingConfigWrapper = mapper.readValue(new InputStreamReader(resource.getInputStream()),
                     new TypeReference<Map<String, Map<String, String>>>(){});
 
             log.info("loging the map constructed from the cofig file : " + tenantRoutingConfigWrapper.toString());
