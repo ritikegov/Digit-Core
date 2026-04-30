@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strings"
 	"text/template"
 
@@ -33,6 +34,7 @@ import (
 type Route struct {
 	Host          string
 	Path          string // Annotation value of zuul/route-path pointing to the context to be filtered
+	Namespace     string // Kubernetes namespace the service belongs to
 	ServiceURL    string // Service URL to be redirected to
 	RateLimiter   bool
 	KeyResolver   string
@@ -46,7 +48,7 @@ const gatewayBurstCapacity = "gateway-burstCapacity"
 const sAnnotationPath string = "zuul/route-path"
 const sAnnotationHost string = "zuul/route-host"
 const routesTemplate string = `{{- range $index, $route := . }}
-spring.cloud.gateway.routes[{{ $index }}].id={{ $route.Path }}
+spring.cloud.gateway.routes[{{ $index }}].id={{ $route.Path }}-{{ $route.Namespace }}
 spring.cloud.gateway.routes[{{ $index }}].uri={{ $route.ServiceURL }}
 spring.cloud.gateway.routes[{{ $index }}].predicates[0]=Path=/{{ $route.Path }}/**
 {{ if ne $route.Host "" }}spring.cloud.gateway.routes[{{ $index }}].predicates[1]=Host={{ $route.Host }}{{ end }}
@@ -111,7 +113,8 @@ func getRoutes(s *v1.ServiceList) (r *[]Route) {
 					burstCapacity = val
 				}
 
-				routes = append(routes, Route{host, path, url, rateLimiter, keyResolver, replenishRate, burstCapacity})
+				namespace := s.Namespace
+				routes = append(routes, Route{host, path, namespace, url, rateLimiter, keyResolver, replenishRate, burstCapacity})
 				if host != "" {
 					log.Printf("Configuring service %s with host %s routing to service URL %s \n", path, host, url)
 				} else {
@@ -167,5 +170,19 @@ func main() {
 		r := getRoutes(s)
 		routes = append(routes, *r...)
 	}
+
+	// Sort: within the same path, routes with a Host predicate come before path-only routes
+	sort.SliceStable(routes, func(i, j int) bool {
+		if routes[i].Path != routes[j].Path {
+			return routes[i].Path < routes[j].Path
+		}
+		iHasHost := routes[i].Host != ""
+		jHasHost := routes[j].Host != ""
+		if iHasHost != jHasHost {
+			return iHasHost // host routes sort before path-only routes
+		}
+		return false
+	})
+
 	writeTemplate(&routes)
 }
