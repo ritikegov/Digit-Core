@@ -68,4 +68,10 @@ public class AuditServiceController {
         return new ResponseEntity<>(auditLogs, HttpStatus.OK);
     }
 
+    @RequestMapping(value="/v1/_verify_test", method = RequestMethod.POST)
+    public ResponseEntity<ResponseInfo> verifys(@Valid @RequestBody VerificationRequest verificationRequest) {
+        service.verifyDbEntity(verificationRequest.getObjectId(), verificationRequest.getKeyValuePairs());
+        return new ResponseEntity<>(ResponseInfo.builder().build(), HttpStatus.OK);
+    }
+
 }
