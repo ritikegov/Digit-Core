@@ -47,6 +47,8 @@ const gatewayReplenishRate = "gateway-replenishRate"
 const gatewayBurstCapacity = "gateway-burstCapacity"
 const sAnnotationPath string = "zuul/route-path"
 const sAnnotationHost string = "zuul/route-host"
+const sAnnotationInternalGatewayEnabled string = "internal-gateway-enabled"
+const sAnnotationInternalGatewayService string = "internal-gateway-service"
 const routesTemplate string = `{{- range $index, $route := . }}
 spring.cloud.gateway.routes[{{ $index }}].id={{ $route.Path }}-{{ $route.Namespace }}
 spring.cloud.gateway.routes[{{ $index }}].uri={{ $route.ServiceURL }}
@@ -83,14 +85,26 @@ func listAllServices(clientset *kubernetes.Clientset, namespace string) (s *v1.S
 	return s
 }
 
-func getRoutes(s *v1.ServiceList) (r *[]Route) {
+func getRoutes(s *v1.ServiceList, defaultInternalGatewayService string) (r *[]Route) {
 	routes := []Route{}
 	for _, s := range s.Items {
 
 		if s.Annotations != nil {
 			if val, ok := s.Annotations[sAnnotationPath]; ok {
 				path := fmt.Sprintf("%s", val)
-				url := fmt.Sprintf("http://%s.%s:%d/", s.Name, s.Namespace, s.Spec.Ports[0].Port)
+				port := s.Spec.Ports[0].Port
+				url := fmt.Sprintf("http://%s.%s:%d/", s.Name, s.Namespace, port)
+
+				if s.Annotations[sAnnotationInternalGatewayEnabled] == "true" {
+					gatewayService := defaultInternalGatewayService
+					if svc, ok := s.Annotations[sAnnotationInternalGatewayService]; ok && svc != "" {
+						gatewayService = svc
+					}
+					if gatewayService != "" {
+						url = fmt.Sprintf("http://%s:%d/", gatewayService, port)
+					}
+				}
+
 				// Initialize variables for rate limiter annotations
 				host := ""
 				rateLimiter := false
@@ -161,13 +175,18 @@ func main() {
 		log.Println("NAMESPACE environment vairable not set, defaulting to cluster wide")
 	}
 
+	defaultInternalGatewayService, ok := os.LookupEnv("DEFAULT_INTERNAL_GATEWAY_SERVICE")
+	if !ok {
+		log.Println("DEFAULT_INTERNAL_GATEWAY_SERVICE not set, internal-gateway-enabled services without annotation will use their direct service URL")
+	}
+
 	clientset := getKubeConnection()
 
 	namespaces := strings.Split(n, ",")
 	routes := []Route{}
 	for _, namespace := range namespaces {
 		s := listAllServices(clientset, namespace)
-		r := getRoutes(s)
+		r := getRoutes(s, defaultInternalGatewayService)
 		routes = append(routes, *r...)
 	}
 
