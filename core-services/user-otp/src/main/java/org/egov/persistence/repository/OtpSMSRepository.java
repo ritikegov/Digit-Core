@@ -42,6 +42,9 @@ public class OtpSMSRepository {
     
     @Value("${egov.localization.default.locale:en_IN}")
     private String defaultLocale;
+    
+    @Value("${egov.localization.module}")
+    private String localizationModule;
 
     @Autowired
     public OtpSMSRepository(CustomKafkaTemplate<String, SMSRequest> kafkaTemplate,
@@ -80,7 +83,7 @@ public class OtpSMSRepository {
             }
         }
 
-        Map<String, String> localisedMsgs = localizationService.getLocalisedMessages(tenantId, locale, "egov-user");
+        Map<String, String> localisedMsgs = localizationService.getLocalisedMessages(tenantId, locale, localizationModule);
         if (localisedMsgs.isEmpty()) {
             log.info("Localization Service didn't return any msgs so using default...");
             localisedMsgs.put(LOCALIZATION_KEY_REGISTER_SMS, "Dear Citizen, Your OTP to complete your DIGIT Registration is %s.");

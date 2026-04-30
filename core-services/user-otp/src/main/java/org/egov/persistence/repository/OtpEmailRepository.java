@@ -43,6 +43,9 @@ public class OtpEmailRepository {
 	
 	@Value("${egov.localization.default.locale:en_IN}")
     private String defaultLocale;
+	
+	@Value("${egov.localization.module}")
+    private String localizationModule;
 
     @Autowired
     public OtpEmailRepository(CustomKafkaTemplate<String, EmailRequest> kafkaTemplate,
@@ -85,7 +88,7 @@ public class OtpEmailRepository {
 	private String getMessages(OtpRequest otpRequest, String localizationKey){
 		String tenantId = getRequiredTenantId(otpRequest.getTenantId());
 		String locale = getLocale(otpRequest);
-		Map<String, String> localisedMessages = localizationService.getLocalisedMessages(tenantId, locale, "egov-user");
+		Map<String, String> localisedMessages = localizationService.getLocalisedMessages(tenantId, locale, localizationModule);
 		if (localisedMessages.isEmpty()) {
 			log.info("Localization Service didn't return any Subject so using default...");
 			localisedMessages.put(LOCALIZATION_KEY_PWD_RESET_SUBJECT_EMAIL, "Password Reset");
