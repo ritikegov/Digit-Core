@@ -15,6 +15,9 @@ public class ValidationData {
     @JsonProperty("rules")
     private ValidationRules rules;
 
-    @JsonProperty("validationName")
-    private String validationName;
+    @JsonProperty("fieldType")
+    private String fieldType;
+
+    @JsonProperty("attributes")
+    private ValidationAttributes attributes;
 }

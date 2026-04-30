@@ -106,12 +106,12 @@ abstract public class BaseSMSService implements SMSService, SMSBodyBuilder {
         }
 
         if (smsProperties.isNumberBlacklisted(sms.getMobileNumber())) {
-            log.error("Sms to {} is blacklisted", maskMobile(sms.getMobileNumber()));
+            log.error("Sms is blacklisted");
             return;
         }
 
         if (!smsProperties.isNumberWhitelisted(sms.getMobileNumber())) {
-            log.error("Sms to {} is not in whitelist", maskMobile(sms.getMobileNumber()));
+            log.error("Sms is not in whitelist");
             return;
         }
 
