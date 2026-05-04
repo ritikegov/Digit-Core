@@ -3,11 +3,13 @@ package org.egov.user.repository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.egov.user.domain.model.mdmsv2.ValidationData;
 import org.egov.user.domain.model.mdmsv2.ValidationRules;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.util.StringUtils;
 
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
@@ -103,6 +105,63 @@ public class ValidationRulesCacheRepository {
     }
 
     /**
+     * Get cached validation data for a tenant and country code
+     *
+     * @param tenantId    Tenant ID
+     * @param countryCode Country code (e.g., "+91")
+     * @return ValidationData or null if not in cache
+     */
+    public ValidationData getValidationData(String tenantId, String countryCode) {
+        try {
+            String cacheKey = getCacheKeyWithCountryCode(tenantId, countryCode);
+            String cachedValue = (String) stringRedisTemplate.opsForHash().get(VALIDATION_RULES_HASH_KEY, cacheKey);
+
+            if (cachedValue != null) {
+                log.info("Cache HIT for tenant: {} with country code: {}", tenantId, countryCode);
+                return objectMapper.readValue(cachedValue, ValidationData.class);
+            }
+
+            log.info("Cache MISS for tenant: {} with country code: {}", tenantId, countryCode);
+            return null;
+
+        } catch (IOException e) {
+            log.error("Error reading validation data from cache for tenant: {} and country code: {}",
+                    tenantId, countryCode, e);
+            return null;
+        }
+    }
+
+    /**
+     * Cache validation data for a tenant and country code with TTL
+     *
+     * @param tenantId       Tenant ID
+     * @param countryCode    Country code (e.g., "+91")
+     * @param validationData ValidationData to cache
+     */
+    public void cacheValidationData(String tenantId, String countryCode, ValidationData validationData) {
+        try {
+            String cacheKey = getCacheKeyWithCountryCode(tenantId, countryCode);
+            String cacheValue = objectMapper.writeValueAsString(validationData);
+
+            stringRedisTemplate.opsForHash().put(VALIDATION_RULES_HASH_KEY, cacheKey, cacheValue);
+
+            // Set expiration on the entire hash (all tenants share same expiration)
+            if (cacheTtlSeconds > 0) {
+                stringRedisTemplate.expire(VALIDATION_RULES_HASH_KEY, cacheTtlSeconds, TimeUnit.SECONDS);
+                log.info("Cached validation data for tenant: {} with country code: {} and TTL: {} seconds",
+                        tenantId, countryCode, cacheTtlSeconds);
+            } else {
+                log.info("Cached validation data for tenant: {} with country code: {} with no expiration (TTL: {})",
+                        tenantId, countryCode, cacheTtlSeconds);
+            }
+
+        } catch (JsonProcessingException e) {
+            log.error("Error writing validation data to cache for tenant: {} and country code: {}",
+                    tenantId, countryCode, e);
+        }
+    }
+
+    /**
      * Generate cache key for tenant
      *
      * @param tenantId Tenant ID
@@ -110,5 +169,21 @@ public class ValidationRulesCacheRepository {
      */
     private String getCacheKey(String tenantId) {
         return String.format("validation:%s", tenantId);
+    }
+
+    /**
+     * Generate cache key for tenant and country code
+     *
+     * @param tenantId    Tenant ID
+     * @param countryCode Country code
+     * @return Cache key
+     */
+    private String getCacheKeyWithCountryCode(String tenantId, String countryCode) {
+        if (!StringUtils.hasText(countryCode)) {
+            return String.format("validation:%s:default", tenantId);
+        }
+        // Sanitize country code for use in cache key (remove special characters like +)
+        String sanitizedCode = countryCode.replaceAll("[^a-zA-Z0-9]", "");
+        return String.format("validation:%s:%s", tenantId, sanitizedCode);
     }
 }

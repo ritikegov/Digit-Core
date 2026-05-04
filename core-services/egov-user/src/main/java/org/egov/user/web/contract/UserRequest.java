@@ -46,6 +46,9 @@ public class UserRequest {
 
     private String mobileNumber;
 
+    @Size(max = 10)
+    private String countryCode;
+
     private String alternatemobilenumber;
 
     @Email
@@ -157,6 +160,7 @@ public class UserRequest {
         this.name = user.getName();
         this.gender = user.getGender() != null ? user.getGender().toString() : null;
         this.mobileNumber = user.getMobileNumber();
+        this.countryCode = user.getCountryCode();
         this.emailId = user.getEmailId();
         this.altContactNumber = user.getAltContactNumber();
         this.pan = user.getPan();
@@ -223,6 +227,7 @@ public class UserRequest {
                 .username(this.userName)
                 .salutation(this.salutation)
                 .mobileNumber(this.mobileNumber)
+                .countryCode(this.countryCode)
                 .emailId(this.emailId)
                 .altContactNumber(this.altContactNumber)
                 .pan(this.pan)
