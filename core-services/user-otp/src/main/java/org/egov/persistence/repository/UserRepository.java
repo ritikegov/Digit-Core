@@ -45,10 +45,10 @@ public class UserRepository {
     	String tenantIdForHeader = tenantId;
         UserSearchRequest request = null;
         if (userType !=null && userType.equals("EMPLOYEE")) {
-            request = new UserSearchRequest(null, tenantId, userType, mobileNumber);
+            request = new UserSearchRequest(null, tenantId, userType, userName);
         } else {
         	tenantIdForHeader = tenantId.split("\\.")[0];
-            request = new UserSearchRequest(null, tenantIdForHeader, userType, mobileNumber);
+            request = new UserSearchRequest(null, tenantIdForHeader, userType, userName);
         }
         
         ObjectMapper mapper = new ObjectMapper();
