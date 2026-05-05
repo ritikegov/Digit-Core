@@ -8,12 +8,14 @@ import (
 )
 
 type Config struct {
-	DBHost     string
-	DBPort     string
-	DBName     string
-	DBUser     string
-	DBPassword string
-	DBSSLMode  string
+	DBHost        string
+	DBPort        string
+	DBName        string
+	DBUser        string
+	DBPassword    string
+	DBSSLMode     string
+	DBMaxOpenConn int
+	DBMaxIdleConn int
 
 	MdmsServiceHost string
 	MdmsSearchURI   string
@@ -28,9 +30,11 @@ type Config struct {
 
 func Load() *Config {
 	cfg := &Config{
-		DBUser:           getEnv("SPRING_DATASOURCE_USERNAME", "postgres"),
-		DBPassword:       getEnv("SPRING_DATASOURCE_PASSWORD", "postgres"),
-		DBSSLMode:        getEnv("DB_SSL_MODE", "disable"),
+		DBUser:        getEnv("SPRING_DATASOURCE_USERNAME", "postgres"),
+		DBPassword:    getEnv("SPRING_DATASOURCE_PASSWORD", "postgres"),
+		DBSSLMode:     getEnv("DB_SSL_MODE", "require"),
+		DBMaxOpenConn: getIntEnv("SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE", 10),
+		DBMaxIdleConn: getIntEnv("SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE", 2),
 		MdmsServiceHost:  getEnv("MDMS_SERVICE_HOST", "http://localhost:8280/"),
 		MdmsSearchURI:    getEnv("MDMS_SERVICE_SEARCH_URI", "egov-mdms-service/v1/_search"),
 		IdFormatFromMDMS: getBoolEnv("IDFORMAT_FROM_MDMS", true),
@@ -86,6 +90,18 @@ func getEnv(key, defaultVal string) string {
 		return val
 	}
 	return defaultVal
+}
+
+func getIntEnv(key string, defaultVal int) int {
+	val := os.Getenv(key)
+	if val == "" {
+		return defaultVal
+	}
+	n, err := strconv.Atoi(val)
+	if err != nil {
+		return defaultVal
+	}
+	return n
 }
 
 func getBoolEnv(key string, defaultVal bool) bool {

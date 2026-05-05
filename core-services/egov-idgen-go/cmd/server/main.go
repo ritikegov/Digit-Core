@@ -23,9 +23,13 @@ func main() {
 	}
 	defer db.Close()
 
+	db.SetMaxOpenConns(cfg.DBMaxOpenConn)
+	db.SetMaxIdleConns(cfg.DBMaxIdleConn)
+
 	if err := db.Ping(); err != nil {
 		log.Fatalf("ping db: %v", err)
 	}
+	log.Printf("db pool: max_open=%d max_idle=%d", cfg.DBMaxOpenConn, cfg.DBMaxIdleConn)
 
 	repo := repository.NewIdGenRepository(db)
 	mdmsSvc := service.NewMdmsService(cfg.MdmsServiceHost, cfg.MdmsSearchURI)
