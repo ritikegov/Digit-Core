@@ -55,7 +55,7 @@ public class RateLimiterConfiguration {
 
 
     /**
-     * user limit
+     * Rate limit key: routeId + userUuid
      * @return
      */
     @Bean
