@@ -51,7 +51,7 @@ public class OtpRequestValidator {
 
         MobileValidationConfig selected = selectConfig(configs, countryCode);
         if (selected != null) {
-            cacheRepository.setValidationRules(stateTenantId, cacheKey, selected);
+            cacheRepository.cacheValidationRules(stateTenantId, cacheKey, selected);
             otpRequest.setMdmsValidationConfig(selected);
         }
     }

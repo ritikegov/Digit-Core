@@ -7,16 +7,16 @@ import org.egov.web.contract.RequestInfo;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
+import org.springframework.web.client.RestTemplate;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 @Repository
 @Slf4j
 public class MdmsRepository {
+
+    private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
 
     @Value("${egov.mdms.host}")
     private String mdmsHost;
@@ -25,59 +25,86 @@ public class MdmsRepository {
     private String mdmsSearchEndpoint;
 
     @Value("${egov.mdms.module.name:common-masters}")
-    private String mdmsModuleName;
+    private String moduleName;
 
     @Value("${egov.mdms.master.name:UserValidation}")
-    private String mdmsMasterName;
+    private String masterName;
 
     @Autowired
-    private RestCallRepository restCallRepository;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @SuppressWarnings("unchecked")
-    public List<MobileValidationConfig> fetchMobileValidationConfigs(String tenantId, RequestInfo requestInfo) {
-        String stateTenantId = tenantId.split("\\.")[0];
-        Map<String, Object> request = buildMdmsRequest(stateTenantId, requestInfo);
-        StringBuilder url = new StringBuilder(mdmsHost).append(mdmsSearchEndpoint);
-
-        Optional<Object> response = restCallRepository.fetchResult(url, request);
-        if (response.isEmpty()) {
-            log.warn("No MDMS response for tenantId: {}", stateTenantId);
-            return Collections.emptyList();
-        }
-
-        try {
-            Map<String, Object> responseMap = (Map<String, Object>) response.get();
-            Map<String, Object> mdmsRes = (Map<String, Object>) responseMap.get("MdmsRes");
-            Map<String, Object> module = (Map<String, Object>) mdmsRes.get(mdmsModuleName);
-            List<Object> masterData = (List<Object>) module.get(mdmsMasterName);
-
-            return masterData.stream()
-                    .map(item -> objectMapper.convertValue(item, MobileValidationConfig.class))
-                    .toList();
-        } catch (Exception e) {
-            log.error("Error parsing MDMS mobile validation config", e);
-            return Collections.emptyList();
-        }
+    public MdmsRepository(RestTemplate restTemplate, ObjectMapper objectMapper) {
+        this.restTemplate = restTemplate;
+        this.objectMapper = objectMapper;
     }
 
-    private Map<String, Object> buildMdmsRequest(String tenantId, RequestInfo requestInfo) {
-        Map<String, Object> masterDetail = new HashMap<>();
-        masterDetail.put("name", mdmsMasterName);
+    public List<MobileValidationConfig> fetchMobileValidationConfigs(String tenantId, RequestInfo requestInfo) {
+        try {
+            String uri = mdmsHost + mdmsSearchEndpoint;
 
-        Map<String, Object> moduleDetail = new HashMap<>();
-        moduleDetail.put("moduleName", mdmsModuleName);
-        moduleDetail.put("masterDetails", List.of(masterDetail));
+            Map<String, Object> masterDetail = new HashMap<>();
+            masterDetail.put("name", masterName);
 
-        Map<String, Object> criteria = new HashMap<>();
-        criteria.put("tenantId", tenantId);
-        criteria.put("moduleDetails", List.of(moduleDetail));
+            List<Map<String, Object>> masterDetails = new ArrayList<>();
+            masterDetails.add(masterDetail);
 
-        Map<String, Object> request = new HashMap<>();
-        request.put("RequestInfo", requestInfo);
-        request.put("MdmsCriteria", criteria);
-        return request;
+            Map<String, Object> moduleDetail = new HashMap<>();
+            moduleDetail.put("moduleName", moduleName);
+            moduleDetail.put("masterDetails", masterDetails);
+
+            List<Map<String, Object>> moduleDetails = new ArrayList<>();
+            moduleDetails.add(moduleDetail);
+
+            Map<String, Object> mdmsCriteria = new HashMap<>();
+            mdmsCriteria.put("tenantId", tenantId);
+            mdmsCriteria.put("moduleDetails", moduleDetails);
+
+            Map<String, Object> request = new HashMap<>();
+            request.put("RequestInfo", requestInfo);
+            request.put("MdmsCriteria", mdmsCriteria);
+
+            log.info("Fetching mobile validation configs from MDMS for tenantId: {}", tenantId);
+
+            Map<String, Object> response = restTemplate.postForObject(uri, request, Map.class);
+
+            if (response != null && response.containsKey("MdmsRes")) {
+                Object mdmsResObj = response.get("MdmsRes");
+                if (!(mdmsResObj instanceof Map)) {
+                    log.warn("Unexpected MdmsRes type: {}", mdmsResObj != null ? mdmsResObj.getClass() : "null");
+                    return Collections.emptyList();
+                }
+                Map<String, Object> mdmsRes = (Map<String, Object>) mdmsResObj;
+
+                if (mdmsRes.containsKey(moduleName)) {
+                    Object moduleObj = mdmsRes.get(moduleName);
+                    if (!(moduleObj instanceof Map)) {
+                        log.warn("Unexpected module type for {}: {}", moduleName, moduleObj != null ? moduleObj.getClass() : "null");
+                        return Collections.emptyList();
+                    }
+                    Map<String, Object> validationConfigs = (Map<String, Object>) moduleObj;
+
+                    if (validationConfigs.containsKey(masterName)) {
+                        Object masterObj = validationConfigs.get(masterName);
+                        if (!(masterObj instanceof List)) {
+                            log.warn("Unexpected master type for {}: {}", masterName, masterObj != null ? masterObj.getClass() : "null");
+                            return Collections.emptyList();
+                        }
+                        List<Object> configList = (List<Object>) masterObj;
+
+                        List<MobileValidationConfig> configs = new ArrayList<>();
+                        for (Object item : configList) {
+                            configs.add(objectMapper.convertValue(item, MobileValidationConfig.class));
+                        }
+                        log.info("Successfully fetched {} mobile validation configs", configs.size());
+                        return configs;
+                    }
+                }
+            }
+
+            log.warn("Mobile validation configs not found in MDMS response for tenantId: {}", tenantId);
+            return Collections.emptyList();
+
+        } catch (Exception e) {
+            log.error("Error fetching mobile validation configs from MDMS: ", e);
+            return Collections.emptyList();
+        }
     }
 }
