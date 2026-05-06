@@ -22,30 +22,34 @@ public class RateLimiterConfiguration {
 
     private ObjectMapper objectMapper;
 
+    // Attribute key Spring Gateway uses to store the matched route ID
+    private static final String GATEWAY_ROUTE_ID_ATTR = "org.springframework.cloud.gateway.support.ServerWebExchangeUtils.gatewayPredicateMatchedPathRouteIdAttr";
+
     public RateLimiterConfiguration(ModifyRequestBodyGatewayFilterFactory modifyRequestBodyFilter, ObjectMapper objectMapper) {
         this.modifyRequestBodyFilter = modifyRequestBodyFilter;
         this.objectMapper = objectMapper;
     }
 
     /**
-     * IP limit
-     * @return
+     * Rate limit key: routeId + IP
+     * Preserves X-Forwarded-For handling for requests behind proxies.
      */
     @Bean
     @Primary
     public KeyResolver ipKeyResolver() {
         return exchange -> {
+            // Prefer X-Forwarded-For so the real client IP is used behind load balancers
             String xForwardedForHeader = exchange.getRequest().getHeaders().getFirst("X-Forwarded-For");
-            if (xForwardedForHeader != null) {
-                // Use the first IP in the X-Forwarded-For header
-                return Mono.just(xForwardedForHeader.split(",")[0]);
-            }
-            // Fallback to remote address if no X-Forwarded-For header is present
-            return Mono.just(
-                    Objects.requireNonNull(exchange.getRequest().getRemoteAddress())
-                            .getAddress()
-                            .getHostAddress()
-            );
+            String ip = (xForwardedForHeader != null)
+                    ? xForwardedForHeader.split(",")[0].trim()
+                    : Objects.requireNonNull(
+                            exchange.getRequest().getRemoteAddress(),
+                    "Remote address must not be null"
+                        ).getAddress().getHostAddress();
+
+            String routeId = exchange.getAttribute(GATEWAY_ROUTE_ID_ATTR);
+
+            return Mono.just(routeId + ":" + ip);
         };
     }
 
@@ -58,12 +62,14 @@ public class RateLimiterConfiguration {
     public KeyResolver userKeyResolver() {
 
         return exchange -> {
+            String routeId = exchange.getAttribute(GATEWAY_ROUTE_ID_ATTR);
+
             return Mono.just(modifyRequestBodyFilter.apply(
                     new ModifyRequestBodyGatewayFilterFactory
                             .Config()
                             .setRewriteFunction(Map.class, String.class, (serverWebExchange, s) -> {
                                 RequestInfo requestInfo = objectMapper.convertValue(s.get(REQUEST_INFO_FIELD_NAME_PASCAL_CASE), RequestInfo.class);
-                                return Mono.just(requestInfo.getUserInfo().getUuid());
+                                return Mono.just(routeId + ":" + requestInfo.getUserInfo().getUuid());
                             })).toString());
         };
     }
