@@ -62,7 +62,8 @@ public class OtpRequestValidator {
         if (countryCode != null && !countryCode.isBlank()) {
             MobileValidationConfig match = configs.stream()
                     .filter(c -> c.getAttributes() != null
-                            && countryCode.equals(c.getAttributes().getCountryCode()))
+                            && (countryCode.equals(c.getAttributes().getPrefix())
+                                || countryCode.equals(c.getAttributes().getCountryCode())))
                     .findFirst()
                     .orElse(null);
             if (match != null) return match;
