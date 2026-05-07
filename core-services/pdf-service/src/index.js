@@ -61,7 +61,8 @@ console.log(`*******************************************`);
 
 
 
-var jp = require("jsonpath");
+var { JSONPath } = require("jsonpath-plus");
+var jp = { query: (obj, path) => JSONPath({ path, json: obj, wrap: true }) };
 //create binary
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
 var pdfMakePrinter = require("pdfmake/src/printer");
