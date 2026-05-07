@@ -14,7 +14,7 @@
   "eslintConfig": {
     "extends": "eslint:recommended",
     "parserOptions": {
-      "ecmaVersion": 7,
+      "ecmaVersion": 2020,
       "sourceType": "module"
     },
     "env": {
@@ -41,7 +41,7 @@
     "express": "^4.21.2",
     "express-async-handler": "^1.1.4",
     "form-data": "^2.5.4",
-    "jsonpath": "^1.3.0",
+    "jsonpath-plus": "^10.2.0",
     "kafka-node": "^5.0.0",
     "lodash.get": "^4.4.2",
     "moment-timezone": "^0.5.28",
@@ -94,7 +94,8 @@
     "ajv": "^6.14.0",
     "crypto-js": "^4.2.0",
     "fsevents": "^1.2.11",
-    "babel-traverse": "^7.23.2"
+    "ansi-regex": "^5.0.1",
+    "y18n": "^5.0.8"
   },
   "bugs": {
     "url": "https://github.com/egovernments/core-services/issues"
