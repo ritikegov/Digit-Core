@@ -18,9 +18,9 @@ public interface Apportion {
      * Distibutes the paid amount among the Bill account details
      * @param bill The bill to be apportioned
      * @param tenantId The tenant ID for billing service calls
-     * @param clientId The client ID for audit details
+     * @param userId The user ID for audit details
      * @return Apportioned BillDetails
      */
-    List<BillDetail> apportionPaidAmount(Bill bill, String tenantId, String clientId);
+    List<BillDetail> apportionPaidAmount(Bill bill, String tenantId, String userId);
 
 }

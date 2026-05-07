@@ -53,7 +53,7 @@ public class OrderByPriorityApportion implements Apportion {
      * @return
      */
     @Override
-    public List<BillDetail> apportionPaidAmount(Bill bill, String tenantId, String clientId) {
+    public List<BillDetail> apportionPaidAmount(Bill bill, String tenantId, String userId) {
         bill.getBillDetails().sort(Comparator.comparing(BillDetail::getFromPeriod));
         List<BillDetail> billDetails = bill.getBillDetails();
         BigDecimal remainingAmount = bill.getAmountPaid();

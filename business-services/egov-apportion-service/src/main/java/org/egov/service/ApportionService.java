@@ -49,10 +49,10 @@ public class ApportionService {
      *
      * @param request The apportion request
      * @param tenantId The tenant ID from header
-     * @param clientId The client ID from header
+     * @param userId The user ID from header
      * @return Apportioned Bills
      */
-    public List<Bill> apportionBills(ApportionRequest request, String tenantId, String clientId) {
+    public List<Bill> apportionBills(ApportionRequest request, String tenantId, String userId) {
         List<Bill> bills = request.getBills();
         Apportion apportion;
 
@@ -83,7 +83,7 @@ public class ApportionService {
             /*
              * Apportion the paid amount among the given list of billDetail
              */
-            apportion.apportionPaidAmount(bill, tenantId, clientId);
+            apportion.apportionPaidAmount(bill, tenantId, userId);
         }
 
         // No longer using Kafka producer - removed persister calls

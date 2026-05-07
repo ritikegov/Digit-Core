@@ -27,10 +27,10 @@ public class ApportionRepository {
      * Saves bill request to database
      * @param request The apportion request
      * @param tenantId The tenant ID from header
-     * @param clientId The client ID from header
+     * @param userId The user ID from header
      * @param currentTime The consistent timestamp for this request
      */
-    public void saveBillRequest(ApportionRequest request, String tenantId, String clientId, Long currentTime) {
+    public void saveBillRequest(ApportionRequest request, String tenantId, String userId, Long currentTime) {
         try {
             for (Bill bill : request.getBills()) {
                 String billDetailsJson = objectMapper.writeValueAsString(bill.getBillDetails());
@@ -53,7 +53,7 @@ public class ApportionRepository {
                     true, // isActive
                     bill.getIsCancelled(),
                     bill.getMobileNumber(),
-                    clientId,
+                    userId,
                     currentTime
                 );
             }
@@ -68,10 +68,10 @@ public class ApportionRepository {
      * Saves bill response to database
      * @param bills The apportioned bills
      * @param tenantId The tenant ID from header
-     * @param clientId The client ID from header
+     * @param userId The user ID from header
      * @param currentTime The consistent timestamp for this request
      */
-    public void saveBillResponse(List<Bill> bills, String tenantId, String clientId, Long currentTime) {
+    public void saveBillResponse(List<Bill> bills, String tenantId, String userId, Long currentTime) {
         try {
             for (Bill bill : bills) {
                 String billDetailsJson = objectMapper.writeValueAsString(bill.getBillDetails());
@@ -94,7 +94,7 @@ public class ApportionRepository {
                     true, // isActive
                     bill.getIsCancelled(),
                     bill.getMobileNumber(),
-                    clientId,
+                    userId,
                     currentTime
                 );
             }
@@ -109,10 +109,10 @@ public class ApportionRepository {
      * Saves demand request to database
      * @param request The demand apportion request
      * @param tenantId The tenant ID from header
-     * @param clientId The client ID from header
+     * @param userId The user ID from header
      * @param currentTime The consistent timestamp for this request
      */
-    public void saveDemandRequest(DemandApportionRequest request, String tenantId, String clientId, Long currentTime) {
+    public void saveDemandRequest(DemandApportionRequest request, String tenantId, String userId, Long currentTime) {
         try {
             for (Demand demand : request.getDemands()) {
                 String demandDetailsJson = objectMapper.writeValueAsString(demand.getDemandDetails());
@@ -132,7 +132,7 @@ public class ApportionRepository {
                     demand.getTaxPeriodTo(),
                     demand.getStatus() != null ? demand.getStatus().toString() : null,
                     demandDetailsJson,
-                    clientId,
+                    userId,
                     currentTime
                 );
             }
@@ -147,10 +147,10 @@ public class ApportionRepository {
      * Saves demand response to database
      * @param demands The apportioned demands
      * @param tenantId The tenant ID from header
-     * @param clientId The client ID from header
+     * @param userId The user ID from header
      * @param currentTime The consistent timestamp for this request
      */
-    public void saveDemandResponse(List<Demand> demands, String tenantId, String clientId, Long currentTime) {
+    public void saveDemandResponse(List<Demand> demands, String tenantId, String userId, Long currentTime) {
         try {
             for (Demand demand : demands) {
                 String demandDetailsJson = objectMapper.writeValueAsString(demand.getDemandDetails());
@@ -170,7 +170,7 @@ public class ApportionRepository {
                     demand.getTaxPeriodTo(),
                     demand.getStatus() != null ? demand.getStatus().toString() : null,
                     demandDetailsJson,
-                    clientId,
+                    userId,
                     currentTime
                 );
             }

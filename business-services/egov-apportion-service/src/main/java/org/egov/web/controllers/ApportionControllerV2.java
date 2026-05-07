@@ -34,17 +34,17 @@ public class ApportionControllerV2 {
     /**
      * Executes the apportioning process on the given bills
      * @param tenantId The tenant ID from header
-     * @param clientId The client ID from header
+     * @param userId The user ID from header
      * @param apportionRequest The ApportionRequest containing the bill to be apportioned
      * @return Apportioned Bills
      */
     @RequestMapping(value="/bill/_apportion", method = RequestMethod.POST)
     public ResponseEntity<ApportionResponse> apportionPost(
             @RequestHeader("X-Tenant-ID") String tenantId,
-            @RequestHeader("X-Client-ID") String clientId,
+            @RequestHeader("X-User-ID") String userId,
             @Valid @RequestBody ApportionRequest apportionRequest){
         
-        List<Bill> billInfos = apportionService.apportionBills(apportionRequest, tenantId, clientId);
+        List<Bill> billInfos = apportionService.apportionBills(apportionRequest, tenantId, userId);
         ApportionResponse response = ApportionResponse.builder()
                 .tenantId(tenantId)
                 .bills(billInfos)
@@ -55,10 +55,10 @@ public class ApportionControllerV2 {
     @RequestMapping(value="/demand/_apportion", method = RequestMethod.POST)
     public ResponseEntity<ApportionDemandResponse> apportionPost(
             @RequestHeader("X-Tenant-ID") String tenantId,
-            @RequestHeader("X-Client-ID") String clientId,
+            @RequestHeader("X-User-ID") String userId,
             @Valid @RequestBody DemandApportionRequest apportionRequest){
         
-        List<Demand> demands = apportionService.apportionDemands(apportionRequest, tenantId, clientId);
+        List<Demand> demands = apportionService.apportionDemands(apportionRequest, tenantId, userId);
         ApportionDemandResponse response = ApportionDemandResponse.builder()
                 .tenantId(tenantId)
                 .demands(demands)

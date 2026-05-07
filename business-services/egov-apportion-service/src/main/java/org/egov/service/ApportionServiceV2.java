@@ -59,10 +59,10 @@ public class ApportionServiceV2 {
      *
      * @param request The apportion request
      * @param tenantId The tenant ID from header
-     * @param clientId The client ID from header
+     * @param userId The user ID from header
      * @return Apportioned Bills
      */
-    public List<Bill> apportionBills(ApportionRequest request, String tenantId, String clientId) {
+    public List<Bill> apportionBills(ApportionRequest request, String tenantId, String userId) {
         List<Bill> bills = request.getBills();
         ApportionV2 apportion;
         
@@ -70,12 +70,12 @@ public class ApportionServiceV2 {
         Long currentTime = System.currentTimeMillis();
 
         // Save the request to database
-        apportionRepository.saveBillRequest(request, tenantId, clientId, currentTime);
+        apportionRepository.saveBillRequest(request, tenantId, userId, currentTime);
 
         for (Bill bill : bills) {
             // Enrich tenantId and audit details from header into bill and nested objects
             enrichTenantId(bill, tenantId);
-            enrichAuditDetails(bill, clientId, currentTime);
+            enrichAuditDetails(bill, userId, currentTime);
             bill.getBillDetails().sort(Comparator.comparing(BillDetail::getFromPeriod));
 
             String businessKey = bill.getBusinessService();
@@ -94,15 +94,15 @@ public class ApportionServiceV2 {
             /*
              * Apportion the paid amount among the given list of billDetail
              */
-            ApportionRequestV2 apportionRequestV2 = translationService.translate(bill, tenantId, clientId);
+            ApportionRequestV2 apportionRequestV2 = translationService.translate(bill, tenantId, userId);
             
-            List<TaxDetail> taxDetails = apportion.apportionPaidAmount(apportionRequestV2, clientId);
+            List<TaxDetail> taxDetails = apportion.apportionPaidAmount(apportionRequestV2, userId);
             updateAdjustedAmountInBills(bill,taxDetails);
             addAdvanceIfExistForBill(billDetails,taxDetails);
         }
 
         // Save the response to database
-        apportionRepository.saveBillResponse(bills, tenantId, clientId, currentTime);
+        apportionRepository.saveBillResponse(bills, tenantId, userId, currentTime);
         return bills;
     }
 
@@ -135,10 +135,10 @@ public class ApportionServiceV2 {
      *
      * @param request The apportion request
      * @param tenantId The tenant ID from header
-     * @param clientId The client ID from header
+     * @param userId The user ID from header
      * @return Apportioned Bills
      */
-    public List<Demand> apportionDemands(DemandApportionRequest request, String tenantId, String clientId) {
+    public List<Demand> apportionDemands(DemandApportionRequest request, String tenantId, String userId) {
         List<Demand> demands = request.getDemands();
         ApportionV2 apportion;
         
@@ -146,15 +146,15 @@ public class ApportionServiceV2 {
         Long currentTime = System.currentTimeMillis();
 
         // Save the request to database
-        apportionRepository.saveDemandRequest(request, tenantId, clientId, currentTime);
+        apportionRepository.saveDemandRequest(request, tenantId, userId, currentTime);
         
         // Enrich tenantId and audit details from header into demands and nested objects
         enrichTenantIdInDemands(demands, tenantId);
-        enrichAuditDetailsInDemands(demands, clientId, currentTime);
+        enrichAuditDetailsInDemands(demands, userId, currentTime);
 
         demands.sort(Comparator.comparing(Demand::getTaxPeriodFrom));
 
-        ApportionRequestV2 apportionRequestV2 = translationService.translate(demands, tenantId, clientId);
+        ApportionRequestV2 apportionRequestV2 = translationService.translate(demands, tenantId, userId);
 
         /*
         * Need to validate that all demands that come for apportioning
@@ -167,12 +167,12 @@ public class ApportionServiceV2 {
         else
             apportion = getApportion(DEFAULT);
 
-        List<TaxDetail> taxDetails = apportion.apportionPaidAmount(apportionRequestV2, clientId);
+        List<TaxDetail> taxDetails = apportion.apportionPaidAmount(apportionRequestV2, userId);
         updateAdjustedAmountInDemands(demands,taxDetails);
         addAdvanceIfExistForDemand(demands,taxDetails);
 
         // Save the response to database
-        apportionRepository.saveDemandResponse(demands, tenantId, clientId, currentTime);
+        apportionRepository.saveDemandResponse(demands, tenantId, userId, currentTime);
         return demands;
     }
 
@@ -313,21 +313,21 @@ public class ApportionServiceV2 {
     /**
      * Enriches audit details for demands and all nested objects
      * @param demands The demands to enrich
-     * @param clientId The client ID from header
+     * @param userId The user ID from header
      * @param currentTime The consistent timestamp for this request
      */
-    private void enrichAuditDetailsInDemands(List<Demand> demands, String clientId, Long currentTime) {
+    private void enrichAuditDetailsInDemands(List<Demand> demands, String userId, Long currentTime) {
         demands.forEach(demand -> {
             // Set audit details in demand if not present
             if (demand.getAuditDetails() == null) {
                 demand.setAuditDetails(AuditDetails.builder()
-                        .createdBy(clientId)
-                        .lastModifiedBy(clientId)
+                        .createdBy(userId)
+                        .lastModifiedBy(userId)
                         .createdTime(currentTime)
                         .lastModifiedTime(currentTime)
                         .build());
             } else {
-                demand.getAuditDetails().setLastModifiedBy(clientId);
+                demand.getAuditDetails().setLastModifiedBy(userId);
                 demand.getAuditDetails().setLastModifiedTime(currentTime);
             }
             
@@ -337,13 +337,13 @@ public class ApportionServiceV2 {
                     // Set audit details in demand detail if not present
                     if (demandDetail.getAuditDetails() == null) {
                         demandDetail.setAuditDetails(AuditDetails.builder()
-                                .createdBy(clientId)
-                                .lastModifiedBy(clientId)
+                                .createdBy(userId)
+                                .lastModifiedBy(userId)
                                 .createdTime(currentTime)
                                 .lastModifiedTime(currentTime)
                                 .build());
                     } else {
-                        demandDetail.getAuditDetails().setLastModifiedBy(clientId);
+                        demandDetail.getAuditDetails().setLastModifiedBy(userId);
                         demandDetail.getAuditDetails().setLastModifiedTime(currentTime);
                     }
                 });
@@ -378,21 +378,21 @@ public class ApportionServiceV2 {
     /**
      * Enriches audit details for bill and all nested objects
      * @param bill The bill to enrich
-     * @param clientId The client ID from header
+     * @param userId The user ID from header
      * @param currentTime The consistent timestamp for this request
      */
-    private void enrichAuditDetails(Bill bill, String clientId, Long currentTime) {
+    private void enrichAuditDetails(Bill bill, String userId, Long currentTime) {
         // Set audit details in bill if not present
         if (bill.getAuditDetails() == null) {
             bill.setAuditDetails(AuditDetails.builder()
-                    .createdBy(clientId)
-                    .lastModifiedBy(clientId)
+                    .createdBy(userId)
+                    .lastModifiedBy(userId)
                     .createdTime(currentTime)
                     .lastModifiedTime(currentTime)
                     .build());
         } else {
             // Update last modified details
-            bill.getAuditDetails().setLastModifiedBy(clientId);
+            bill.getAuditDetails().setLastModifiedBy(userId);
             bill.getAuditDetails().setLastModifiedTime(currentTime);
         }
         
@@ -402,13 +402,13 @@ public class ApportionServiceV2 {
                 // Set audit details in bill detail if not present
                 if (billDetail.getAuditDetails() == null) {
                     billDetail.setAuditDetails(AuditDetails.builder()
-                            .createdBy(clientId)
-                            .lastModifiedBy(clientId)
+                            .createdBy(userId)
+                            .lastModifiedBy(userId)
                             .createdTime(currentTime)
                             .lastModifiedTime(currentTime)
                             .build());
                 } else {
-                    billDetail.getAuditDetails().setLastModifiedBy(clientId);
+                    billDetail.getAuditDetails().setLastModifiedBy(userId);
                     billDetail.getAuditDetails().setLastModifiedTime(currentTime);
                 }
                 
@@ -418,13 +418,13 @@ public class ApportionServiceV2 {
                         // Set audit details in bill account detail if not present
                         if (billAccountDetail.getAuditDetails() == null) {
                             billAccountDetail.setAuditDetails(AuditDetails.builder()
-                                    .createdBy(clientId)
-                                    .lastModifiedBy(clientId)
+                                    .createdBy(userId)
+                                    .lastModifiedBy(userId)
                                     .createdTime(currentTime)
                                     .lastModifiedTime(currentTime)
                                     .build());
                         } else {
-                            billAccountDetail.getAuditDetails().setLastModifiedBy(clientId);
+                            billAccountDetail.getAuditDetails().setLastModifiedBy(userId);
                             billAccountDetail.getAuditDetails().setLastModifiedTime(currentTime);
                         }
                     });

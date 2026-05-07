@@ -43,7 +43,7 @@ public class OrderByPriority implements ApportionV2 {
     }
 
     @Override
-    public List<TaxDetail> apportionPaidAmount(ApportionRequestV2 apportionRequestV2, String clientId) {
+    public List<TaxDetail> apportionPaidAmount(ApportionRequestV2 apportionRequestV2, String userId) {
         List<TaxDetail> taxDetails = apportionRequestV2.getTaxDetails();
         taxDetails.sort(Comparator.comparing(TaxDetail::getFromPeriod));
         BigDecimal remainingAmount = apportionRequestV2.getAmountPaid();
@@ -125,7 +125,7 @@ public class OrderByPriority implements ApportionV2 {
 
         //If advance amount is available
         if(remainingAmount.compareTo(BigDecimal.ZERO)>0){
-            addAdvanceBillAccountDetail(remainingAmount,apportionRequestV2,clientId);
+            addAdvanceBillAccountDetail(remainingAmount,apportionRequestV2,userId);
         }
 
 
@@ -138,9 +138,9 @@ public class OrderByPriority implements ApportionV2 {
      * Creates a advance BillAccountDetail and adds it to the latest billDetail
      * @param advanceAmount The advance amount paid
      * @param apportionRequestV2 The bill for which apportioning is done
-     * @param clientId The client ID for audit details
+     * @param userId The user ID for audit details
      */
-    private void addAdvanceBillAccountDetail(BigDecimal advanceAmount, ApportionRequestV2 apportionRequestV2, String clientId){
+    private void addAdvanceBillAccountDetail(BigDecimal advanceAmount, ApportionRequestV2 apportionRequestV2, String userId){
         List<TaxDetail> taxDetails = apportionRequestV2.getTaxDetails();
         
         // Use new billing service API

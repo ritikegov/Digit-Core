@@ -21,7 +21,7 @@ public class TranslationService {
         this.taxHeadMasterService = taxHeadMasterService;
     }
 
-    public ApportionRequestV2 translate(Bill bill, String tenantId, String clientId){
+    public ApportionRequestV2 translate(Bill bill, String tenantId, String userId){
         String businessService = bill.getBusinessService();
         BigDecimal amountPaid = bill.getAmountPaid();
         Boolean isAdvanceAllowed = bill.getIsAdvanceAllowed();
@@ -60,7 +60,7 @@ public class TranslationService {
         return apportionRequestV2;
     }
 
-    public ApportionRequestV2 translate(List<Demand> demands, String tenantId, String clientId) {
+    public ApportionRequestV2 translate(List<Demand> demands, String tenantId, String userId) {
         // Group by businessService before calling this function
         String businessService = demands.get(0).getBusinessService();
 
