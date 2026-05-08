@@ -23,7 +23,7 @@
 	    <tomcat.version>10.1.45</tomcat.version>
     <jackson-bom.version>2.18.6</jackson-bom.version>
     <spring-framework.version>6.2.11</spring-framework.version>
-    <postgresql.version>42.7.7</postgresql.version>
+    <postgresql.version>42.7.11</postgresql.version>
   </properties>
 	<dependencyManagement>
     <dependencies>
@@ -65,12 +65,21 @@
 		<dependency>
 			<groupId>io.minio</groupId>
 			<artifactId>minio</artifactId>
-			<version>7.1.4</version>
+			<version>8.6.0</version>
+		</dependency>
+		<!-- okhttp-jvm required: Minio 8.x depends on okhttp 5.x which is a Kotlin
+		     Multiplatform library. Maven cannot resolve Gradle KMP metadata so the main
+		     okhttp artifact is an empty metadata jar. Declaring okhttp-jvm explicitly
+		     forces the JVM-specific jar onto the classpath. -->
+		<dependency>
+			<groupId>com.squareup.okhttp3</groupId>
+			<artifactId>okhttp-jvm</artifactId>
+			<version>5.1.0</version>
 		</dependency>
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
-			<version>42.7.7</version>
+			<version>${postgresql.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.projectlombok</groupId>
@@ -116,7 +125,7 @@
 		<dependency>
 			<groupId>com.amazonaws</groupId>
 			<artifactId>aws-java-sdk-s3</artifactId>
-			<version>1.11.289</version>
+			<version>1.12.261</version>
 		</dependency>
 		<dependency>
 			<groupId>com.microsoft.azure</groupId>
