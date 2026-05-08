@@ -67,6 +67,15 @@
 			<artifactId>minio</artifactId>
 			<version>8.6.0</version>
 		</dependency>
+		<!-- okhttp-jvm required: Minio 8.x depends on okhttp 5.x which is a Kotlin
+		     Multiplatform library. Maven cannot resolve Gradle KMP metadata so the main
+		     okhttp artifact is an empty metadata jar. Declaring okhttp-jvm explicitly
+		     forces the JVM-specific jar onto the classpath. -->
+		<dependency>
+			<groupId>com.squareup.okhttp3</groupId>
+			<artifactId>okhttp-jvm</artifactId>
+			<version>5.1.0</version>
+		</dependency>
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
