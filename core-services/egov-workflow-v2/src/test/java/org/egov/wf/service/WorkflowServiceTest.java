@@ -73,6 +73,9 @@ class WorkflowServiceTest {
 
     @MockBean
     private WorkflowValidator workflowValidator;
+
+    @MockBean
+    private WorkflowCacheService workflowCacheService;
     
     Map<String, Map<String,List<String>>> roleTenantAndStatusMapping = new HashMap<>();
 

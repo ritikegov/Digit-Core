@@ -17,7 +17,7 @@ class WorkflowConfigTest {
 
         WorkflowConfig workflowConfig = new WorkflowConfig("UTC", 1, 1, 3, "Save Transition Topic",
                 "Save Business Service Topic", "2020-03-01", "localhost", "https://config.us-east-2.amazonaws.com",
-                "localhost", "https://config.us-east-2.amazonaws.com", true, "MD", 3, 3, true);
+                "localhost", "https://config.us-east-2.amazonaws.com", true, "MD", 3, 3, true, "localhost", 6379, "", 60L);
         workflowConfig.initialize();
         assertTrue(workflowConfig.getAssignedOnly());
         assertEquals("https://config.us-east-2.amazonaws.com", workflowConfig.getUserSearchEndpoint());
