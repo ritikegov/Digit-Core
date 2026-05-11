@@ -80,29 +80,18 @@ public class MinioRepository implements CloudFilesManager {
 
 	private void push(MultipartFile multipartFile, String fileNameWithPath) {
 		try {
-			InputStream is = multipartFile.getInputStream();
-			long contentLength = multipartFile.getSize();
+			byte[] fileBytes = multipartFile.getBytes();
+			long fileSize = fileBytes.length;
+			InputStream is = new ByteArrayInputStream(fileBytes);
 
-			/*PutObjectOptions putObjectOptions = new PutObjectOptions(contentLength, PutObjectOptions.MAX_PART_SIZE);
-			putObjectOptions.setContentType(multipartFile.getContentType());
-			minioClient.putObject(minioConfig.getBucketName(), fileNameWithPath, is, putObjectOptions);*/
-
-			long fileSize = is.available();
-			PutObjectArgs.Builder putObjectArgsBuilder = PutObjectArgs.builder()
+			PutObjectArgs args = PutObjectArgs.builder()
 					.bucket(minioConfig.getBucketName())
 					.object(fileNameWithPath)
-					.stream(is, fileSize, -1) // Set part size to -1 for auto detection
-					.contentType(multipartFile.getContentType()); // Change this as per your file's content type
+					.stream(is, fileSize, -1)
+					.contentType(multipartFile.getContentType())
+					.build();
 
-			// If the file is larger than 5 MB, set the part size explicitly (5 * 1024 * 1024 bytes)
-			/*if (fileSize > 5 * 1024 * 1024) {
-				putObjectArgsBuilder.  .partSize(5 * 1024 * 1024);
-			}*/
-
-			minioClient.putObject(putObjectArgsBuilder.build());
-
-
-
+			minioClient.putObject(args);
 			log.debug("Upload Successful");
 
 		} catch (MinioException | InvalidKeyException | IllegalArgumentException | NoSuchAlgorithmException
@@ -115,21 +104,17 @@ public class MinioRepository implements CloudFilesManager {
 
 	private void push(InputStream is, long contentLength, String contentType, String fileNameWithPath) {
 		try {
-			/*PutObjectOptions putObjectOptions = new PutObjectOptions(contentLength, PutObjectOptions.MAX_PART_SIZE);
-			putObjectOptions.setContentType(contentType);
-			minioClient.putObject(minioConfig.getBucketName(), fileNameWithPath, is, putObjectOptions);*/
-
-			long fileSize = is.available();
-			PutObjectArgs.Builder putObjectArgsBuilder = PutObjectArgs.builder()
+			PutObjectArgs args = PutObjectArgs.builder()
 					.bucket(minioConfig.getBucketName())
 					.object(fileNameWithPath)
-					.stream(is, fileSize, -1) // Set part size to -1 for auto detection
-					.contentType(contentType); // Change this as per your file's content type
-			minioClient.putObject(putObjectArgsBuilder.build());
+					.stream(is, contentLength, -1)
+					.contentType(contentType)
+					.build();
+			minioClient.putObject(args);
 
 		} catch (MinioException | InvalidKeyException | IllegalArgumentException | NoSuchAlgorithmException
 				| IOException e) {
-			log.error("Error occurred: " + e);
+			log.error("Error occurred: ", e);
 			throw new RuntimeException(ERROR_IN_CONFIGURATION);
 		}
 

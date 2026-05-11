@@ -27,32 +27,38 @@ public class StorageValidator {
 
 
 	public void validate(Artifact artifact) {
-			
+
 		String extension = (FilenameUtils.getExtension(artifact.getMultipartFile().getOriginalFilename())).toLowerCase();
 		validateFileExtention(extension);
-		validateContentType(artifact.getFileContentInString(), extension);
+		validateContentType(artifact, extension);
 		validateInputContentType(artifact);
 	}
-	
+
 	private void validateFileExtention(String extension) {
 		if(!fileStoreConfig.getAllowedFormatsMap().containsKey(extension)) {
 			throw new CustomException("EG_FILESTORE_INVALID_INPUT","Inalvid input provided for file : " + extension + ", please upload any of the allowed formats : " + fileStoreConfig.getAllowedKeySet());
 		}
 	}
-	
-	private void validateContentType(String inputStreamAsString, String extension) {
-		
+
+	private void validateContentType(Artifact artifact, String extension) {
+
 		String inputFormat = null;
 		Tika tika = new Tika();
 		try {
-			
-			InputStream ipStreamForValidation = IOUtils.toInputStream(inputStreamAsString, fileStoreConfig.getImageCharsetType());
-			inputFormat = tika.detect(ipStreamForValidation);
-			ipStreamForValidation.close();
+			String inputStreamAsString = artifact.getFileContentInString();
+			if (inputStreamAsString != null) {
+				InputStream ipStreamForValidation = IOUtils.toInputStream(inputStreamAsString, fileStoreConfig.getImageCharsetType());
+				inputFormat = tika.detect(ipStreamForValidation);
+				ipStreamForValidation.close();
+			} else {
+				try (InputStream is = artifact.getMultipartFile().getInputStream()) {
+					inputFormat = tika.detect(is);
+				}
+			}
 		} catch (IOException e) {
 			throw new CustomException("EG_FILESTORE_PARSING_ERROR","not able to parse the input please upload a proper file of allowed type : " + e.getMessage());
 		}
-		
+
 		if (!fileStoreConfig.getAllowedFormatsMap().get(extension).contains(inputFormat)) {
 			throw new CustomException("EG_FILESTORE_INVALID_INPUT", "Inalvid input provided for file, the extension does not match the file format. Please upload any of the allowed formats : "
 							+ fileStoreConfig.getAllowedKeySet());

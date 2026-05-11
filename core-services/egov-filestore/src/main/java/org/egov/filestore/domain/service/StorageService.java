@@ -147,29 +147,30 @@ public class StorageService {
 	private List<Artifact> mapFilesToArtifact(List<MultipartFile> files, String module, String tag, String tenantId) {
 
 		final String folderName = getFolderName(module, tenantId);
-		String inputStreamAsString = null;
 		List<Artifact> artifacts = new ArrayList<>();
-		Artifact artifact = null;
 		for (MultipartFile file : files) {
 			String randomString = RandomStringUtils.random(filenameLength, useLetters, useNumbers);
 			String orignalFileName = file.getOriginalFilename();
 			String imagetype = FilenameUtils.getExtension(orignalFileName);
-			String fileName = folderName + System.currentTimeMillis() + randomString + "." +imagetype;
+			String fileName = folderName + System.currentTimeMillis() + randomString + "." + imagetype;
 			String id = this.idGeneratorService.getId();
 			FileLocation fileLocation = new FileLocation(id, module, tag, tenantId, fileName, null);
-			try {
-				inputStreamAsString = IOUtils.toString(file.getInputStream(), fileStoreConfig.getImageCharsetType());
-				artifact = Artifact.builder().fileContentInString(inputStreamAsString).multipartFile(file)
-						.fileLocation(fileLocation).build();
-				artifacts.add(artifact);
 
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				log.error("IO Exception while mapping files to artifact: " + e.getMessage());
+			Artifact artifact = Artifact.builder().multipartFile(file).fileLocation(fileLocation).build();
+
+			// Read stream as string only for image formats that need thumbnail generation
+			if (fileStoreConfig.getImageFormats().contains(imagetype)) {
+				try {
+					artifact.setFileContentInString(IOUtils.toString(file.getInputStream(), fileStoreConfig.getImageCharsetType()));
+				} catch (IOException e) {
+					log.error("IO Exception while reading image stream for thumbnail: " + e.getMessage());
+				}
 			}
+
+			artifacts.add(artifact);
 			storageValidator.validate(artifact);
-			
-			if (fileStoreConfig.getImageFormats().contains(FilenameUtils.getExtension(artifact.getMultipartFile().getOriginalFilename())))
+
+			if (fileStoreConfig.getImageFormats().contains(imagetype))
 				setThumbnailImages(artifact);
 		}
 
