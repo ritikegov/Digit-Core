@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.wf.repository.querybuilder.WorkflowQueryBuilder;
 import org.egov.wf.repository.rowmapper.WorkflowRowMapper;
+import org.egov.wf.service.WorkflowCacheService;
 import org.egov.wf.util.WorkflowUtil;
 import org.egov.wf.web.models.ProcessInstance;
 import org.egov.wf.web.models.ProcessInstanceSearchCriteria;
@@ -13,7 +14,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.SingleColumnRowMapper;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.CollectionUtils;
-import org.springframework.util.ObjectUtils;
 
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -31,34 +31,107 @@ public class WorKflowRepository {
 
     private WorkflowUtil util;
 
+    private WorkflowCacheService cacheService;
+
 
     @Autowired
-    public WorKflowRepository(WorkflowQueryBuilder queryBuilder, JdbcTemplate jdbcTemplate, WorkflowRowMapper rowMapper, WorkflowUtil util) {
+    public WorKflowRepository(WorkflowQueryBuilder queryBuilder, JdbcTemplate jdbcTemplate,
+                               WorkflowRowMapper rowMapper, WorkflowUtil util,
+                               WorkflowCacheService cacheService) {
         this.queryBuilder = queryBuilder;
         this.jdbcTemplate = jdbcTemplate;
         this.rowMapper = rowMapper;
         this.util = util;
+        this.cacheService = cacheService;
     }
 
 
     /**
-     * Executes the search criteria on the db
-     * @param criteria The object containing the params to search on
-     * @return The parsed response from the search query
+     * Executes the search criteria on the db with a cache-aside layer.
+     *
+     * Simple businessId lookups (no status/assignee/date filters) are served entirely from cache when
+     * available. For all other multi-criteria searches the DB result is returned, but any individual
+     * process instance that is present in cache is substituted with its cached version so callers
+     * always see the most recently cached state.
      */
-    public List<ProcessInstance> getProcessInstances(ProcessInstanceSearchCriteria criteria){
+    public List<ProcessInstance> getProcessInstances(ProcessInstanceSearchCriteria criteria) {
+        boolean isSimpleLookup = isSimpleLookup(criteria);
+
+        // For simple single-businessId history lookup, try cache first
+        if (isSimpleLookup && Boolean.TRUE.equals(criteria.getHistory())
+                && criteria.getBusinessIds().size() == 1) {
+            List<ProcessInstance> cached = cacheService.getHistory(
+                    criteria.getTenantId(), criteria.getBusinessService(), criteria.getBusinessIds().get(0));
+            if (cached != null) {
+                log.debug("Cache hit for history [{}/{}]", criteria.getBusinessService(), criteria.getBusinessIds().get(0));
+                return cached;
+            }
+        }
+
+        // For simple latest-state lookups, try to serve all businessIds from cache
+        if (isSimpleLookup && !Boolean.TRUE.equals(criteria.getHistory())) {
+            List<ProcessInstance> allCached = tryGetAllFromLatestCache(criteria);
+            if (allCached != null) {
+                log.debug("Cache hit for latest [{}/{}]", criteria.getBusinessService(), criteria.getBusinessIds());
+                return allCached;
+            }
+        }
+
         List<Object> preparedStmtList = new ArrayList<>();
-
         List<String> ids = getProcessInstanceIds(criteria);
-
-        if(CollectionUtils.isEmpty(ids))
-            return new LinkedList<>();
+        if (CollectionUtils.isEmpty(ids)) return new LinkedList<>();
 
         String query = queryBuilder.getProcessInstanceSearchQueryById(ids, preparedStmtList);
         query = util.replaceSchemaPlaceholder(query, criteria.getTenantId());
-        log.debug("query for status search: "+query+" params: "+preparedStmtList);
+        log.debug("query for status search: " + query + " params: " + preparedStmtList);
 
-        return jdbcTemplate.query(query, rowMapper, preparedStmtList.toArray());
+        List<ProcessInstance> result = jdbcTemplate.query(query, rowMapper, preparedStmtList.toArray());
+
+        if (CollectionUtils.isEmpty(result)) return result;
+
+        // Populate cache for simple lookups
+        if (isSimpleLookup) {
+            if (Boolean.TRUE.equals(criteria.getHistory()) && criteria.getBusinessIds().size() == 1) {
+                cacheService.setHistory(criteria.getTenantId(), criteria.getBusinessService(),
+                        criteria.getBusinessIds().get(0), result);
+            } else if (!Boolean.TRUE.equals(criteria.getHistory())) {
+                result.forEach(cacheService::setLatestProcessInstance);
+            }
+        } else {
+            // Multi-criteria search: merge cached versions for individual instances where available
+            result = cacheService.mergeWithCache(criteria.getTenantId(), criteria.getBusinessService(), result);
+        }
+
+        return result;
+    }
+
+    /**
+     * Returns true when the search is a straightforward lookup by businessService + businessIds
+     * with no additional filters that would make cache substitution unsafe.
+     */
+    private boolean isSimpleLookup(ProcessInstanceSearchCriteria criteria) {
+        return criteria.getBusinessService() != null
+                && !CollectionUtils.isEmpty(criteria.getBusinessIds())
+                && criteria.getStatus() == null
+                && criteria.getAssignee() == null
+                && criteria.getIds() == null
+                && criteria.getFromDate() == null
+                && criteria.getToDate() == null;
+    }
+
+    /**
+     * Attempts to serve all requested businessIds from the latest-state cache.
+     * Returns null if any single entry is missing (triggers full DB fetch instead).
+     */
+    private List<ProcessInstance> tryGetAllFromLatestCache(ProcessInstanceSearchCriteria criteria) {
+        List<ProcessInstance> result = new ArrayList<>();
+        for (String businessId : criteria.getBusinessIds()) {
+            ProcessInstance cached = cacheService.getLatestProcessInstance(
+                    criteria.getTenantId(), criteria.getBusinessService(), businessId);
+            if (cached == null) return null;
+            result.add(cached);
+        }
+        return result;
     }
 
 

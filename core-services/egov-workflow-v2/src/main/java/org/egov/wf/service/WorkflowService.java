@@ -45,6 +45,9 @@ public class WorkflowService {
     @Autowired
     private BusinessMasterService businessMasterService;
 
+    @Autowired
+    private WorkflowCacheService workflowCacheService;
+
 
     @Autowired
     public WorkflowService(WorkflowConfig config, TransitionService transitionService,
@@ -74,6 +77,7 @@ public class WorkflowService {
         enrichmentService.enrichProcessRequest(requestInfo,processStateAndActions);
         workflowValidator.validateRequest(requestInfo,processStateAndActions);
         statusUpdateService.updateStatus(requestInfo,processStateAndActions);
+        workflowCacheService.invalidateOnTransition(request.getProcessInstances());
         return request.getProcessInstances();
     }
 

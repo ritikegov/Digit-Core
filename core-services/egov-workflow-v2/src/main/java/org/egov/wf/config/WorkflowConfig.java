@@ -104,7 +104,16 @@ public class WorkflowConfig {
     @Value("${is.environment.central.instance}")
     private Boolean isEnvironmentCentralInstance;
 
+    @Value("${spring.data.redis.host:localhost}")
+    private String redisHost;
 
+    @Value("${spring.data.redis.port:6379}")
+    private int redisPort;
 
+    @Value("${spring.data.redis.password:}")
+    private String redisPassword;
+
+    @Value("${cache.expiry.processinstance.seconds:60}")
+    private long processInstanceCacheExpiry;
 
 }
