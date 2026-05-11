@@ -20,14 +20,11 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
-import org.springframework.scheduling.annotation.EnableAsync;
-
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
 @SpringBootApplication
 @EnableCaching
-@EnableAsync
 @Import({ TracerConfiguration.class })
 public class Main {
 

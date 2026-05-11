@@ -11,6 +11,7 @@ import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -91,6 +92,7 @@ class WorkflowServiceTest {
         doNothing().when(this.enrichmentService)
                 .enrichProcessRequest((org.egov.common.contract.request.RequestInfo) any(),
                         (List<ProcessStateAndAction>) any());
+        doNothing().when(this.workflowCacheService).updateOnTransition((List<ProcessInstance>) any());
         assertNull(this.workflowService.transition(new ProcessInstanceRequest()));
         verify(this.workflowValidator).validateRequest((org.egov.common.contract.request.RequestInfo) any(),
                 (List<ProcessStateAndAction>) any());
@@ -99,6 +101,7 @@ class WorkflowServiceTest {
                 (List<ProcessStateAndAction>) any());
         verify(this.enrichmentService).enrichProcessRequest((org.egov.common.contract.request.RequestInfo) any(),
                 (List<ProcessStateAndAction>) any());
+        verify(this.workflowCacheService).updateOnTransition((List<ProcessInstance>) any());
     }
 
 
@@ -139,6 +142,8 @@ class WorkflowServiceTest {
                 (List<ProcessStateAndAction>) any());
         verify(this.enrichmentService).enrichProcessRequest((org.egov.common.contract.request.RequestInfo) any(),
                 (List<ProcessStateAndAction>) any());
+        // updateOnTransition is not reached when statusUpdateService throws
+        verify(this.workflowCacheService, never()).updateOnTransition((List<ProcessInstance>) any());
     }
 
 

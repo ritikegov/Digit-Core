@@ -7,7 +7,6 @@ import org.egov.wf.config.WorkflowConfig;
 import org.egov.wf.web.models.ProcessInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
@@ -104,21 +103,25 @@ public class WorkflowCacheService {
     }
 
     /**
-     * Invalidates latest and history cache entries for the given process instances.
-     * Runs asynchronously so transition response is not blocked.
+     * Writes the post-transition state of each process instance into the latest cache and
+     * deletes its history cache entry. Must be called synchronously after updateStatus.
+     *
+     * Simple deletion is insufficient: the DB write is async (Kafka persister), so a search
+     * arriving after the transition but before the Kafka consumer commits would miss the cache,
+     * read stale DB state, re-populate the cache with pre-transition data, and return wrong
+     * nextActions — causing callers to retry an already-completed transition.
+     *
+     * By writing the post-transition instance (state = resultantState) directly to cache here,
+     * any concurrent search gets a cache hit with the correct new state during the Kafka window.
      */
-    @Async
-    public void invalidateOnTransition(List<ProcessInstance> processInstances) {
+    public void updateOnTransition(List<ProcessInstance> processInstances) {
         if (CollectionUtils.isEmpty(processInstances)) return;
         for (ProcessInstance pi : processInstances) {
             try {
-                redisTemplate.opsForHash().delete(
-                        latestHashKey(pi.getTenantId(), pi.getBusinessService()),
-                        pi.getBusinessId()
-                );
+                setLatestProcessInstance(pi);
                 redisTemplate.delete(historyKey(pi.getTenantId(), pi.getBusinessService(), pi.getBusinessId()));
             } catch (Exception e) {
-                log.warn("Redis invalidation failed for [{}/{}]: {}", pi.getBusinessService(), pi.getBusinessId(), e.getMessage());
+                log.warn("Redis update failed on transition for [{}/{}]: {}", pi.getBusinessService(), pi.getBusinessId(), e.getMessage());
             }
         }
     }

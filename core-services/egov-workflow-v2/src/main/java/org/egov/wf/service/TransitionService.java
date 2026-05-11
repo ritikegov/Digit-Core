@@ -60,7 +60,7 @@ public class TransitionService {
             }
             processStateAndAction.setProcessInstanceFromDb(idToProcessInstanceFromDbMap.get(processInstance.getBusinessId()));
             State currentState = null;
-            if(processStateAndAction.getProcessInstanceFromDb()!=null && isTransitionCall)
+            if(processStateAndAction.getProcessInstanceFromDb() != null)
                 currentState = processStateAndAction.getProcessInstanceFromDb().getState();
             else if(!isTransitionCall)
                 currentState = processStateAndAction.getProcessInstanceFromRequest().getState();

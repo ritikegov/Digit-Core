@@ -1,5 +1,6 @@
 package org.egov.wf.service;
 
+import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.tracer.model.CustomException;
 import org.egov.wf.config.WorkflowConfig;
@@ -12,7 +13,6 @@ import org.egov.wf.web.models.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
-import org.egov.tracer.model.CustomException;
 import org.springframework.util.ObjectUtils;
 
 import static java.util.Objects.isNull;
@@ -21,6 +21,7 @@ import java.util.*;
 
 
 @Service
+@Slf4j
 public class WorkflowService {
 
     private WorkflowConfig config;
@@ -74,10 +75,17 @@ public class WorkflowService {
         RequestInfo requestInfo = request.getRequestInfo();
 
         List<ProcessStateAndAction> processStateAndActions = transitionService.getProcessStateAndActions(request.getProcessInstances(),true);
+        processStateAndActions.forEach(psa -> log.info(
+                "Transition | businessService={} businessId={} action={} currentState={} resultantState={}",
+                psa.getProcessInstanceFromRequest().getBusinessService(),
+                psa.getProcessInstanceFromRequest().getBusinessId(),
+                psa.getProcessInstanceFromRequest().getAction(),
+                psa.getCurrentState() != null ? psa.getCurrentState().getState() : "NEW",
+                psa.getResultantState() != null ? psa.getResultantState().getState() : null));
         enrichmentService.enrichProcessRequest(requestInfo,processStateAndActions);
         workflowValidator.validateRequest(requestInfo,processStateAndActions);
         statusUpdateService.updateStatus(requestInfo,processStateAndActions);
-        workflowCacheService.invalidateOnTransition(request.getProcessInstances());
+        workflowCacheService.updateOnTransition(request.getProcessInstances());
         return request.getProcessInstances();
     }
 

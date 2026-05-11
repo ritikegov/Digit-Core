@@ -1,5 +1,6 @@
 package org.egov.wf.service;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.verify;
@@ -18,6 +19,7 @@ import org.egov.wf.web.models.Action;
 import org.egov.wf.web.models.AuditDetails;
 import org.egov.wf.web.models.BusinessService;
 import org.egov.wf.web.models.ProcessInstance;
+import org.egov.wf.web.models.ProcessStateAndAction;
 import org.egov.wf.web.models.State;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -301,6 +303,60 @@ class TransitionServiceTest {
 
         ArrayList<ProcessInstance> processInstanceList = new ArrayList<>();
         processInstanceList.add(new ProcessInstance());
-        }
+    }
+
+
+    @Test
+    void testGetProcessStateAndActions_nonTransitionCall_usesProcessInstanceFromDbState() {
+        // Arrange: request has stale INITIAL state; DB returns post-transition UNDER_REVIEW state
+        State staleState = new State();
+        staleState.setUuid("state-uuid-initial");
+        staleState.setState("INITIAL");
+
+        State freshState = new State();
+        freshState.setUuid("state-uuid-under-review");
+        freshState.setState("UNDER_REVIEW");
+
+        ProcessInstance requestInstance = new ProcessInstance();
+        requestInstance.setTenantId("pb");
+        requestInstance.setBusinessService("TL");
+        requestInstance.setBusinessId("TL-001");
+        requestInstance.setState(staleState);
+
+        ProcessInstance dbInstance = new ProcessInstance();
+        dbInstance.setTenantId("pb");
+        dbInstance.setBusinessService("TL");
+        dbInstance.setBusinessId("TL-001");
+        dbInstance.setState(freshState);
+
+        when(this.workflowUtil.rolesAllowedInService((BusinessService) any())).thenReturn(new ArrayList<>());
+
+        ArrayList<ProcessInstance> dbResult = new ArrayList<>();
+        dbResult.add(dbInstance);
+        when(this.worKflowRepository.getProcessInstances((org.egov.wf.web.models.ProcessInstanceSearchCriteria) any()))
+                .thenReturn(dbResult);
+
+        // Business service with the UNDER_REVIEW state defined
+        ArrayList<State> stateList = new ArrayList<>();
+        stateList.add(freshState);
+        BusinessService businessService = new BusinessService();
+        businessService.setStates(stateList);
+
+        ArrayList<BusinessService> businessServiceList = new ArrayList<>();
+        businessServiceList.add(businessService);
+        when(this.businessServiceRepository
+                .getBusinessServices((org.egov.wf.web.models.BusinessServiceSearchCriteria) any()))
+                .thenReturn(businessServiceList);
+
+        ArrayList<ProcessInstance> processInstanceList = new ArrayList<>();
+        processInstanceList.add(requestInstance);
+
+        // Act: isTransitionCall = false (search path)
+        List<ProcessStateAndAction> result = this.transitionService.getProcessStateAndActions(processInstanceList, false);
+
+        // Assert: currentState comes from processInstanceFromDb (UNDER_REVIEW), not from request (INITIAL)
+        assertEquals(1, result.size());
+        assertEquals("UNDER_REVIEW", result.get(0).getCurrentState().getState());
+    }
 }
 
