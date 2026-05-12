@@ -19,6 +19,7 @@ public class WorkflowCacheService {
 
     private static final String LATEST_KEY_PREFIX = "wf:pi:latest:";
     private static final String HISTORY_KEY_PREFIX = "wf:pi:history:";
+    private static final String LOCK_KEY_PREFIX = "wf:lock:";
 
     private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
@@ -33,18 +34,21 @@ public class WorkflowCacheService {
         this.config = config;
     }
 
-    // Hash key groups all businessIds for a given tenant+businessService
-    private String latestHashKey(String tenantId, String businessService) {
-        return LATEST_KEY_PREFIX + tenantId + ":" + businessService;
+    private String latestKey(String tenantId, String businessService, String businessId) {
+        return LATEST_KEY_PREFIX + tenantId + ":" + businessService + ":" + businessId;
     }
 
     private String historyKey(String tenantId, String businessService, String businessId) {
         return HISTORY_KEY_PREFIX + tenantId + ":" + businessService + ":" + businessId;
     }
 
+    private String lockKey(String tenantId, String businessService, String businessId) {
+        return LOCK_KEY_PREFIX + tenantId + ":" + businessService + ":" + businessId;
+    }
+
     public ProcessInstance getLatestProcessInstance(String tenantId, String businessService, String businessId) {
         try {
-            Object cached = redisTemplate.opsForHash().get(latestHashKey(tenantId, businessService), businessId);
+            Object cached = redisTemplate.opsForValue().get(latestKey(tenantId, businessService, businessId));
             if (cached == null) return null;
             return objectMapper.convertValue(cached, ProcessInstance.class);
         } catch (Exception e) {
@@ -54,13 +58,11 @@ public class WorkflowCacheService {
     }
 
     public void setLatestProcessInstance(ProcessInstance processInstance) {
-        try {
-            String hashKey = latestHashKey(processInstance.getTenantId(), processInstance.getBusinessService());
-            redisTemplate.opsForHash().put(hashKey, processInstance.getBusinessId(), processInstance);
-            redisTemplate.expire(hashKey, config.getProcessInstanceCacheExpiry(), TimeUnit.SECONDS);
-        } catch (Exception e) {
-            log.warn("Redis write failed for latest process instance: {}", e.getMessage());
-        }
+        redisTemplate.opsForValue().set(
+                latestKey(processInstance.getTenantId(), processInstance.getBusinessService(), processInstance.getBusinessId()),
+                processInstance,
+                config.getProcessInstanceCacheExpiry(),
+                TimeUnit.SECONDS);
     }
 
     public List<ProcessInstance> getHistory(String tenantId, String businessService, String businessId) {
@@ -90,11 +92,16 @@ public class WorkflowCacheService {
     /**
      * Merges DB results with any fresher data available in cache.
      * For each process instance in dbResults, if a cached version exists it is used; otherwise the DB result stands.
+     * Uses businessService from the processInstance itself when not provided in criteria, so merging works even
+     * for searches that don't filter by businessService.
      */
     public List<ProcessInstance> mergeWithCache(String tenantId, String businessService, List<ProcessInstance> dbResults) {
-        if (CollectionUtils.isEmpty(dbResults) || businessService == null) return dbResults;
+        if (CollectionUtils.isEmpty(dbResults)) return dbResults;
         for (int i = 0; i < dbResults.size(); i++) {
-            ProcessInstance cached = getLatestProcessInstance(tenantId, businessService, dbResults.get(i).getBusinessId());
+            ProcessInstance pi = dbResults.get(i);
+            String effectiveBusinessService = businessService != null ? businessService : pi.getBusinessService();
+            if (effectiveBusinessService == null) continue;
+            ProcessInstance cached = getLatestProcessInstance(tenantId, effectiveBusinessService, pi.getBusinessId());
             if (cached != null) {
                 dbResults.set(i, cached);
             }
@@ -123,6 +130,34 @@ public class WorkflowCacheService {
             } catch (Exception e) {
                 log.warn("Redis update failed on transition for [{}/{}]: {}", pi.getBusinessService(), pi.getBusinessId(), e.getMessage());
             }
+        }
+    }
+
+    /**
+     * Acquires a short-lived distributed lock for a single businessId transition.
+     * Prevents two concurrent requests from both reading the same pre-transition state
+     * and both succeeding, which would produce duplicate DB records.
+     *
+     * On Redis failure, returns true (degraded mode: lock skipped, transition allowed).
+     * TTL of 10 seconds auto-releases if the service crashes before explicit release.
+     */
+    public boolean acquireTransitionLock(String tenantId, String businessService, String businessId) {
+        try {
+            Boolean acquired = redisTemplate.opsForValue()
+                    .setIfAbsent(lockKey(tenantId, businessService, businessId), "LOCKED", 10L, TimeUnit.SECONDS);
+            return Boolean.TRUE.equals(acquired);
+        } catch (Exception e) {
+            log.warn("Failed to acquire transition lock for [{}/{}]: {} — allowing transition in degraded mode",
+                    businessService, businessId, e.getMessage());
+            return true;
+        }
+    }
+
+    public void releaseTransitionLock(String tenantId, String businessService, String businessId) {
+        try {
+            redisTemplate.delete(lockKey(tenantId, businessService, businessId));
+        } catch (Exception e) {
+            log.warn("Failed to release transition lock for [{}/{}]: {}", businessService, businessId, e.getMessage());
         }
     }
 }

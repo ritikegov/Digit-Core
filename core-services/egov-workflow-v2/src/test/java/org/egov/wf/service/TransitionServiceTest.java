@@ -357,6 +357,8 @@ class TransitionServiceTest {
         // Assert: currentState comes from processInstanceFromDb (UNDER_REVIEW), not from request (INITIAL)
         assertEquals(1, result.size());
         assertEquals("UNDER_REVIEW", result.get(0).getCurrentState().getState());
+        // Assert: processInstanceFromRequest.state is also updated to keep search response consistent
+        assertEquals("UNDER_REVIEW", result.get(0).getProcessInstanceFromRequest().getState().getState());
     }
 }
 

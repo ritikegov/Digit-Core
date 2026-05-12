@@ -18,6 +18,8 @@ import org.springframework.util.CollectionUtils;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Repository
 @Slf4j
@@ -68,13 +70,30 @@ public class WorKflowRepository {
             }
         }
 
-        // For simple latest-state lookups, try to serve all businessIds from cache
+        // For simple latest-state lookups, serve cache hits immediately and query DB only for misses
         if (isSimpleLookup && !Boolean.TRUE.equals(criteria.getHistory())) {
-            List<ProcessInstance> allCached = tryGetAllFromLatestCache(criteria);
-            if (allCached != null) {
-                log.debug("Cache hit for latest [{}/{}]", criteria.getBusinessService(), criteria.getBusinessIds());
-                return allCached;
+            List<ProcessInstance> cacheHits = new ArrayList<>();
+            List<String> missIds = new ArrayList<>();
+            for (String businessId : criteria.getBusinessIds()) {
+                ProcessInstance cached = cacheService.getLatestProcessInstance(
+                        criteria.getTenantId(), criteria.getBusinessService(), businessId);
+                if (cached != null) cacheHits.add(cached);
+                else missIds.add(businessId);
             }
+            if (missIds.isEmpty()) {
+                log.debug("Full cache hit for latest [{}/{}]", criteria.getBusinessService(), criteria.getBusinessIds());
+                return cacheHits;
+            }
+            if (!cacheHits.isEmpty()) {
+                // Partial hit — query DB only for the missing businessIds
+                log.debug("Partial cache hit for latest [{}/{}], fetching {} misses from DB",
+                        criteria.getBusinessService(), criteria.getBusinessIds(), missIds.size());
+                List<ProcessInstance> dbResults = fetchLatestFromDb(criteria, missIds);
+                dbResults.forEach(cacheService::setLatestProcessInstance);
+                cacheHits.addAll(dbResults);
+                return cacheHits;
+            }
+            // Full miss — fall through to DB query below
         }
 
         List<Object> preparedStmtList = new ArrayList<>();
@@ -120,18 +139,22 @@ public class WorKflowRepository {
     }
 
     /**
-     * Attempts to serve all requested businessIds from the latest-state cache.
-     * Returns null if any single entry is missing (triggers full DB fetch instead).
+     * Queries DB for the given missIds only, using the same tenantId and businessService
+     * as the original criteria. Used when a batch lookup has partial cache hits.
      */
-    private List<ProcessInstance> tryGetAllFromLatestCache(ProcessInstanceSearchCriteria criteria) {
-        List<ProcessInstance> result = new ArrayList<>();
-        for (String businessId : criteria.getBusinessIds()) {
-            ProcessInstance cached = cacheService.getLatestProcessInstance(
-                    criteria.getTenantId(), criteria.getBusinessService(), businessId);
-            if (cached == null) return null;
-            result.add(cached);
-        }
-        return result;
+    private List<ProcessInstance> fetchLatestFromDb(ProcessInstanceSearchCriteria originalCriteria, List<String> missIds) {
+        ProcessInstanceSearchCriteria missCriteria = new ProcessInstanceSearchCriteria();
+        missCriteria.setTenantId(originalCriteria.getTenantId());
+        missCriteria.setBusinessService(originalCriteria.getBusinessService());
+        missCriteria.setBusinessIds(missIds);
+
+        List<Object> preparedStmtList = new ArrayList<>();
+        List<String> ids = getProcessInstanceIds(missCriteria);
+        if (CollectionUtils.isEmpty(ids)) return new ArrayList<>();
+
+        String query = queryBuilder.getProcessInstanceSearchQueryById(ids, preparedStmtList);
+        query = util.replaceSchemaPlaceholder(query, originalCriteria.getTenantId());
+        return jdbcTemplate.query(query, rowMapper, preparedStmtList.toArray());
     }
 
 

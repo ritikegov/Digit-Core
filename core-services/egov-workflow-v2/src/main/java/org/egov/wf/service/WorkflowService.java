@@ -74,19 +74,42 @@ public class WorkflowService {
     public List<ProcessInstance> transition(ProcessInstanceRequest request){
         RequestInfo requestInfo = request.getRequestInfo();
 
-        List<ProcessStateAndAction> processStateAndActions = transitionService.getProcessStateAndActions(request.getProcessInstances(),true);
-        processStateAndActions.forEach(psa -> log.info(
-                "Transition | businessService={} businessId={} action={} currentState={} resultantState={}",
-                psa.getProcessInstanceFromRequest().getBusinessService(),
-                psa.getProcessInstanceFromRequest().getBusinessId(),
-                psa.getProcessInstanceFromRequest().getAction(),
-                psa.getCurrentState() != null ? psa.getCurrentState().getState() : "NEW",
-                psa.getResultantState() != null ? psa.getResultantState().getState() : null));
-        enrichmentService.enrichProcessRequest(requestInfo,processStateAndActions);
-        workflowValidator.validateRequest(requestInfo,processStateAndActions);
-        statusUpdateService.updateStatus(requestInfo,processStateAndActions);
-        workflowCacheService.updateOnTransition(request.getProcessInstances());
-        return request.getProcessInstances();
+        if (!CollectionUtils.isEmpty(request.getProcessInstances())) {
+            request.getProcessInstances().forEach(pi -> log.info(
+                    "Transition attempt | businessService={} businessId={} action={}",
+                    pi.getBusinessService(), pi.getBusinessId(), pi.getAction()));
+        }
+
+        List<ProcessInstance> lockedInstances = new ArrayList<>();
+        try {
+            if (!CollectionUtils.isEmpty(request.getProcessInstances())) {
+                for (ProcessInstance pi : request.getProcessInstances()) {
+                    if (!workflowCacheService.acquireTransitionLock(pi.getTenantId(), pi.getBusinessService(), pi.getBusinessId())) {
+                        throw new CustomException("CONCURRENT_TRANSITION",
+                                "A transition is already in progress for businessId: " + pi.getBusinessId()
+                                + ". Please retry after a moment.");
+                    }
+                    lockedInstances.add(pi);
+                }
+            }
+
+            List<ProcessStateAndAction> processStateAndActions = transitionService.getProcessStateAndActions(request.getProcessInstances(),true);
+            processStateAndActions.forEach(psa -> log.info(
+                    "Transition resolved | businessService={} businessId={} action={} currentState={} resultantState={}",
+                    psa.getProcessInstanceFromRequest().getBusinessService(),
+                    psa.getProcessInstanceFromRequest().getBusinessId(),
+                    psa.getProcessInstanceFromRequest().getAction(),
+                    psa.getCurrentState() != null ? psa.getCurrentState().getState() : "NEW",
+                    psa.getResultantState() != null ? psa.getResultantState().getState() : null));
+            enrichmentService.enrichProcessRequest(requestInfo,processStateAndActions);
+            workflowValidator.validateRequest(requestInfo,processStateAndActions);
+            statusUpdateService.updateStatus(requestInfo,processStateAndActions);
+            workflowCacheService.updateOnTransition(request.getProcessInstances());
+            return request.getProcessInstances();
+        } finally {
+            lockedInstances.forEach(pi ->
+                    workflowCacheService.releaseTransitionLock(pi.getTenantId(), pi.getBusinessService(), pi.getBusinessId()));
+        }
     }
 
 

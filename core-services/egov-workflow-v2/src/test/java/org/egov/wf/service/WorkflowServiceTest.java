@@ -146,6 +146,48 @@ class WorkflowServiceTest {
         verify(this.workflowCacheService, never()).updateOnTransition((List<ProcessInstance>) any());
     }
 
+    @Test
+    void testTransition_concurrentRequest_throwsConcurrentTransitionException() {
+        ProcessInstance pi = new ProcessInstance();
+        pi.setTenantId("pb");
+        pi.setBusinessService("TL");
+        pi.setBusinessId("TL-001");
+
+        ProcessInstanceRequest request = new ProcessInstanceRequest();
+        request.setProcessInstances(List.of(pi));
+
+        when(this.workflowCacheService.acquireTransitionLock("pb", "TL", "TL-001")).thenReturn(false);
+
+        CustomException ex = assertThrows(CustomException.class, () -> this.workflowService.transition(request));
+        assertEquals("CONCURRENT_TRANSITION", ex.getCode());
+
+        // Lock was not acquired so release should NOT be called
+        verify(this.workflowCacheService, never()).releaseTransitionLock(any(), any(), any());
+        // Transition pipeline must not start
+        verify(this.transitionService, never()).getProcessStateAndActions(any(), any());
+    }
+
+    @Test
+    void testTransition_lockReleasedOnException() {
+        ProcessInstance pi = new ProcessInstance();
+        pi.setTenantId("pb");
+        pi.setBusinessService("TL");
+        pi.setBusinessId("TL-001");
+
+        ProcessInstanceRequest request = new ProcessInstanceRequest();
+        request.setProcessInstances(List.of(pi));
+
+        when(this.workflowCacheService.acquireTransitionLock("pb", "TL", "TL-001")).thenReturn(true);
+        doNothing().when(this.workflowCacheService).releaseTransitionLock(any(), any(), any());
+        when(this.transitionService.getProcessStateAndActions(any(), any()))
+                .thenThrow(new CustomException("ERR", "fail"));
+
+        assertThrows(CustomException.class, () -> this.workflowService.transition(request));
+
+        // Lock must be released in finally even when exception thrown
+        verify(this.workflowCacheService).releaseTransitionLock("pb", "TL", "TL-001");
+    }
+
 
     @Test
     void testSearch() {

@@ -60,9 +60,11 @@ public class TransitionService {
             }
             processStateAndAction.setProcessInstanceFromDb(idToProcessInstanceFromDbMap.get(processInstance.getBusinessId()));
             State currentState = null;
-            if(processStateAndAction.getProcessInstanceFromDb() != null)
+            if(processStateAndAction.getProcessInstanceFromDb() != null) {
                 currentState = processStateAndAction.getProcessInstanceFromDb().getState();
-            else if(!isTransitionCall)
+                if(!isTransitionCall)
+                    processStateAndAction.getProcessInstanceFromRequest().setState(currentState);
+            } else if(!isTransitionCall)
                 currentState = processStateAndAction.getProcessInstanceFromRequest().getState();
 
 
@@ -94,10 +96,24 @@ public class TransitionService {
 
 
             if(isTransitionCall){
-                if(processStateAndAction.getAction()==null)
-                    throw new CustomException("INVALID ACTION","Action "+processStateAndAction.getProcessInstanceFromRequest().getAction()
-                            + " not found in config for the businessId: "
-                            +processStateAndAction.getProcessInstanceFromRequest().getBusinessId());
+                if(processStateAndAction.getAction()==null) {
+                    List<String> availableActions = CollectionUtils.isEmpty(processStateAndAction.getCurrentState().getActions())
+                            ? Collections.emptyList()
+                            : processStateAndAction.getCurrentState().getActions().stream()
+                                .map(Action::getAction)
+                                .collect(Collectors.toList());
+                    log.error("Invalid action | businessService={} businessId={} requestedAction={} currentState={} availableActions={}",
+                            processStateAndAction.getProcessInstanceFromRequest().getBusinessService(),
+                            processStateAndAction.getProcessInstanceFromRequest().getBusinessId(),
+                            processStateAndAction.getProcessInstanceFromRequest().getAction(),
+                            processStateAndAction.getCurrentState().getState(),
+                            availableActions);
+                    throw new CustomException("INVALID ACTION",
+                            "Action " + processStateAndAction.getProcessInstanceFromRequest().getAction()
+                            + " is not valid for businessId: " + processStateAndAction.getProcessInstanceFromRequest().getBusinessId()
+                            + " | currentState: " + processStateAndAction.getCurrentState().getState()
+                            + " | availableActions: " + availableActions);
+                }
 
                 for(State state : businessService.getStates()){
                     if(state.getUuid().equalsIgnoreCase(processStateAndAction.getAction().getNextState())){
@@ -136,6 +152,7 @@ public class TransitionService {
         List<String> businessIds = processInstances.stream().map(ProcessInstance::getBusinessId)
                 .collect(Collectors.toList());
         criteria.setTenantId(processInstances.get(0).getTenantId());
+        criteria.setBusinessService(processInstances.get(0).getBusinessService());
         criteria.setBusinessIds(businessIds);
         /*
          * fetching the result from repository
