@@ -1,6 +1,5 @@
 package org.digit.services.boundary.model;
 
-import org.digit.services.account.model.ResponseInfo;
 import org.digit.services.common.model.AuditDetails;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -11,19 +10,12 @@ import lombok.NoArgsConstructor;
 
 import java.util.List;
 
-/**
- * Response wrapper for Boundary search operations.
- * Based on the actual API structure from Go service.
- */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class BoundarySearchResponse {
-
-    @JsonProperty("responseInfo")
-    private ResponseInfo responseInfo;
 
     @JsonProperty("tenantBoundary")
     private List<HierarchyRelation> tenantBoundary;
@@ -35,8 +27,8 @@ public class BoundarySearchResponse {
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class HierarchyRelation {
 
-        @JsonProperty("tenantId")
-        private String tenantId;
+        @JsonProperty("hierarchyType")
+        private String hierarchyType;
 
         @JsonProperty("boundary")
         private List<EnrichedBoundary> boundary;
@@ -52,26 +44,14 @@ public class BoundarySearchResponse {
         @JsonProperty("id")
         private String id;
 
-        @JsonProperty("tenantId")
-        private String tenantId;
-
         @JsonProperty("code")
         private String code;
 
-        @JsonProperty("name")
-        private String name;
-
-        @JsonProperty("type")
-        private String type;
-
-        @JsonProperty("parent")
-        private String parent;
+        @JsonProperty("boundaryType")
+        private String boundaryType;
 
         @JsonProperty("children")
-        private List<String> children;
-
-        @JsonProperty("materializedPath")
-        private String materializedPath;
+        private List<EnrichedBoundary> children;
 
         @JsonProperty("auditDetails")
         private AuditDetails auditDetails;

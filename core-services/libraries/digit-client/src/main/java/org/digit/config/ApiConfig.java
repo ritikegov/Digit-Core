@@ -50,7 +50,7 @@ public class ApiConfig {
         
         // OpenTelemetry tracing removed from digit-client
         log.info("ℹ️ OpenTelemetry tracing not available (dependencies removed from digit-client)");
-        
+
         log.info("✅ RestTemplate created - interceptors will be added by auto-configuration");
         
         // Set custom error handler

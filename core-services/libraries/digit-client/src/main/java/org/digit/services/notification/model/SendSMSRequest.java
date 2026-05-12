@@ -21,9 +21,6 @@ public class SendSMSRequest {
     @JsonProperty("version")
     private String version;
 
-    @JsonProperty("tenantId")
-    private String tenantId;
-
     @JsonProperty("mobileNumbers")
     private List<String> mobileNumbers;
 

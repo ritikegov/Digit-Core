@@ -1,350 +1,132 @@
 package org.digit.factory;
 
 import org.digit.config.ApiProperties;
+import org.digit.config.PropagationProperties;
 import org.digit.exception.DigitClientErrorHandler;
-import org.digit.services.account.AccountClient;
+import org.digit.services.billing.BillingClient;
 import org.digit.services.boundary.BoundaryClient;
-import org.digit.services.workflow.WorkflowClient;
-import org.digit.services.idgen.IdGenClient;
-import org.digit.services.notification.NotificationClient;
-import org.digit.services.individual.IndividualClient;
 import org.digit.services.filestore.FilestoreClient;
+import org.digit.services.idgen.IdGenClient;
+import org.digit.services.individual.IndividualClient;
 import org.digit.services.mdms.MdmsClient;
+import org.digit.services.notification.NotificationClient;
 import org.digit.services.registry.RegistryClient;
+import org.digit.services.workflow.WorkflowClient;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.web.client.RestTemplate;
 
-/**
- * Factory class for creating pre-configured Digit service clients.
- * Handles all internal configuration including RestTemplate setup, error handling, and base URLs.
- */
 public class DigitClientFactory {
 
-    /**
-     * Creates a pre-configured BoundaryClient with default base URL (http://localhost:8080).
-     *
-     * @return configured BoundaryClient ready for use
-     */
     public static BoundaryClient createBoundaryClient() {
         return createBoundaryClient("http://localhost:8080");
     }
 
-    /**
-     * Creates a pre-configured BoundaryClient with the specified base URL.
-     *
-     * @param baseUrl the base URL for the Boundary service
-     * @return configured BoundaryClient ready for use
-     */
     public static BoundaryClient createBoundaryClient(String baseUrl) {
-        if (baseUrl == null || baseUrl.trim().isEmpty()) {
-            throw new IllegalArgumentException("Boundary service base URL cannot be null or empty");
-        }
-
-        // Create and configure RestTemplate
-        RestTemplate restTemplate = createRestTemplate();
-        
-        // Create ApiProperties with the provided base URL
-        ApiProperties apiProperties = createApiProperties(null, baseUrl, null, null);
-        
-        return new BoundaryClient(restTemplate, apiProperties);
+        validate(baseUrl, "Boundary");
+        return new BoundaryClient(restTemplate(), props("boundaryServiceUrl", baseUrl));
     }
 
-    /**
-     * Creates a pre-configured AccountClient with default base URL (http://localhost:8080).
-     *
-     * @return configured AccountClient ready for use
-     */
-    public static AccountClient createAccountClient() {
-        return createAccountClient("http://localhost:8080");
-    }
-
-    /**
-     * Creates a pre-configured AccountClient with the specified base URL.
-     *
-     * @param baseUrl the base URL for the Account service
-     * @return configured AccountClient ready for use
-     */
-    public static AccountClient createAccountClient(String baseUrl) {
-        if (baseUrl == null || baseUrl.trim().isEmpty()) {
-            throw new IllegalArgumentException("Account service base URL cannot be null or empty");
-        }
-
-        // Create and configure RestTemplate
-        RestTemplate restTemplate = createRestTemplate();
-        
-        // Create ApiProperties with the provided base URL
-        ApiProperties apiProperties = createApiProperties(baseUrl, null, null, null);
-        
-        return new AccountClient(restTemplate, apiProperties);
-    }
-
-    /**
-     * Creates a pre-configured WorkflowClient with default base URL (http://localhost:8085).
-     *
-     * @return configured WorkflowClient ready for use
-     */
     public static WorkflowClient createWorkflowClient() {
-        return createWorkflowClient("http://localhost:8080");
+        return createWorkflowClient("http://localhost:8085");
     }
 
-    /**
-     * Creates a pre-configured WorkflowClient with the specified base URL.
-     *
-     * @param baseUrl the base URL for the Workflow service
-     * @return configured WorkflowClient ready for use
-     */
     public static WorkflowClient createWorkflowClient(String baseUrl) {
-        if (baseUrl == null || baseUrl.trim().isEmpty()) {
-            throw new IllegalArgumentException("Workflow service base URL cannot be null or empty");
-        }
-
-        // Create and configure RestTemplate
-        RestTemplate restTemplate = createRestTemplate();
-        
-        // Create ApiProperties with the provided base URL
-        ApiProperties apiProperties = createApiProperties(null, null, baseUrl, null);
-        
-        return new WorkflowClient(restTemplate, apiProperties);
+        validate(baseUrl, "Workflow");
+        return new WorkflowClient(restTemplate(), props("workflowServiceUrl", baseUrl));
     }
 
-    /**
-     * Creates a pre-configured IdGenClient with default base URL (http://localhost:8100).
-     *
-     * @return configured IdGenClient instance
-     */
     public static IdGenClient createIdGenClient() {
         return createIdGenClient("http://localhost:8100");
     }
 
-    /**
-     * Creates a pre-configured IdGenClient with custom base URL.
-     *
-     * @param baseUrl the base URL for the IdGen service
-     * @return configured IdGenClient instance
-     */
     public static IdGenClient createIdGenClient(String baseUrl) {
-        ApiProperties apiProperties = new ApiProperties();
-        apiProperties.setIdgenServiceUrl(baseUrl);
-        
-        RestTemplate restTemplate = createRestTemplate();
-        
-        return new IdGenClient(restTemplate, apiProperties);
+        ApiProperties p = new ApiProperties();
+        setField(p, "idgenServiceUrl", baseUrl);
+        return new IdGenClient(restTemplate(), p);
     }
 
-    /**
-     * Creates a pre-configured NotificationClient with default base URL (http://localhost:8091).
-     *
-     * @return configured NotificationClient instance
-     */
     public static NotificationClient createNotificationClient() {
         return createNotificationClient("http://localhost:8091");
     }
 
-    /**
-     * Creates a pre-configured NotificationClient with custom base URL.
-     *
-     * @param baseUrl the base URL for the Notification service
-     * @return configured NotificationClient instance
-     */
     public static NotificationClient createNotificationClient(String baseUrl) {
-        ApiProperties apiProperties = new ApiProperties();
-        apiProperties.setNotificationServiceUrl(baseUrl);
-        
-        RestTemplate restTemplate = createRestTemplate();
-        return new NotificationClient(restTemplate, apiProperties);
+        ApiProperties p = new ApiProperties();
+        setField(p, "notificationServiceUrl", baseUrl);
+        return new NotificationClient(restTemplate(), p);
     }
 
-    /**
-     * Creates a pre-configured IndividualClient with default base URL (http://localhost:8999).
-     *
-     * @return configured IndividualClient instance
-     */
     public static IndividualClient createIndividualClient() {
         return createIndividualClient("http://localhost:8999");
     }
 
-    /**
-     * Creates a pre-configured IndividualClient with custom base URL.
-     *
-     * @param baseUrl the base URL for the Individual service
-     * @return configured IndividualClient instance
-     */
     public static IndividualClient createIndividualClient(String baseUrl) {
-        ApiProperties apiProperties = new ApiProperties();
-        apiProperties.setIndividualServiceUrl(baseUrl);
-        
-        RestTemplate restTemplate = createRestTemplate();
-        return new IndividualClient(restTemplate, apiProperties);
+        ApiProperties p = new ApiProperties();
+        setField(p, "individualServiceUrl", baseUrl);
+        return new IndividualClient(restTemplate(), p);
     }
 
-    /**
-     * Creates a pre-configured FilestoreClient with default base URL (http://localhost:8080).
-     *
-     * @return configured FilestoreClient instance
-     */
     public static FilestoreClient createFilestoreClient() {
         return createFilestoreClient("http://localhost:8080");
     }
 
-    /**
-     * Creates a pre-configured FilestoreClient with custom base URL.
-     *
-     * @param baseUrl the base URL for the Filestore service
-     * @return configured FilestoreClient instance
-     */
     public static FilestoreClient createFilestoreClient(String baseUrl) {
-        ApiProperties apiProperties = new ApiProperties();
-        apiProperties.setFilestoreServiceUrl(baseUrl);
-        
-        RestTemplate restTemplate = createRestTemplate();
-        return new FilestoreClient(restTemplate, apiProperties);
+        ApiProperties p = new ApiProperties();
+        setField(p, "filestoreServiceUrl", baseUrl);
+        PropagationProperties propagationProperties = new PropagationProperties();
+        return new FilestoreClient(restTemplate(), p, propagationProperties);
     }
 
-    /**
-     * Creates a pre-configured MdmsClient with default base URL (http://localhost:8080).
-     *
-     * @return configured MdmsClient instance
-     */
     public static MdmsClient createMdmsClient() {
         return createMdmsClient("http://localhost:8080");
     }
 
-    /**
-     * Creates a pre-configured MdmsClient with custom base URL.
-     *
-     * @param baseUrl the base URL for the MDMS service
-     * @return configured MdmsClient instance
-     */
     public static MdmsClient createMdmsClient(String baseUrl) {
-        ApiProperties apiProperties = new ApiProperties();
-        apiProperties.setMdmsServiceUrl(baseUrl);
-        
-        RestTemplate restTemplate = createRestTemplate();
-        return new MdmsClient(restTemplate, apiProperties);
+        ApiProperties p = new ApiProperties();
+        setField(p, "mdmsServiceUrl", baseUrl);
+        return new MdmsClient(restTemplate(), p);
     }
 
-    /**
-     * Creates a pre-configured RegistryClient with default base URL (http://localhost:8085).
-     *
-     * @return configured RegistryClient instance
-     */
     public static RegistryClient createRegistryClient() {
         return createRegistryClient("http://localhost:8085");
     }
 
-    /**
-     * Creates a pre-configured RegistryClient with custom base URL.
-     *
-     * @param baseUrl the base URL for the Registry service
-     * @return configured RegistryClient instance
-     */
     public static RegistryClient createRegistryClient(String baseUrl) {
-        ApiProperties apiProperties = new ApiProperties();
-        apiProperties.setRegistryServiceUrl(baseUrl);
-        
-        RestTemplate restTemplate = createRestTemplate();
-        return new RegistryClient(restTemplate, apiProperties);
+        ApiProperties p = new ApiProperties();
+        setField(p, "registryServiceUrl", baseUrl);
+        return new RegistryClient(restTemplate(), p);
     }
 
-    /**
-     * Creates both AccountClient and BoundaryClient with default base URLs (http://localhost:8080).
-     *
-     * @return DigitClients container with both clients
-     */
-    public static DigitClients createClients() {
-        return createClients("http://localhost:8080", "http://localhost:8080");
+    public static BillingClient createBillingClient() {
+        return createBillingClient("http://localhost:8080");
     }
 
-    /**
-     * Creates both AccountClient and BoundaryClient with their respective base URLs.
-     *
-     * @param accountBaseUrl the base URL for the Account service
-     * @param boundaryBaseUrl the base URL for the Boundary service
-     * @return DigitClients container with both clients
-     */
-    public static DigitClients createClients(String accountBaseUrl, String boundaryBaseUrl) {
-        return createClients(accountBaseUrl, boundaryBaseUrl, "http://localhost:8085");
+    public static BillingClient createBillingClient(String baseUrl) {
+        ApiProperties p = new ApiProperties();
+        setField(p, "billingServiceUrl", baseUrl);
+        return new BillingClient(restTemplate(), p, new ObjectMapper());
     }
 
-    /**
-     * Creates all clients (Account, Boundary, Workflow, IdGen) with their respective base URLs.
-     *
-     * @param accountBaseUrl the base URL for the Account service
-     * @param boundaryBaseUrl the base URL for the Boundary service
-     * @param workflowBaseUrl the base URL for the Workflow service
-     * @param idgenBaseUrl the base URL for the IdGen service
-     * @return DigitClients container with all clients
-     */
-    public static DigitClients createClients(String accountBaseUrl, String boundaryBaseUrl, String workflowBaseUrl, String idgenBaseUrl) {
-        AccountClient accountClient = createAccountClient(accountBaseUrl);
-        BoundaryClient boundaryClient = createBoundaryClient(boundaryBaseUrl);
-        WorkflowClient workflowClient = createWorkflowClient(workflowBaseUrl);
-        IdGenClient idGenClient = createIdGenClient(idgenBaseUrl);
-        
-        return new DigitClients(accountClient, boundaryClient, workflowClient, idGenClient);
+    private static RestTemplate restTemplate() {
+        RestTemplate rt = new RestTemplate();
+        rt.setErrorHandler(new DigitClientErrorHandler());
+        return rt;
     }
 
-    /**
-     * Creates all three clients (Account, Boundary, Workflow) with their respective base URLs.
-     *
-     * @param accountBaseUrl the base URL for the Account service
-     * @param boundaryBaseUrl the base URL for the Boundary service
-     * @param workflowBaseUrl the base URL for the Workflow service
-     * @return DigitClients container with all clients
-     */
-    public static DigitClients createClients(String accountBaseUrl, String boundaryBaseUrl, String workflowBaseUrl) {
-        return createClients(accountBaseUrl, boundaryBaseUrl, workflowBaseUrl, "http://localhost:8100");
+    private static ApiProperties props(String field, String url) {
+        ApiProperties p = new ApiProperties();
+        setField(p, field, url);
+        setField(p, "connectTimeout", 5000);
+        setField(p, "readTimeout", 30000);
+        setField(p, "maxRetryAttempts", 3);
+        setField(p, "retryDelay", 1000L);
+        return p;
     }
 
-    /**
-     * Creates a configured RestTemplate with error handling.
-     */
-    private static RestTemplate createRestTemplate() {
-        RestTemplate restTemplate = new RestTemplate();
-        restTemplate.setErrorHandler(new DigitClientErrorHandler());
-        return restTemplate;
+    private static void validate(String url, String service) {
+        if (url == null || url.trim().isEmpty())
+            throw new IllegalArgumentException(service + " service base URL cannot be null or empty");
     }
 
-    /**
-     * Creates ApiProperties with the specified base URLs.
-     */
-    private static ApiProperties createApiProperties(String accountBaseUrl, String boundaryBaseUrl, String workflowBaseUrl, String idgenBaseUrl) {
-        ApiProperties apiProperties = new ApiProperties();
-        
-        if (accountBaseUrl != null) {
-            // Use reflection or direct field access since we can't use @Value here
-            setField(apiProperties, "accountServiceUrl", accountBaseUrl);
-        }
-        
-        if (boundaryBaseUrl != null) {
-            setField(apiProperties, "boundaryServiceUrl", boundaryBaseUrl);
-        }
-        
-        if (workflowBaseUrl != null) {
-            setField(apiProperties, "workflowServiceUrl", workflowBaseUrl);
-        }
-        
-        if (idgenBaseUrl != null) {
-            setField(apiProperties, "idgenServiceUrl", idgenBaseUrl);
-        }
-        
-        // Set default MDMS service URL
-        setField(apiProperties, "mdmsServiceUrl", "http://localhost:8080");
-        
-        // Set default Registry service URL
-        setField(apiProperties, "registryServiceUrl", "http://localhost:8085");
-        
-        // Set default values for other properties
-        setField(apiProperties, "connectTimeout", 5000);
-        setField(apiProperties, "readTimeout", 30000);
-        setField(apiProperties, "maxRetryAttempts", 3);
-        setField(apiProperties, "retryDelay", 1000L);
-        
-        return apiProperties;
-    }
-
-    /**
-     * Helper method to set field values using reflection.
-     */
     private static void setField(Object target, String fieldName, Object value) {
         try {
             java.lang.reflect.Field field = target.getClass().getDeclaredField(fieldName);
@@ -355,104 +137,41 @@ public class DigitClientFactory {
         }
     }
 
-    /**
-     * Container class for multiple Digit service clients.
-     */
     public static class DigitClients {
-        private final AccountClient accountClient;
         private final BoundaryClient boundaryClient;
         private final WorkflowClient workflowClient;
         private final IdGenClient idGenClient;
         private final IndividualClient individualClient;
         private final MdmsClient mdmsClient;
         private final RegistryClient registryClient;
+        private final BillingClient billingClient;
+        private final NotificationClient notificationClient;
+        private final FilestoreClient filestoreClient;
 
-        public DigitClients(AccountClient accountClient, BoundaryClient boundaryClient) {
-            this.accountClient = accountClient;
-            this.boundaryClient = boundaryClient;
-            this.workflowClient = null;
-            this.idGenClient = null;
-            this.individualClient = null;
-            this.mdmsClient = null;
-            this.registryClient = null;
-        }
-
-        public DigitClients(AccountClient accountClient, BoundaryClient boundaryClient, WorkflowClient workflowClient) {
-            this.accountClient = accountClient;
-            this.boundaryClient = boundaryClient;
-            this.workflowClient = workflowClient;
-            this.idGenClient = null;
-            this.individualClient = null;
-            this.mdmsClient = null;
-            this.registryClient = null;
-        }
-
-        public DigitClients(AccountClient accountClient, BoundaryClient boundaryClient, WorkflowClient workflowClient, IdGenClient idGenClient) {
-            this.accountClient = accountClient;
-            this.boundaryClient = boundaryClient;
-            this.workflowClient = workflowClient;
-            this.idGenClient = idGenClient;
-            this.individualClient = null;
-            this.mdmsClient = null;
-            this.registryClient = null;
-        }
-
-        public DigitClients(AccountClient accountClient, BoundaryClient boundaryClient, WorkflowClient workflowClient, IdGenClient idGenClient, IndividualClient individualClient) {
-            this.accountClient = accountClient;
-            this.boundaryClient = boundaryClient;
-            this.workflowClient = workflowClient;
-            this.idGenClient = idGenClient;
-            this.individualClient = individualClient;
-            this.mdmsClient = null;
-            this.registryClient = null;
-        }
-
-        public DigitClients(AccountClient accountClient, BoundaryClient boundaryClient, WorkflowClient workflowClient, IdGenClient idGenClient, IndividualClient individualClient, MdmsClient mdmsClient) {
-            this.accountClient = accountClient;
-            this.boundaryClient = boundaryClient;
-            this.workflowClient = workflowClient;
-            this.idGenClient = idGenClient;
-            this.individualClient = individualClient;
-            this.mdmsClient = mdmsClient;
-            this.registryClient = null;
-        }
-
-        public DigitClients(AccountClient accountClient, BoundaryClient boundaryClient, WorkflowClient workflowClient, IdGenClient idGenClient, IndividualClient individualClient, MdmsClient mdmsClient, RegistryClient registryClient) {
-            this.accountClient = accountClient;
+        public DigitClients(BoundaryClient boundaryClient, WorkflowClient workflowClient,
+                IdGenClient idGenClient, IndividualClient individualClient,
+                MdmsClient mdmsClient, RegistryClient registryClient,
+                BillingClient billingClient, NotificationClient notificationClient,
+                FilestoreClient filestoreClient) {
             this.boundaryClient = boundaryClient;
             this.workflowClient = workflowClient;
             this.idGenClient = idGenClient;
             this.individualClient = individualClient;
             this.mdmsClient = mdmsClient;
             this.registryClient = registryClient;
+            this.billingClient = billingClient;
+            this.notificationClient = notificationClient;
+            this.filestoreClient = filestoreClient;
         }
 
-        public AccountClient getAccountClient() {
-            return accountClient;
-        }
-
-        public BoundaryClient getBoundaryClient() {
-            return boundaryClient;
-        }
-
-        public WorkflowClient getWorkflowClient() {
-            return workflowClient;
-        }
-
-        public IdGenClient getIdGenClient() {
-            return idGenClient;
-        }
-
-        public IndividualClient getIndividualClient() {
-            return individualClient;
-        }
-
-        public MdmsClient getMdmsClient() {
-            return mdmsClient;
-        }
-
-        public RegistryClient getRegistryClient() {
-            return registryClient;
-        }
+        public BoundaryClient getBoundaryClient() { return boundaryClient; }
+        public WorkflowClient getWorkflowClient() { return workflowClient; }
+        public IdGenClient getIdGenClient() { return idGenClient; }
+        public IndividualClient getIndividualClient() { return individualClient; }
+        public MdmsClient getMdmsClient() { return mdmsClient; }
+        public RegistryClient getRegistryClient() { return registryClient; }
+        public BillingClient getBillingClient() { return billingClient; }
+        public NotificationClient getNotificationClient() { return notificationClient; }
+        public FilestoreClient getFilestoreClient() { return filestoreClient; }
     }
 }

@@ -35,7 +35,7 @@ public class WorkflowTransitionResponse {
     private String comment;
 
     @JsonProperty("documents")
-    private List<Document> documents;
+    private List<String> documents;
 
     @JsonProperty("assigner")
     private String assigner;
@@ -72,23 +72,4 @@ public class WorkflowTransitionResponse {
 
     @JsonProperty("auditDetails")
     private AuditDetails auditDetails;
-
-
-    @Data
-    @AllArgsConstructor
-    @NoArgsConstructor
-    @Builder
-    public static class Document {
-        @JsonProperty("documentType")
-        private String documentType;
-
-        @JsonProperty("fileStoreId")
-        private String fileStoreId;
-
-        @JsonProperty("documentUid")
-        private String documentUid;
-
-        @JsonProperty("additionalDetails")
-        private Map<String, Object> additionalDetails;
-    }
 }

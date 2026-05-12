@@ -1,15 +1,9 @@
 package org.digit.config;
 
-import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 
-/**
- * Configuration properties for Digit service API endpoints.
- * Holds configurable base URLs for different services.
- */
 @Getter
 @Setter
 public class ApiProperties {
@@ -41,6 +35,24 @@ public class ApiProperties {
     @Value("${digit.services.registry.base-url:http://localhost:8085}")
     private String registryServiceUrl;
 
+    @Value("${digit.services.accesscontrol.base-url:http://localhost:8080}")
+    private String accessControlServiceUrl;
+
+    @Value("${digit.services.localization.base-url:http://localhost:8080}")
+    private String localizationServiceUrl;
+
+    @Value("${digit.services.otp.base-url:http://localhost:8080}")
+    private String otpServiceUrl;
+
+    @Value("${digit.services.urlshortener.base-url:http://localhost:8080}")
+    private String urlShortenerServiceUrl;
+
+    @Value("${digit.services.employee.base-url:http://localhost:8080}")
+    private String employeeServiceUrl;
+
+    @Value("${digit.services.billing.base-url:http://localhost:8080}")
+    private String billingServiceUrl;
+
     @Value("${digit.services.timeout.connect:5000}")
     private int connectTimeout;
 
@@ -50,55 +62,6 @@ public class ApiProperties {
     @Value("${digit.services.retry.max-attempts:3}")
     private int maxRetryAttempts;
 
-    // Explicit getter methods as fallback for Lombok
-    public String getAccountServiceUrl() {
-        return accountServiceUrl;
-    }
-
-    public String getBoundaryServiceUrl() {
-        return boundaryServiceUrl;
-    }
-
-    public String getWorkflowServiceUrl() {
-        return workflowServiceUrl;
-    }
-
-    public String getIdgenServiceUrl() {
-        return idgenServiceUrl;
-    }
-
-    public String getIndividualServiceUrl() {
-        return individualServiceUrl;
-    }
-
-    public String getFilestoreServiceUrl() {
-        return filestoreServiceUrl;
-    }
-
-    public String getMdmsServiceUrl() {
-        return mdmsServiceUrl;
-    }
-
-    public String getRegistryServiceUrl() {
-        return registryServiceUrl;
-    }
-
-    public int getConnectTimeout() {
-        return connectTimeout;
-    }
-
-    public int getReadTimeout() {
-        return readTimeout;
-    }
-
-    public int getMaxRetryAttempts() {
-        return maxRetryAttempts;
-    }
-
     @Value("${digit.services.retry.delay:1000}")
     private long retryDelay;
-
-    public long getRetryDelay() {
-        return retryDelay;
-    }
 }

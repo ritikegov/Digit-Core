@@ -12,13 +12,10 @@ import lombok.NoArgsConstructor;
 @Builder
 public class GenerateIDResponse {
 
-    @JsonProperty("tenantId")
-    private String tenantId;
-
     @JsonProperty("templateCode")
     private String templateCode;
 
-    @JsonProperty("Version")
+    @JsonProperty("version")
     private String version;
 
     @JsonProperty("id")

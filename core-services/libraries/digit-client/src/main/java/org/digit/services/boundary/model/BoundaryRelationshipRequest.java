@@ -7,12 +7,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
-
-/**
- * Request wrapper for BoundaryRelationship operations.
- * Based on the actual API structure from Go service.
- */
 @Data
 @Builder
 @NoArgsConstructor
@@ -20,6 +14,6 @@ import java.util.List;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class BoundaryRelationshipRequest {
 
-    @JsonProperty("relationship")
-    private List<BoundaryRelationship> relationship;
+    @JsonProperty("boundaryRelationship")
+    private BoundaryRelationship boundaryRelationship;
 }

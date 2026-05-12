@@ -27,14 +27,14 @@ public class BoundaryHierarchy {
     @JsonProperty("id")
     private String id;
 
-    @JsonProperty("tenantId")
-    private String tenantId;
-
     @JsonProperty("hierarchyType")
     private String hierarchyType;
 
     @JsonProperty("boundaryHierarchy")
     private List<BoundaryTypeHierarchy> boundaryHierarchy;
+
+    @JsonProperty("requestId")
+    private String requestId;
 
     @JsonProperty("auditDetails")
     private AuditDetails auditDetails;

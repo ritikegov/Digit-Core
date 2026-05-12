@@ -27,9 +27,6 @@ public class BoundaryRelationship {
     @JsonProperty("id")
     private String id;
 
-    @JsonProperty("tenantId")
-    private String tenantId;
-
     @JsonProperty("code")
     private String code;
 
@@ -44,6 +41,9 @@ public class BoundaryRelationship {
 
     @JsonProperty("ancestralMaterializedPath")
     private String ancestralMaterializedPath;
+
+    @JsonProperty("requestId")
+    private String requestId;
 
     @JsonProperty("auditDetails")
     private AuditDetails auditDetails;

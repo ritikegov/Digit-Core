@@ -1,17 +1,15 @@
 package org.digit.services.workflow.model;
 
-import org.digit.services.common.model.AuditDetails;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
+
+import java.util.Map;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class Document {
-
-    @JsonProperty("id")
-    private String id;
 
     @JsonProperty("documentType")
     private String documentType;
@@ -22,6 +20,6 @@ public class Document {
     @JsonProperty("documentUid")
     private String documentUid;
 
-    @JsonProperty("auditDetails")
-    private AuditDetails auditDetails;
+    @JsonProperty("additionalDetails")
+    private Map<String, Object> additionalDetails;
 }

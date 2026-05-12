@@ -18,6 +18,6 @@ import lombok.NoArgsConstructor;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class BoundaryHierarchyRequest {
 
-    @JsonProperty("hierarchy")
-    private BoundaryHierarchy hierarchy;
+    @JsonProperty("boundaryHierarchy")
+    private BoundaryHierarchy boundaryHierarchy;
 }

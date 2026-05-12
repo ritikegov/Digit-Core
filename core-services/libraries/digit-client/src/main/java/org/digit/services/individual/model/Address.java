@@ -4,90 +4,53 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
-/**
- * Address model representing physical address entity.
- */
-@Getter
-@Setter
+@Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Address {
 
-    @JsonProperty("id")
-    private String id;
+    @JsonProperty("addressId")
+    private String addressId;
 
-    @JsonProperty("clientReferenceId")
-    private String clientReferenceId;
+    @JsonProperty("streetAddress")
+    private String streetAddress;
 
-    @JsonProperty("tenantId")
-    private String tenantId;
-
-    @JsonProperty("doorNo")
-    private String doorNo;
-
-    @JsonProperty("latitude")
-    private Double latitude;
-
-    @JsonProperty("longitude")
-    private Double longitude;
-
-    @JsonProperty("locationAccuracy")
-    private Double locationAccuracy;
-
-    @JsonProperty("type")
-    private String type;
-
-    @JsonProperty("addressLine1")
-    private String addressLine1;
-
-    @JsonProperty("addressLine2")
-    private String addressLine2;
-
-    @JsonProperty("landmark")
-    private String landmark;
+    @JsonProperty("area")
+    private String area;
 
     @JsonProperty("city")
     private String city;
 
-    @JsonProperty("region")
-    private String region;
+    @JsonProperty("state")
+    private String state;
+
+    @JsonProperty("countryCode")
+    private String countryCode;
 
     @JsonProperty("pincode")
     private String pincode;
 
-    @JsonProperty("buildingName")
-    private String buildingName;
+    @JsonProperty("landmark")
+    private String landmark;
 
-    @JsonProperty("street")
-    private String street;
+    @JsonProperty("geoLocation")
+    private GeoLocation geoLocation;
 
-    @JsonProperty("country")
-    private String country;
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class GeoLocation {
+        @JsonProperty("latitude")
+        private Double latitude;
 
-    @JsonProperty("formatted")
-    private String formatted;
-
-    @JsonProperty("localityCode")
-    private String localityCode;
-
-    @JsonProperty("wardCode")
-    private String wardCode;
-
-    @JsonProperty("createdBy")
-    private String createdBy;
-
-    @JsonProperty("lastModifiedBy")
-    private String lastModifiedBy;
-
-    @JsonProperty("createdTime")
-    private Long createdTime;
-
-    @JsonProperty("lastModifiedTime")
-    private Long lastModifiedTime;
+        @JsonProperty("longitude")
+        private Double longitude;
+    }
 }

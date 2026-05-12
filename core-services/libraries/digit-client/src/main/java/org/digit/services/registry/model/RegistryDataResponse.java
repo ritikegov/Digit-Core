@@ -7,9 +7,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * Registry response model matching Go Response struct.
- */
 @Data
 @Builder
 @NoArgsConstructor

@@ -19,5 +19,6 @@ public class IdGenGenerateRequest {
     private String templateCode;
 
     @JsonProperty("variables")
+    @Builder.Default
     private Map<String, String> variables = new HashMap<>();
 }

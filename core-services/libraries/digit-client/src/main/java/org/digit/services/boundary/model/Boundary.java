@@ -27,17 +27,17 @@ public class Boundary {
     @JsonProperty("id")
     private String id;
 
-    @JsonProperty("tenantId")
-    private String tenantId;
-
     @JsonProperty("code")
     private String code;
 
     @JsonProperty("geometry")
     private Map<String, Object> geometry;
 
-    @JsonProperty("additionalDetails")
-    private Map<String, Object> additionalDetails;
+    @JsonProperty("additionalAttributes")
+    private Map<String, Object> additionalAttributes;
+
+    @JsonProperty("requestId")
+    private String requestId;
 
     @JsonProperty("auditDetails")
     private AuditDetails auditDetails;

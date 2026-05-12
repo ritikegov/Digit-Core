@@ -1,6 +1,5 @@
 package org.digit.services.boundary.model;
 
-import org.digit.services.account.model.ResponseInfo;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
@@ -8,10 +7,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * Response wrapper for BoundaryHierarchy operations.
- * Based on the actual API structure from Go service.
- */
+import java.util.List;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -19,9 +16,6 @@ import lombok.NoArgsConstructor;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class BoundaryHierarchyResponse {
 
-    @JsonProperty("responseInfo")
-    private ResponseInfo responseInfo;
-
     @JsonProperty("hierarchy")
-    private BoundaryHierarchy hierarchy;
+    private List<BoundaryHierarchy> hierarchy;
 }

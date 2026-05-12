@@ -11,18 +11,12 @@ import lombok.NoArgsConstructor;
 
 import jakarta.validation.constraints.NotNull;
 
-/**
- * Registry data request model matching Go DataRequest struct.
- */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class RegistryData {
-
-    @JsonIgnore
-    private String tenantId;
 
     @JsonIgnore
     private String schemaCode;
