@@ -12,7 +12,7 @@ on:
   schedule:
     - cron: '45 1 * * 4'
   push:
-    branches: [ "master" ]
+    branches: [ "security-patch" ]
 
 # Declare default permissions as read only.
 permissions: read-all
