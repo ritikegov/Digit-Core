@@ -1,4 +1,4 @@
-FROM eclipse-temurin:21-jdk-alpine AS build
+FROM eclipse-temurin:25-jdk-alpine AS build
 ARG WORK_DIR
 ARG nexusUsername
 ARG nexusPassword
