@@ -1,0 +1,19 @@
+package com.digit.services.boundary.model;
+
+import com.digit.services.boundary.model.BoundaryHierarchy;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@JsonIgnoreProperties(ignoreUnknown=true)
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class BoundaryHierarchyRequest {
+    @JsonProperty(value="boundaryHierarchy")
+    private BoundaryHierarchy boundaryHierarchy;
+}
