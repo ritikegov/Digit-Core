@@ -1,7 +1,7 @@
 package org.egov.example;
 
 import org.egov.config.ApiConfig;
-import com.digit.services.boundary.BoundaryClient;
+import org.egov.services.boundary.BoundaryClient;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 public class DigitClientExample {

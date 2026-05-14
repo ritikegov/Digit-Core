@@ -167,14 +167,14 @@ public class YourService {
 
 ```java
 import config.org.egov.ApiConfig;
-import com.digit.services.account.AccountClient;
-import com.digit.services.boundary.BoundaryClient;
-import com.digit.services.workflow.WorkflowClient;
-import com.digit.services.individual.IndividualClient;
-import com.digit.services.filestore.FilestoreClient;
-import com.digit.services.idgen.IdGenClient;
-import com.digit.services.mdms.MdmsClient;
-import com.digit.services.notification.NotificationClient;
+import org.egov.services.account.AccountClient;
+import org.egov.services.boundary.BoundaryClient;
+import org.egov.services.workflow.WorkflowClient;
+import org.egov.services.individual.IndividualClient;
+import org.egov.services.filestore.FilestoreClient;
+import org.egov.services.idgen.IdGenClient;
+import org.egov.services.mdms.MdmsClient;
+import org.egov.services.notification.NotificationClient;
 
 // Initialize Spring context with configuration
 ApplicationContext context = new AnnotationConfigApplicationContext(ApiConfig.class);
@@ -866,7 +866,7 @@ mvn exec:java -Dexec.mainClass="example.org.egov.DigitClientExample"
 
 To add a new service client:
 
-1. Create a new package under `com.digit.services`
+1. Create a new package under `org.egov.services`
 2. Add model classes in the `model` subpackage
 3. Create a client class following the pattern of existing clients
 4. Add service URL configuration to `ApiProperties`

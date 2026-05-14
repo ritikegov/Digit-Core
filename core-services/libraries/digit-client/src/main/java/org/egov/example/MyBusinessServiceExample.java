@@ -1,6 +1,6 @@
 package org.egov.example;
 
-import com.digit.services.boundary.BoundaryClient;
+import org.egov.services.boundary.BoundaryClient;
 import org.egov.services.boundary.model.Boundary;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;

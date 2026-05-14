@@ -1,6 +1,6 @@
 package org.egov.services.mdms.model;
 
-import com.digit.services.common.model.AuditDetails;
+import org.egov.services.common.model.AuditDetails;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.AllArgsConstructor;

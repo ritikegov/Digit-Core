@@ -1,6 +1,6 @@
 package org.egov.services.workflow.model;
 
-import com.digit.services.common.model.AuditDetails;
+import org.egov.services.common.model.AuditDetails;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import java.util.Map;

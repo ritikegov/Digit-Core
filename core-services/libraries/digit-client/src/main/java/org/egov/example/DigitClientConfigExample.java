@@ -1,8 +1,8 @@
 package org.egov.example;
 
 import org.egov.factory.DigitClientFactory;
-import com.digit.services.boundary.BoundaryClient;
-import com.digit.services.workflow.WorkflowClient;
+import org.egov.services.boundary.BoundaryClient;
+import org.egov.services.workflow.WorkflowClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 
