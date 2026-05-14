@@ -115,7 +115,7 @@ Create a simple configuration class in your project:
 ```java
 package com.yourproject.config;
 
-import com.digit.config.ApiConfig;
+import config.org.egov.ApiConfig;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
@@ -126,17 +126,17 @@ import org.springframework.context.annotation.Import;
 @Configuration
 @Import(ApiConfig.class)  // Import digit-client configuration (RestTemplate with interceptor)
 public class DigitClientConfig {
-    // That's it! Everything else auto-configured:
-    // - ApiProperties (from application.properties)
-    // - BoundaryClient (with RestTemplate + ApiProperties)
-    // - AccountClient (with RestTemplate + ApiProperties)
-    // - WorkflowClient (with RestTemplate + ApiProperties)
-    // - IndividualClient (with RestTemplate + ApiProperties)
-    // - FilestoreClient (with RestTemplate + ApiProperties)
-    // - IdGenClient (with RestTemplate + ApiProperties)
-    // - MdmsClient (with RestTemplate + ApiProperties)
-    // - NotificationClient (with RestTemplate + ApiProperties)
-    // - HeaderPropagationInterceptor (automatic header propagation)
+	// That's it! Everything else auto-configured:
+	// - ApiProperties (from application.properties)
+	// - BoundaryClient (with RestTemplate + ApiProperties)
+	// - AccountClient (with RestTemplate + ApiProperties)
+	// - WorkflowClient (with RestTemplate + ApiProperties)
+	// - IndividualClient (with RestTemplate + ApiProperties)
+	// - FilestoreClient (with RestTemplate + ApiProperties)
+	// - IdGenClient (with RestTemplate + ApiProperties)
+	// - MdmsClient (with RestTemplate + ApiProperties)
+	// - NotificationClient (with RestTemplate + ApiProperties)
+	// - HeaderPropagationInterceptor (automatic header propagation)
 }
 ```
 
@@ -166,7 +166,7 @@ public class YourService {
 #### Option B: Manual Context Setup
 
 ```java
-import com.digit.config.ApiConfig;
+import config.org.egov.ApiConfig;
 import com.digit.services.account.AccountClient;
 import com.digit.services.boundary.BoundaryClient;
 import com.digit.services.workflow.WorkflowClient;
@@ -179,15 +179,15 @@ import com.digit.services.notification.NotificationClient;
 // Initialize Spring context with configuration
 ApplicationContext context = new AnnotationConfigApplicationContext(ApiConfig.class);
 
-// Get client beans for all 8 services
-AccountClient accountClient = context.getBean(AccountClient.class);
-BoundaryClient boundaryClient = context.getBean(BoundaryClient.class);
-WorkflowClient workflowClient = context.getBean(WorkflowClient.class);
-IndividualClient individualClient = context.getBean(IndividualClient.class);
-FilestoreClient filestoreClient = context.getBean(FilestoreClient.class);
-IdGenClient idGenClient = context.getBean(IdGenClient.class);
-MdmsClient mdmsClient = context.getBean(MdmsClient.class);
-NotificationClient notificationClient = context.getBean(NotificationClient.class);
+		// Get client beans for all 8 services
+		AccountClient accountClient = context.getBean(AccountClient.class);
+		BoundaryClient boundaryClient = context.getBean(BoundaryClient.class);
+		WorkflowClient workflowClient = context.getBean(WorkflowClient.class);
+		IndividualClient individualClient = context.getBean(IndividualClient.class);
+		FilestoreClient filestoreClient = context.getBean(FilestoreClient.class);
+		IdGenClient idGenClient = context.getBean(IdGenClient.class);
+		MdmsClient mdmsClient = context.getBean(MdmsClient.class);
+		NotificationClient notificationClient = context.getBean(NotificationClient.class);
 ```
 
 ### 3. Configure Service URLs
@@ -859,7 +859,7 @@ mvn clean compile
 ## Running Examples
 
 ```bash
-mvn exec:java -Dexec.mainClass="com.digit.example.DigitClientExample"
+mvn exec:java -Dexec.mainClass="example.org.egov.DigitClientExample"
 ```
 
 ## Adding New Service Clients

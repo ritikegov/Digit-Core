@@ -1,0 +1,40 @@
+package org.egov.services.individual.model;
+
+import org.egov.services.common.model.AuditDetails;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.List;
+import java.util.Map;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.egov.services.common.model.AuditDetails;
+
+@JsonIgnoreProperties(ignoreUnknown=true)
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class Individual {
+    @JsonProperty(value="id")
+    private String id;
+    @JsonProperty(value="name")
+    private String name;
+    @JsonProperty(value="dateOfBirth")
+    private String dateOfBirth;
+    @JsonProperty(value="gender")
+    private String gender;
+    @JsonProperty(value="mobileNumber")
+    private String mobileNumber;
+    @JsonProperty(value="email")
+    private String email;
+    @JsonProperty(value="address")
+    private Address address;
+    @JsonProperty(value="documents")
+    private List<Document> documents;
+    @JsonProperty(value="auditDetail")
+    private AuditDetails auditDetail;
+    @JsonProperty(value="additionalFields")
+    private Map<String, Object> additionalFields;
+}
