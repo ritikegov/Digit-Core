@@ -13,6 +13,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class IndividualResponse {
-    @JsonProperty(value="Individual")
+    @JsonProperty("Individuals")
     private Individual individual;
 }
