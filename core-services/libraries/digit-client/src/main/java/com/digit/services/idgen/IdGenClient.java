@@ -1,9 +1,9 @@
-package com.digit.services.idgen;
+package org.egov.services.idgen;
 
-import com.digit.config.ApiProperties;
-import com.digit.exception.DigitClientException;
-import com.digit.services.idgen.model.GenerateIDResponse;
-import com.digit.services.idgen.model.IdGenGenerateRequest;
+import org.egov.config.ApiProperties;
+import org.egov.exception.DigitClientException;
+import org.egov.services.idgen.model.GenerateIDResponse;
+import org.egov.services.idgen.model.IdGenGenerateRequest;
 import java.util.Map;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;

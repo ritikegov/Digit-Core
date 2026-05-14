@@ -1,9 +1,9 @@
-package com.digit.services.individual;
+package org.egov.services.individual;
 
-import com.digit.config.ApiProperties;
-import com.digit.services.individual.model.Individual;
-import com.digit.services.individual.model.IndividualResponse;
-import com.digit.services.individual.model.IndividualSearchResponse;
+import org.egov.config.ApiProperties;
+import org.egov.services.individual.model.Individual;
+import org.egov.services.individual.model.IndividualResponse;
+import org.egov.services.individual.model.IndividualSearchResponse;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;

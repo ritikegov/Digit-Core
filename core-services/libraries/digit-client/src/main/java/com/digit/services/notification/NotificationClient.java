@@ -1,11 +1,11 @@
-package com.digit.services.notification;
+package org.egov.services.notification;
 
-import com.digit.config.ApiProperties;
-import com.digit.exception.DigitClientException;
-import com.digit.services.notification.model.SendEmailRequest;
-import com.digit.services.notification.model.SendEmailResponse;
-import com.digit.services.notification.model.SendSMSRequest;
-import com.digit.services.notification.model.SendSMSResponse;
+import org.egov.config.ApiProperties;
+import org.egov.exception.DigitClientException;
+import org.egov.services.notification.model.SendEmailRequest;
+import org.egov.services.notification.model.SendEmailResponse;
+import org.egov.services.notification.model.SendSMSRequest;
+import org.egov.services.notification.model.SendSMSResponse;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpEntity;

@@ -1,9 +1,9 @@
-package com.digit.services.registry;
+package org.egov.services.registry;
 
-import com.digit.config.ApiProperties;
-import com.digit.exception.DigitClientException;
-import com.digit.services.registry.model.RegistryData;
-import com.digit.services.registry.model.RegistryDataResponse;
+import org.egov.config.ApiProperties;
+import org.egov.exception.DigitClientException;
+import org.egov.services.registry.model.RegistryData;
+import org.egov.services.registry.model.RegistryDataResponse;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;

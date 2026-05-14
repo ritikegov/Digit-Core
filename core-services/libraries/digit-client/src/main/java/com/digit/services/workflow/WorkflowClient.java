@@ -1,10 +1,10 @@
-package com.digit.services.workflow;
+package org.egov.services.workflow;
 
-import com.digit.config.ApiProperties;
-import com.digit.exception.DigitClientException;
-import com.digit.services.workflow.model.WorkflowProcessResponse;
-import com.digit.services.workflow.model.WorkflowTransitionRequest;
-import com.digit.services.workflow.model.WorkflowTransitionResponse;
+import org.egov.config.ApiProperties;
+import org.egov.exception.DigitClientException;
+import org.egov.services.workflow.model.WorkflowProcessResponse;
+import org.egov.services.workflow.model.WorkflowTransitionRequest;
+import org.egov.services.workflow.model.WorkflowTransitionResponse;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;

@@ -1,4 +1,4 @@
-package com.digit.services.common.model;
+package org.egov.services.common.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;

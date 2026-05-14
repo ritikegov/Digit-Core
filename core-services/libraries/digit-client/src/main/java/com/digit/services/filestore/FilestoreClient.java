@@ -1,8 +1,8 @@
-package com.digit.services.filestore;
+package org.egov.services.filestore;
 
-import com.digit.config.ApiProperties;
-import com.digit.config.PropagationProperties;
-import com.digit.exception.DigitClientException;
+import org.egov.config.ApiProperties;
+import org.egov.config.PropagationProperties;
+import org.egov.exception.DigitClientException;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
