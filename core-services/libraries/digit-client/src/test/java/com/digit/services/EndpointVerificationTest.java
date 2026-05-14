@@ -420,17 +420,16 @@ class EndpointVerificationTest {
 
     @Test
     void filestore_isFileAvailable_usesCorrectEndpoint() {
-        var client = new FilestoreClient(restTemplate, props);
+        var client = new FilestoreClient(restTemplate, props, new com.digit.config.PropagationProperties());
 
-        when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(), eq(Object.class)))
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(), eq(byte[].class)))
                 .thenReturn(ResponseEntity.ok(null));
 
         client.isFileAvailable("file-abc", "pb");
 
         var urlCaptor = ArgumentCaptor.forClass(String.class);
-        verify(restTemplate).exchange(urlCaptor.capture(), eq(HttpMethod.POST), any(), eq(Object.class));
-        assertTrue(urlCaptor.getValue().startsWith(BASE + "/filestore/v3/files/metadata"));
-        assertTrue(urlCaptor.getValue().contains("fileStoreId=file-abc"));
+        verify(restTemplate).exchange(urlCaptor.capture(), eq(HttpMethod.GET), any(), eq(byte[].class));
+        assertTrue(urlCaptor.getValue().startsWith(BASE + "/filestore/v3/files/file-abc"));
         assertTrue(urlCaptor.getValue().contains("tenantId=pb"));
     }
 }
