@@ -19,7 +19,7 @@ import org.egov.services.common.model.AuditDetails;
 public class Individual {
     @JsonProperty(value="id")
     private String id;
-    @JsonProperty(value="name")
+    @JsonProperty("givenName")
     private String name;
     @JsonProperty(value="dateOfBirth")
     private String dateOfBirth;

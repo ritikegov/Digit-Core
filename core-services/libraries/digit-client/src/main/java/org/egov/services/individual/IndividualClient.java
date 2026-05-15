@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
+import java.util.Map;
 import lombok.Getter;
 
 @Getter
@@ -27,7 +28,7 @@ public class IndividualClient {
 
     public Individual createIndividual(Individual individual) {
         String url = this.apiProperties.getIndividualServiceUrl() + "/individual/v3/individuals";
-        ResponseEntity response = this.restTemplate.postForEntity(url, (Object)individual, IndividualResponse.class, new Object[0]);
+        ResponseEntity response = this.restTemplate.postForEntity(url, Map.of("Individual", individual), IndividualResponse.class, new Object[0]);
         return response.getBody() != null ? ((IndividualResponse)response.getBody()).getIndividual() : null;
     }
 
