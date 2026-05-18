@@ -61,16 +61,16 @@ public class UserServiceConstants {
 
 
     public static final String PATTERN_GENDER = "^[a-zA-Z ]*$";
-    public static final String PATTERN_MOBILE = "(^$|[0-9]{8,11})";
+    public static final String PATTERN_MOBILE = "(^$|[0-9]{10})";
     public static final String PATTERN_CITY = "^[a-zA-Z. ]*$";
     public static final String PATTERN_TENANT = "^[a-zA-Z. ]*$";
     public static final String PATTERN_PINCODE = "^[1-9][0-9]{5}$";
-    
+
     public static final String TENANTID_MDC_STRING = "TENANTID";
-    
+
     public static final String CITIZEN_ROLE_CODE = "CITIZEN";
 
-    public static final String INVALID_TENANT_ID_ERR_CODE = "INVALID_TENANT_ID";
+    public static final String MOBILE_UNIQUE_IDENTIFIER = "mobile";
     
 }
 

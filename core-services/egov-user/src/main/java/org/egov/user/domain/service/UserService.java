@@ -162,11 +162,10 @@ public class UserService {
         return users.get(0);
     }
 
-    public User getUserByUuid(String uuid, String tenantId) {
+    public User getUserByUuid(String uuid) {
 
         UserSearchCriteria userSearchCriteria = UserSearchCriteria.builder()
                 .uuid(Collections.singletonList(uuid))
-                .tenantId(tenantId)
                 .build();
 
         if (isEmpty(uuid)) {
@@ -358,7 +357,7 @@ public class UserService {
      */
     // TODO Fix date formats
     public User updateWithoutOtpValidation(User user, RequestInfo requestInfo) {
-        final User existingUser = getUserByUuid(user.getUuid(), user.getTenantId());
+        final User existingUser = getUserByUuid(user.getUuid());
         user.setTenantId(userUtils.getStateLevelTenantForCitizen(user.getTenantId(), user.getType()));
         validateUserRoles(user);
         user.validateUserModification();
@@ -372,7 +371,7 @@ public class UserService {
         if (user.getAccountLocked() != null && !user.getAccountLocked() && existingUser.getAccountLocked())
             resetFailedLoginAttempts(user);
 
-        User encryptedUpdatedUserfromDB = getUserByUuid(user.getUuid(), user.getTenantId());
+        User encryptedUpdatedUserfromDB = getUserByUuid(user.getUuid());
         User decryptedupdatedUserfromDB = encryptionDecryptionUtil.decryptObject(encryptedUpdatedUserfromDB, "UserSelf", User.class, requestInfo);
         return decryptedupdatedUserfromDB;
     }
@@ -418,12 +417,12 @@ public class UserService {
         /* encrypt here */
         user = encryptionDecryptionUtil.encryptObject(user, "User", User.class);
 
-        User existingUser = getUserByUuid(user.getUuid(), user.getTenantId());
+        User existingUser = getUserByUuid(user.getUuid());
         validateProfileUpdateIsDoneByTheSameLoggedInUser(user);
         user.nullifySensitiveFields();
         validatePassword(user.getPassword());
         userRepository.update(user, existingUser,requestInfo.getUserInfo().getId(), requestInfo.getUserInfo().getUuid() );
-        User updatedUser = getUserByUuid(user.getUuid(), user.getTenantId());
+        User updatedUser = getUserByUuid(user.getUuid());
         
         /* decrypt here */
         existingUser = encryptionDecryptionUtil.decryptObject(existingUser, "UserSelf", User.class, requestInfo);
@@ -502,7 +501,7 @@ public class UserService {
      */
     public void resetFailedLoginAttempts(User user) {
         if (user.getUuid() != null)
-            userRepository.resetFailedLoginAttemptsForUser(user.getTenantId(), user.getUuid());
+            userRepository.resetFailedLoginAttemptsForUser(user.getUuid());
     }
 
     /**
@@ -541,7 +540,7 @@ public class UserService {
     public void handleFailedLogin(User user, String ipAddress, RequestInfo requestInfo) {
         if (!Objects.isNull(user.getUuid())) {
             List<FailedLoginAttempt> failedLoginAttempts =
-                    userRepository.fetchFailedAttemptsByUserAndTime(user.getTenantId(), user.getUuid(),
+                    userRepository.fetchFailedAttemptsByUserAndTime(user.getUuid(),
                             System.currentTimeMillis() - TimeUnit.MINUTES.toMillis(maxInvalidLoginAttemptsPeriod));
 
             if (failedLoginAttempts.size() + 1 >= maxInvalidLoginAttempts) {
@@ -556,10 +555,10 @@ public class UserService {
                 log.info("Locked account with uuid {} for {} minutes as exceeded max allowed attempts of {} within {} " +
                                 "minutes",
                         user.getUuid(), accountUnlockCoolDownPeriod, maxInvalidLoginAttempts, maxInvalidLoginAttemptsPeriod);
-                throw new OAuth2Exception("Account locked for "+accountUnlockCoolDownPeriod+ " minutes due to maximum invalid login attempts");
+                throw new OAuth2Exception("Account locked");
             }
 
-            userRepository.insertFailedLoginAttempt(user.getTenantId(), new FailedLoginAttempt(user.getUuid(), ipAddress,
+            userRepository.insertFailedLoginAttempt(new FailedLoginAttempt(user.getUuid(), ipAddress,
                     System.currentTimeMillis(), true));
         }
     }
