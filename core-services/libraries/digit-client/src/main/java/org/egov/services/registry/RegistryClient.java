@@ -2,11 +2,17 @@ package org.egov.services.registry;
 
 import org.egov.config.ApiProperties;
 import org.egov.exception.DigitClientException;
+import org.egov.services.registry.model.RegistryCacheEntry;
 import org.egov.services.registry.model.RegistryData;
 import org.egov.services.registry.model.RegistryDataResponse;
+import org.egov.util.HeaderStore;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -20,10 +26,17 @@ import lombok.extern.slf4j.Slf4j;
 public class RegistryClient {
     private final RestTemplate restTemplate;
     private final ApiProperties apiProperties;
+    private final RedisTemplate<String, String> registryCacheTemplate;
+    private static final ObjectMapper CACHE_MAPPER = new ObjectMapper();
 
     public RegistryClient(RestTemplate restTemplate, ApiProperties apiProperties) {
+        this(restTemplate, apiProperties, null);
+    }
+
+    public RegistryClient(RestTemplate restTemplate, ApiProperties apiProperties, RedisTemplate<String, String> registryCacheTemplate) {
         this.restTemplate = restTemplate;
         this.apiProperties = apiProperties;
+        this.registryCacheTemplate = registryCacheTemplate;
     }
 
     public RegistryDataResponse createRegistryData(String schemaCode, RegistryData registryData) {
@@ -43,7 +56,9 @@ public class RegistryClient {
             headers.set("Content-Type", "application/json");
             ResponseEntity response = this.restTemplate.postForEntity(url, (Object)new HttpEntity((Object)registryData, headers), RegistryDataResponse.class, new Object[0]);
             log.debug("Successfully created registry data with schema code: {}", (Object)schemaCode);
-            return (RegistryDataResponse)response.getBody();
+            RegistryDataResponse result = (RegistryDataResponse) response.getBody();
+            cacheAllFields(schemaCode, registryData.getData(), result);
+            return result;
         }
         catch (Exception e) {
             if (e instanceof DigitClientException) {
@@ -134,17 +149,26 @@ public class RegistryClient {
         }
         try {
             log.debug("Updating registry data with schema code: {}, key: {}, value: {}", new Object[]{schemaCode, key, value});
-            RegistryDataResponse searchResponse = this.searchRegistryData(schemaCode, key, value);
-            if (searchResponse == null || searchResponse.getData() == null) {
-                throw new DigitClientException("Registry data not found for key: " + key + " and value: " + value);
-            }
-            Integer currentVersion = this.extractVersionFromResponse(searchResponse);
-            if (currentVersion == null) {
-                throw new DigitClientException("Could not extract version from existing registry data");
-            }
-            String registryId = this.extractRegistryIdFromResponse(searchResponse);
-            if (registryId == null || registryId.trim().isEmpty()) {
-                throw new DigitClientException("Could not extract registry ID from existing registry data");
+            RegistryCacheEntry cached = getCachedEntry(schemaCode, key, value);
+            String registryId;
+            Integer currentVersion;
+            if (cached != null) {
+                log.debug("Cache hit for registry update: schemaCode={}, key={}, value={}", schemaCode, key, value);
+                registryId = cached.getRegistryId();
+                currentVersion = cached.getVersion();
+            } else {
+                RegistryDataResponse searchResponse = this.searchRegistryData(schemaCode, key, value);
+                if (searchResponse == null || searchResponse.getData() == null) {
+                    throw new DigitClientException("Registry data not found for key: " + key + " and value: " + value);
+                }
+                currentVersion = this.extractVersionFromResponse(searchResponse);
+                if (currentVersion == null) {
+                    throw new DigitClientException("Could not extract version from existing registry data");
+                }
+                registryId = this.extractRegistryIdFromResponse(searchResponse);
+                if (registryId == null || registryId.trim().isEmpty()) {
+                    throw new DigitClientException("Could not extract registry ID from existing registry data");
+                }
             }
             registryData.setVersion(currentVersion);
             String url = this.apiProperties.getRegistryServiceUrl() + "/registry/v3/schema/" + schemaCode + "/data?id=" + registryId;
@@ -152,7 +176,12 @@ public class RegistryClient {
             headers.set("Content-Type", "application/json");
             ResponseEntity response = this.restTemplate.exchange(url, HttpMethod.PUT, new HttpEntity((Object)registryData, headers), RegistryDataResponse.class, new Object[0]);
             log.debug("Successfully updated registry data with schema code: {}, key: {}, value: {}", new Object[]{schemaCode, key, value});
-            return (RegistryDataResponse)response.getBody();
+            RegistryDataResponse updateResult = (RegistryDataResponse) response.getBody();
+            Integer updatedVersion = extractVersionFromResponse(updateResult);
+            if (updatedVersion != null) {
+                cacheEntry(schemaCode, HeaderStore.extractTenantId(), key, value, registryId, updatedVersion);
+            }
+            return updateResult;
         }
         catch (Exception e) {
             if (e instanceof DigitClientException) {
@@ -160,6 +189,45 @@ public class RegistryClient {
             }
             throw new DigitClientException("Failed to update registry data: " + e.getMessage(), e);
         }
+    }
+
+    private void cacheAllFields(String schemaCode, JsonNode dataNode, RegistryDataResponse response) {
+        if (registryCacheTemplate == null || response == null) return;
+        String registryId = extractRegistryIdFromResponse(response);
+        Integer version = extractVersionFromResponse(response);
+        if (registryId == null || version == null || dataNode == null || !dataNode.isObject()) return;
+        String tenantId = HeaderStore.extractTenantId();
+        Iterator<Map.Entry<String, JsonNode>> fields = dataNode.fields();
+        while (fields.hasNext()) {
+            Map.Entry<String, JsonNode> field = fields.next();
+            if (field.getValue().isValueNode()) {
+                cacheEntry(schemaCode, tenantId, field.getKey(), field.getValue().asText(), registryId, version);
+            }
+        }
+    }
+
+    private void cacheEntry(String schemaCode, String tenantId, String key, String value, String registryId, Integer version) {
+        if (registryCacheTemplate == null) return;
+        try {
+            String cacheKey = "registry:" + schemaCode + ":" + (tenantId != null ? tenantId : "default") + ":" + key + ":" + value;
+            String json = CACHE_MAPPER.writeValueAsString(new RegistryCacheEntry(registryId, version));
+            registryCacheTemplate.opsForValue().set(cacheKey, json);
+        } catch (Exception e) {
+            log.warn("Failed to write registry cache entry: {}", (Object) e.getMessage());
+        }
+    }
+
+    private RegistryCacheEntry getCachedEntry(String schemaCode, String key, String value) {
+        if (registryCacheTemplate == null) return null;
+        try {
+            String tenantId = HeaderStore.extractTenantId();
+            String cacheKey = "registry:" + schemaCode + ":" + (tenantId != null ? tenantId : "default") + ":" + key + ":" + value;
+            String json = registryCacheTemplate.opsForValue().get(cacheKey);
+            if (json != null) return CACHE_MAPPER.readValue(json, RegistryCacheEntry.class);
+        } catch (Exception e) {
+            log.warn("Failed to read registry cache entry: {}", (Object) e.getMessage());
+        }
+        return null;
     }
 
     private Integer extractVersionFromResponse(RegistryDataResponse response) {

@@ -45,4 +45,10 @@ public class ApiProperties {
     private int maxRetryAttempts;
     @Value(value="${digit.services.retry.delay:1000}")
     private long retryDelay;
+    @Value(value="${spring.data.redis.host:localhost}")
+    private String redisHost;
+    @Value(value="${spring.data.redis.port:6380}")
+    private int redisPort;
+    @Value(value="${spring.cache.type:none}")
+    private String cacheType;
 }
